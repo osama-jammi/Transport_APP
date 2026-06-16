@@ -14,7 +14,7 @@ import java.util.List;
  * Accès en lecture seule à la base Divalto (RB217_MIG) pour les matières premières.
  *
  * Flux en 2 étapes :
- *  1. Sélection d'une commande (entête ENT) : PICOD=2, DOS=1, TICOD='F', CE4=2.
+ *  1. Sélection d'une commande (entête ENT) : PICOD=2, DOS=1, TICOD='F', CE4=1.
  *  2. Lignes de la commande (MOUV) par CDNO : DOS=1, TICOD='F', PICOD=1.
  * Strictement en lecture (aucune écriture dans l'ERP).
  */
@@ -61,11 +61,11 @@ public class DivaltoReadService {
 
     /**
      * Étape 1 — Commandes (entêtes ENT) parmi lesquelles choisir.
-     * Filtre : PICOD = 1, DOS = 1, TICOD = 'F', CE4 = 2.
+     * Filtre : PICOD = 2, DOS = 1, TICOD = 'F', CE4 = 1.
      */
     public List<CommandeMpDTO> getCommandes() {
         String sql = "SELECT TOP (500) PINO, PREFPINO, PROJET, MARCHE, TIERS, PIDT " +
-                "FROM ENT WHERE PICOD = 1 AND DOS = 1 AND TICOD = 'F' AND CE4 = 2 " +
+                "FROM ENT WHERE PICOD = 2 AND DOS = 1 AND TICOD = 'F' AND CE4 = 1 " +
                 "ORDER BY PINO DESC";
         return divaltoJdbcTemplate.query(sql, COMMANDE_MAPPER);
     }

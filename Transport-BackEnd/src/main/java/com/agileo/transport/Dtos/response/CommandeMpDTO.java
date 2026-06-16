@@ -6,7 +6,7 @@ import java.time.LocalDateTime;
 
 /**
  * Commande (entête ENT Divalto) servant à sélectionner les matières premières.
- * Filtre métier : PICOD = 2, DOS = 1, TICOD = 'F', CE4 = 2.
+ * Filtre métier : PICOD = 2, DOS = 1, TICOD = 'F', CE4 = 1.
  * Le numéro de commande (PINO) est ensuite utilisé comme CDNO pour lire les lignes MOUV.
  */
 @Data

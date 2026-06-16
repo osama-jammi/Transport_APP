@@ -25,7 +25,7 @@ public class MatierePremiereController {
     }
 
     @GetMapping("/commandes")
-    @Operation(summary = "Étape 1 : commandes (ENT) à sélectionner (PICOD=1, DOS=1, TICOD='F', CE4=2)")
+    @Operation(summary = "Étape 1 : commandes (ENT) à sélectionner (PICOD=2, DOS=1, TICOD='F', CE4=1)")
     public ResponseEntity<List<CommandeMpDTO>> getCommandes() {
         return ResponseEntity.ok(divaltoReadService.getCommandes());
     }
