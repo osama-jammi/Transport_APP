@@ -4,13 +4,32 @@ import { forkJoin, of } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import { VoyageConteneurService } from '../services/voyage-conteneur.service';
 import { ChauffeurService } from '../services/chauffeur.service';
+import { ChantierService } from '../services/chantier.service';
+import { MatierePremiereService } from '../services/matiere-premiere.service';
 import { VoyageService } from '../services/voyage.service';
 import { environment } from '../../environments/environment';
 import {
-  VoyageConteneur, VoyageConteneurRequest, GapVoyage, GapChauffeur,
-  GapVoyageArticle, MatierePremiere, TrajetVoyage
+  VoyageConteneur, VoyageConteneurRequest, GapVoyage, GapChauffeur, Chantier,
+  CommandeMp, GapVoyageArticle, MatierePremiere, TrajetVoyage
 } from '../core/models';
 import * as L from 'leaflet';
+
+/** Une ligne du voyage : un chantier, une date, et soit des livraisons (articles) soit des MP. */
+interface VoyageLigne {
+  chantierId?: number;
+  chantierCode?: string;
+  filtreChantier: string;
+  comboOpen: boolean;
+  date?: string;
+  type: 'ARTICLE' | 'MATIERE_PREMIERE';
+  selectedLiv: Record<number, boolean>;
+  commandes: CommandeMp[];
+  commandeId?: number;
+  lignesMp: MatierePremiere[];
+  loadingMp: boolean;
+  selectedMp: Record<string, boolean>;
+  qteMp: Record<string, number>;
+}
 
 @Component({
   selector: 'app-voyages-conteneurs',
@@ -67,37 +86,75 @@ import * as L from 'leaflet';
             </div>
           </div>
 
-          <div class="form-grid">
-            <div class="field"><label>Jour chargement</label>
-              <input type="date" [(ngModel)]="form.chargementJour"></div>
-            <div class="field"><label>Heure chargement</label>
-              <input type="time" [(ngModel)]="form.chargementHeure"></div>
-            <div class="field"><label>Jour déchargement</label>
-              <input type="date" [(ngModel)]="form.dechargementJour"></div>
-            <div class="field"><label>Heure déchargement</label>
-              <input type="time" [(ngModel)]="form.dechargementHeure"></div>
+          <div *ngFor="let lg of lignes; let i = index" class="card" style="margin:10px 0">
+            <div class="card-body">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                <strong>Ligne {{ i + 1 }}</strong>
+                <button class="btn btn-danger btn-sm" (click)="retirerLigne(i)" title="Retirer"><i class="fa-solid fa-trash"></i></button>
+              </div>
+              <div class="form-grid">
+                <div class="field combo">
+                  <label>Chantier *</label>
+                  <input class="filtre-input" [(ngModel)]="lg.filtreChantier" autocomplete="off"
+                         (focus)="lg.comboOpen=true" (input)="lg.comboOpen=true; lg.chantierId=undefined"
+                         (blur)="fermerComboLigne(lg)" placeholder="Taper un chantier…">
+                  <div class="combo-list" *ngIf="lg.comboOpen && chantiersFiltres(lg).length">
+                    <div class="combo-item" *ngFor="let ch of chantiersFiltres(lg)" (mousedown)="choisirChantierLigne(lg, ch)">
+                      {{ ch.nom }}<span *ngIf="ch.ville" class="muted"> — {{ ch.ville }}</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="field"><label>Date de livraison</label><input type="date" [(ngModel)]="lg.date"></div>
+              </div>
+
+              <div class="type-toggle">
+                <button type="button" [class.active]="lg.type==='ARTICLE'" (click)="lg.type='ARTICLE'">
+                  <i class="fa-solid fa-boxes-stacked"></i> Articles</button>
+                <button type="button" [class.active]="lg.type==='MATIERE_PREMIERE'" (click)="setTypeMp(lg)">
+                  <i class="fa-solid fa-cubes"></i> Matières premières</button>
+              </div>
+
+              <!-- Articles : livraisons de ce chantier -->
+              <div *ngIf="lg.type==='ARTICLE'">
+                <div *ngIf="!lg.chantierId" class="muted" style="font-size:12px;padding:8px">Choisissez d'abord un chantier.</div>
+                <div class="art-list" *ngIf="lg.chantierId">
+                  <div *ngIf="livraisonsDuChantier(lg).length===0" class="muted" style="font-size:12px;padding:8px">Aucune livraison pour ce chantier.</div>
+                  <label class="art-item" *ngFor="let l of livraisonsDuChantier(lg)" [class.checked]="lg.selectedLiv[l.id]">
+                    <input type="checkbox" [(ngModel)]="lg.selectedLiv[l.id]">
+                    <div class="art-info"><strong>#{{ l.id }}</strong>
+                      <span class="muted">{{ l.nbArticles }} article(s) · {{ l.statutReception || '—' }}</span></div>
+                  </label>
+                </div>
+              </div>
+
+              <!-- Matières premières : commande de ce chantier -> lignes -->
+              <div *ngIf="lg.type==='MATIERE_PREMIERE'">
+                <div *ngIf="!lg.chantierId" class="muted" style="font-size:12px;padding:8px">Choisissez d'abord un chantier.</div>
+                <div *ngIf="lg.chantierId">
+                  <div class="field" style="margin-bottom:8px"><label>Commande</label>
+                    <select [(ngModel)]="lg.commandeId" (change)="chargerLignesMp(lg)">
+                      <option [ngValue]="undefined" disabled>— Choisir une commande —</option>
+                      <option *ngFor="let c of lg.commandes" [ngValue]="c.cdno">
+                        #{{ c.cdno }}<span *ngIf="c.tiers"> · {{ c.tiers }}</span></option>
+                    </select>
+                  </div>
+                  <div *ngIf="lg.loadingMp" class="spinner" style="margin:12px auto"></div>
+                  <div class="art-list" *ngIf="lg.commandeId && !lg.loadingMp">
+                    <div *ngIf="lg.lignesMp.length===0" class="muted" style="font-size:12px;padding:8px">Aucune ligne.</div>
+                    <label class="art-item" *ngFor="let m of lg.lignesMp" [class.checked]="lg.selectedMp[m.reference||'']">
+                      <input type="checkbox" [(ngModel)]="lg.selectedMp[m.reference||'']" (change)="onToggleMp(lg, m)">
+                      <div class="art-info"><strong>{{ m.designation || m.reference }}</strong>
+                        <span class="muted">{{ m.reference }} · OF {{ m.of || '—' }} · dispo {{ m.quantite ?? '—' }}</span></div>
+                      <input *ngIf="lg.selectedMp[m.reference||'']" type="number" min="1" class="qte-input"
+                             [(ngModel)]="lg.qteMp[m.reference||'']" (click)="$event.stopPropagation()" placeholder="Qté">
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div class="art-section">
-            <div class="art-head">
-              <label>Livraisons du voyage <span class="muted">({{ selectedCount() }} sélectionnée(s))</span></label>
-            </div>
-            <input class="filtre-input" [(ngModel)]="filtreLivraison"
-                   placeholder="🔍 Filtrer les livraisons (chantier, chauffeur)…" style="margin-bottom:10px">
-            <div *ngIf="livLoading" class="spinner" style="margin:18px auto"></div>
-            <div *ngIf="!livLoading && livraisons.length===0" class="empty" style="padding:20px">
-              <i class="fa-solid fa-box"></i> Aucune livraison disponible
-            </div>
-            <div class="art-list" *ngIf="!livLoading && livraisons.length">
-              <label class="art-item" *ngFor="let l of livraisonsFiltres()" [class.checked]="selected[l.id]">
-                <input type="checkbox" [(ngModel)]="selected[l.id]">
-                <div class="art-info">
-                  <strong>#{{ l.id }} — {{ l.projetDesignation || l.projetCode || 'Sans chantier' }}</strong>
-                  <span class="muted">{{ l.chauffeur || '—' }} · {{ l.nbArticles }} article(s) · {{ l.statutReception || '—' }}</span>
-                </div>
-              </label>
-            </div>
-          </div>
+          <button class="btn btn-outline" (click)="ajouterLigne()"><i class="fa-solid fa-plus"></i> Ajouter une ligne</button>
         </div>
         <div class="m-foot">
           <button class="btn btn-outline" (click)="modal=false">Annuler</button>
@@ -187,6 +244,24 @@ import * as L from 'leaflet';
             </div>
           </div>
 
+          <h4 class="art-title">Matières premières ({{ detailMatieres.length }})</h4>
+          <div *ngIf="detailMatieres.length===0" class="empty" style="padding:14px">
+            <i class="fa-solid fa-cubes"></i> Aucune matière première</div>
+          <div class="table-wrap" *ngIf="detailMatieres.length">
+            <table>
+              <thead><tr><th>Désignation</th><th>Réf</th><th>OF</th><th>Affaire</th><th>Qté</th></tr></thead>
+              <tbody>
+                <tr *ngFor="let m of detailMatieres">
+                  <td><strong>{{ m.designation || '—' }}</strong></td>
+                  <td><code>{{ m.reference || '—' }}</code></td>
+                  <td><code>{{ m.of || '—' }}</code></td>
+                  <td>{{ m.projet || '—' }}</td>
+                  <td>{{ m.quantite ?? '—' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
           <h4 class="art-title">Suivi GPS du chauffeur</h4>
           <div *ngIf="trajetLoading" class="spinner" style="margin:20px auto"></div>
           <div *ngIf="!trajetLoading && (!trajet || !trajet.nbPoints)" class="empty" style="padding:16px">
@@ -217,18 +292,17 @@ export class VoyagesConteneursComponent implements OnInit {
   chauffeurId?: number;
   filtreChauffeur = '';
   comboOpen = false;
-  form: { chargementJour?: string; chargementHeure?: string; dechargementJour?: string; dechargementHeure?: string } = {};
 
-  livraisons: GapVoyage[] = [];
-  livLoading = false;
-  filtreLivraison = '';
-  selected: Record<number, boolean> = {};
+  chantiers: Chantier[] = [];
+  allLivraisons: GapVoyage[] = [];   // livraisons assignables (filtrées par chantier dans chaque ligne)
+  lignes: VoyageLigne[] = [];
 
   // Détail (consultation)
   detail: VoyageConteneur | null = null;
   detailLivraisons: GapVoyage[] = [];
   contenu: Record<number, { articles: GapVoyageArticle[]; matieres: MatierePremiere[] }> = {};
   detailLoading = false;
+  detailMatieres: MatierePremiere[] = [];
   trajet: TrajetVoyage | null = null;
   trajetLoading = false;
   artDetailId: number | null = null;
@@ -237,6 +311,8 @@ export class VoyagesConteneursComponent implements OnInit {
   constructor(
     private svc: VoyageConteneurService,
     private chauffeurSvc: ChauffeurService,
+    private chantierSvc: ChantierService,
+    private matiereSvc: MatierePremiereService,
     private voyageSvc: VoyageService,
     private toastr: ToastrService
   ) {}
@@ -255,30 +331,48 @@ export class VoyagesConteneursComponent implements OnInit {
     this.editId = v ? v.id : null;
     this.chauffeurId = v ? v.chauffeurId : undefined;
     this.filtreChauffeur = v && v.chauffeur ? v.chauffeur : '';
-    this.filtreLivraison = '';
-    this.selected = {};
     this.comboOpen = false;
-    // Pré-remplit les heures (datetime ISO → jour + heure)
-    const split = (iso?: string) => iso ? { jour: iso.slice(0, 10), heure: iso.slice(11, 16) } : { jour: undefined, heure: undefined };
-    const c = split(v?.chargement); const d = split(v?.dechargement);
-    this.form = {
-      chargementJour: c.jour, chargementHeure: c.heure,
-      dechargementJour: d.jour, dechargementHeure: d.heure
-    };
+    this.lignes = [];
     this.modal = true;
-    this.livLoading = true;
-    const vid = v ? v.id : 0; // 0 = nouveau voyage → renvoie les livraisons libres
+    const vid = v ? v.id : 0;
     forkJoin({
       chauffeurs: this.chauffeurSvc.getFromGap().pipe(catchError(() => of([] as GapChauffeur[]))),
+      chantiers:  this.chantierSvc.getFromGap().pipe(catchError(() => of([] as Chantier[]))),
       livraisons: this.svc.livraisonsAssignables(vid).pipe(catchError(() => of([] as GapVoyage[])))
-    }).subscribe(({ chauffeurs, livraisons }) => {
+    }).subscribe(({ chauffeurs, chantiers, livraisons }) => {
       this.chauffeurs = chauffeurs;
-      this.livraisons = livraisons;
-      // Pré-cocher celles déjà rattachées à ce voyage
-      if (v) livraisons.forEach(l => { if (l.voyageId === v.id) this.selected[l.id] = true; });
-      this.livLoading = false;
+      this.chantiers = chantiers;
+      this.allLivraisons = livraisons;
+      // À l'édition : reconstruit une ligne « articles » par chantier déjà rattaché
+      if (v) {
+        const parChantier = new Map<number, GapVoyage[]>();
+        livraisons.filter(l => l.voyageId === v.id).forEach(l => {
+          const k = l.projetId ?? 0;
+          if (!parChantier.has(k)) parChantier.set(k, []);
+          parChantier.get(k)!.push(l);
+        });
+        parChantier.forEach((livs, projetId) => {
+          const lg = this.nouvelleLigne();
+          lg.chantierId = projetId;
+          const ch = chantiers.find(c => c.id === projetId);
+          lg.chantierCode = ch?.code; lg.filtreChantier = ch ? ch.nom : (livs[0].projetDesignation || '');
+          livs.forEach(l => lg.selectedLiv[l.id] = true);
+          this.lignes.push(lg);
+        });
+      }
+      if (this.lignes.length === 0) this.ajouterLigne();
     });
   }
+
+  nouvelleLigne(): VoyageLigne {
+    return {
+      filtreChantier: '', comboOpen: false, type: 'ARTICLE',
+      selectedLiv: {}, commandes: [], lignesMp: [], loadingMp: false,
+      selectedMp: {}, qteMp: {}
+    };
+  }
+  ajouterLigne(): void { this.lignes.push(this.nouvelleLigne()); }
+  retirerLigne(i: number): void { this.lignes.splice(i, 1); }
 
   fermer(e: Event): void { if (e.target === e.currentTarget) this.modal = false; }
 
@@ -295,28 +389,69 @@ export class VoyagesConteneursComponent implements OnInit {
   }
   fermerCombo(): void { setTimeout(() => this.comboOpen = false, 150); }
 
-  livraisonsFiltres(): GapVoyage[] {
-    const t = this.filtreLivraison.toLowerCase().trim();
-    if (!t) return this.livraisons;
-    return this.livraisons.filter(l =>
-      `${l.projetDesignation || ''} ${l.projetCode || ''} ${l.chauffeur || ''} ${l.id}`.toLowerCase().includes(t));
+  /* ─────────── Lignes : chantier ─────────── */
+  chantiersFiltres(lg: VoyageLigne): Chantier[] {
+    const t = lg.filtreChantier.toLowerCase().trim();
+    if (!t) return this.chantiers;
+    return this.chantiers.filter(c => `${c.nom || ''} ${c.ville || ''} ${c.code || ''}`.toLowerCase().includes(t));
+  }
+  choisirChantierLigne(lg: VoyageLigne, ch: Chantier): void {
+    lg.chantierId = ch.id; lg.chantierCode = ch.code;
+    lg.filtreChantier = ch.nom + (ch.ville ? ` — ${ch.ville}` : '');
+    lg.comboOpen = false;
+    lg.selectedLiv = {}; lg.commandes = []; lg.commandeId = undefined; lg.lignesMp = []; lg.selectedMp = {}; lg.qteMp = {};
+    if (lg.type === 'MATIERE_PREMIERE') this.chargerCommandes(lg);
+  }
+  fermerComboLigne(lg: VoyageLigne): void { setTimeout(() => lg.comboOpen = false, 150); }
+
+  livraisonsDuChantier(lg: VoyageLigne): GapVoyage[] {
+    return this.allLivraisons.filter(l => l.projetId === lg.chantierId);
   }
 
-  selectedIds(): number[] {
-    return Object.keys(this.selected).filter(k => this.selected[+k]).map(k => +k);
+  /* ─────────── Lignes : matières premières ─────────── */
+  setTypeMp(lg: VoyageLigne): void {
+    lg.type = 'MATIERE_PREMIERE';
+    if (lg.chantierId && lg.commandes.length === 0) this.chargerCommandes(lg);
   }
-  selectedCount(): number { return this.selectedIds().length; }
+  chargerCommandes(lg: VoyageLigne): void {
+    this.matiereSvc.getCommandes(lg.chantierCode).subscribe({
+      next: d => lg.commandes = d,
+      error: () => this.toastr.error('Commandes indisponibles (Divalto).')
+    });
+  }
+  chargerLignesMp(lg: VoyageLigne): void {
+    if (!lg.commandeId) return;
+    lg.loadingMp = true; lg.lignesMp = [];
+    this.matiereSvc.getLignes(lg.commandeId).subscribe({
+      next: d => { lg.lignesMp = d; lg.loadingMp = false; },
+      error: () => { lg.loadingMp = false; this.toastr.error('Lignes indisponibles (Divalto).'); }
+    });
+  }
+  onToggleMp(lg: VoyageLigne, m: MatierePremiere): void {
+    const k = m.reference || '';
+    if (lg.selectedMp[k] && (lg.qteMp[k] == null || lg.qteMp[k] <= 0)) lg.qteMp[k] = 1;
+  }
 
   enregistrer(): void {
     if (!this.chauffeurId) { this.toastr.warning('Veuillez choisir un chauffeur.'); return; }
-    const req: VoyageConteneurRequest = {
-      chauffeurId: this.chauffeurId,
-      livraisonIds: this.selectedIds(),
-      chargementJour: this.form.chargementJour,
-      chargementHeure: this.form.chargementHeure,
-      dechargementJour: this.form.dechargementJour,
-      dechargementHeure: this.form.dechargementHeure
-    };
+    const livraisonIds: number[] = [];
+    const matieres: NonNullable<VoyageConteneurRequest['matieres']> = [];
+    for (const lg of this.lignes) {
+      if (lg.type === 'ARTICLE') {
+        Object.keys(lg.selectedLiv).filter(k => lg.selectedLiv[+k]).forEach(k => livraisonIds.push(+k));
+      } else {
+        lg.lignesMp.filter(m => lg.selectedMp[m.reference || '']).forEach(m => {
+          const ref = m.reference || '';
+          matieres.push({
+            projet: lg.chantierCode, cdno: lg.commandeId, ref,
+            designation: m.designation, of: m.of, unite: m.unite,
+            quantite: lg.qteMp[ref] && lg.qteMp[ref] > 0 ? lg.qteMp[ref] : 1,
+            dateLivraison: lg.date
+          });
+        });
+      }
+    }
+    const req: VoyageConteneurRequest = { chauffeurId: this.chauffeurId, livraisonIds, matieres };
     this.saving = true;
     const ok = () => {
       this.toastr.success(this.editId ? 'Voyage modifié.' : 'Voyage créé.');
@@ -335,6 +470,8 @@ export class VoyagesConteneursComponent implements OnInit {
     this.detail = v;
     this.detailLivraisons = [];
     this.contenu = {};
+    this.detailMatieres = [];
+    this.svc.matieres(v.id).subscribe({ next: m => this.detailMatieres = m, error: () => {} });
     this.detailLoading = true;
     this.detruireCarte();
     this.trajet = null;

@@ -79,6 +79,7 @@ export interface Chantier {
   nom: string;
   lieu?: string;
   ville?: string;
+  code?: string;
   latitude?: number;
   longitude?: number;
   rayonMetres?: number;
@@ -212,6 +213,10 @@ export interface VoyageConteneurRequest {
   chargementHeure?: string;
   dechargementJour?: string;
   dechargementHeure?: string;
+  matieres?: {
+    projet?: string; cdno?: number; ref?: string; designation?: string;
+    of?: string; quantite?: number; unite?: string; dateLivraison?: string;
+  }[];
 }
 
 /** Un point du trajet GPS d'un voyage. */

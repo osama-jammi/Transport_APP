@@ -18,6 +18,7 @@ export class ChantierService {
         id: g.id,
         nom: g.designation || g.code || `Projet ${g.id}`,
         ville: g.code,
+        code: g.code,
         latitude: g.latitude,
         longitude: g.longitude,
         rayonMetres: g.rayonMetres,

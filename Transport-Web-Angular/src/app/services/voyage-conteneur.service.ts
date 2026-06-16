@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
-import { VoyageConteneur, VoyageConteneurRequest, GapVoyage, TrajetVoyage } from '../core/models';
+import { VoyageConteneur, VoyageConteneurRequest, GapVoyage, TrajetVoyage, MatierePremiere } from '../core/models';
 
 @Injectable({ providedIn: 'root' })
 export class VoyageConteneurService {
@@ -29,5 +29,9 @@ export class VoyageConteneurService {
   /** Trajet GPS agrégé du voyage. */
   trajet(id: number): Observable<TrajetVoyage> {
     return this.http.get<TrajetVoyage>(`${this.base}/${id}/trajet`);
+  }
+  /** Matières premières rattachées directement au voyage. */
+  matieres(id: number): Observable<MatierePremiere[]> {
+    return this.http.get<MatierePremiere[]>(`${this.base}/${id}/matieres`);
   }
 }
