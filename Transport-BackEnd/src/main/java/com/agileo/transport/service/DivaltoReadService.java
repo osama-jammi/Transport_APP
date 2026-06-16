@@ -67,15 +67,25 @@ public class DivaltoReadService {
      * Filtre : PICOD = 2, DOS = 1, TICOD = 'F', CE4 = 1.
      */
     public List<CommandeMpDTO> getCommandes() {
-        String sql = "SELECT TOP (500) e.PINO, e.PREFPINO, " +
+        return getCommandes(null);
+    }
+
+    /** Commandes (ENT), filtrées optionnellement par chantier/affaire (PROJET = code CHxxxx). */
+    public List<CommandeMpDTO> getCommandes(String projet) {
+        StringBuilder sql = new StringBuilder(
+                "SELECT TOP (500) e.PINO, e.PREFPINO, " +
                 "COALESCE(pr.LIB80, e.PROJET) AS PROJET, e.MARCHE, " +
                 "COALESCE(f.NOM, e.TIERS) AS TIERS, e.PIDT, e.PINOTIERS, e.PIREF " +
                 "FROM ENT e " +
                 "LEFT JOIN PRJAP pr ON e.PROJET = pr.AFFAIRE " +
                 "LEFT JOIN FOU   f  ON e.TIERS  = f.TIERS " +
-                "WHERE e.PICOD = 2 AND e.DOS = 1 AND e.TICOD = 'F' AND e.CE4 = 1 " +
-                "ORDER BY e.PINO DESC";
-        return divaltoJdbcTemplate.query(sql, COMMANDE_MAPPER);
+                "WHERE e.PICOD = 2 AND e.DOS = 1 AND e.TICOD = 'F' AND e.CE4 = 1 ");
+        if (projet != null && !projet.isBlank()) {
+            sql.append("AND e.PROJET = ? ORDER BY e.PINO DESC");
+            return divaltoJdbcTemplate.query(sql.toString(), COMMANDE_MAPPER, projet.trim());
+        }
+        sql.append("ORDER BY e.PINO DESC");
+        return divaltoJdbcTemplate.query(sql.toString(), COMMANDE_MAPPER);
     }
 
     /**

@@ -25,9 +25,10 @@ public class MatierePremiereController {
     }
 
     @GetMapping("/commandes")
-    @Operation(summary = "Étape 1 : commandes (ENT) à sélectionner (PICOD=2, DOS=1, TICOD='F', CE4=1)")
-    public ResponseEntity<List<CommandeMpDTO>> getCommandes() {
-        return ResponseEntity.ok(divaltoReadService.getCommandes());
+    @Operation(summary = "Étape 1 : commandes (ENT). Filtre optionnel par chantier (projet = code CHxxxx)")
+    public ResponseEntity<List<CommandeMpDTO>> getCommandes(
+            @org.springframework.web.bind.annotation.RequestParam(required = false) String projet) {
+        return ResponseEntity.ok(divaltoReadService.getCommandes(projet));
     }
 
     @GetMapping("/commandes/{cdno}/lignes")
