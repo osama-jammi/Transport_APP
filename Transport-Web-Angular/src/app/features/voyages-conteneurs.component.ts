@@ -120,6 +120,18 @@ import * as L from 'leaflet';
             <div><span class="dk">Déchargement</span><span class="dv">{{ detail.dechargement ? (detail.dechargement | date:'dd/MM/yy HH:mm') : '—' }}</span></div>
           </div>
 
+          <!-- QR du voyage : un seul scan vaut le scan de toutes les lignes -->
+          <div style="display:flex;align-items:center;gap:14px;margin-top:12px;padding:12px;border:1px solid var(--border);border-radius:10px">
+            <img [src]="qrVoyageUrl(detail.id)" alt="QR voyage" style="width:96px;height:96px">
+            <div>
+              <strong>QR du voyage</strong>
+              <div class="muted" style="font-size:12px">Scanné par le chauffeur, il valide toutes les lignes du voyage en une fois.</div>
+              <a class="btn btn-outline btn-sm" style="margin-top:6px" [href]="qrVoyageUrl(detail.id)"
+                 [download]="'qr-voyage-' + detail.id + '.png'" target="_blank">
+                <i class="fa-solid fa-download"></i> Télécharger</a>
+            </div>
+          </div>
+
           <h4 class="art-title">Livraisons ({{ detailLivraisons.length }})</h4>
           <div *ngIf="detailLoading" class="spinner" style="margin:20px auto"></div>
           <div *ngIf="!detailLoading && detailLivraisons.length===0" class="empty" style="padding:16px">
@@ -135,12 +147,22 @@ import * as L from 'leaflet';
                 <table>
                   <thead><tr><th>Article</th><th>Qté</th><th>Statut</th><th>QR</th></tr></thead>
                   <tbody>
-                    <tr *ngFor="let a of contenu[l.id].articles">
-                      <td><strong>{{ a.designation || '—' }}</strong></td>
-                      <td>{{ a.quantite ?? '—' }}</td>
-                      <td><span class="badge badge-gray">{{ a.statutReception || '—' }}</span></td>
-                      <td><img [src]="qrArticleUrl(a.id)" alt="QR" style="width:48px;height:48px"></td>
-                    </tr>
+                    <ng-container *ngFor="let a of contenu[l.id].articles">
+                      <tr class="row-link" (click)="artDetailId = artDetailId===a.id ? null : a.id">
+                        <td><strong>{{ a.designation || '—' }}</strong></td>
+                        <td>{{ a.quantite ?? '—' }}</td>
+                        <td><span class="badge badge-gray">{{ a.statutReception || '—' }}</span></td>
+                        <td><img [src]="qrArticleUrl(a.id)" alt="QR" style="width:48px;height:48px"></td>
+                      </tr>
+                      <tr *ngIf="artDetailId===a.id">
+                        <td colspan="4" class="muted" style="font-size:12px;background:#faf9fb">
+                          N° prix : <code>{{ a.numPrix || '—' }}</code> ·
+                          Projet : {{ a.projet || '—' }} ·
+                          Heure scan : {{ a.heureScan ? (a.heureScan | date:'dd/MM/yy HH:mm:ss') : '—' }} ·
+                          Réf ligne : <code>#{{ a.id }}</code>
+                        </td>
+                      </tr>
+                    </ng-container>
                   </tbody>
                 </table>
               </div>
@@ -209,6 +231,7 @@ export class VoyagesConteneursComponent implements OnInit {
   detailLoading = false;
   trajet: TrajetVoyage | null = null;
   trajetLoading = false;
+  artDetailId: number | null = null;
   private trajetMap?: L.Map;
 
   constructor(
@@ -339,6 +362,7 @@ export class VoyagesConteneursComponent implements OnInit {
 
   qrArticleUrl(detailId: number): string { return `${environment.apiUrl}/articles/detail/${detailId}/qrcode`; }
   qrMatiereUrl(detailMpId: number): string { return `${environment.apiUrl}/articles/matiere/${detailMpId}/qrcode`; }
+  qrVoyageUrl(voyageId: number): string { return `${environment.apiUrl}/voyages-conteneurs/${voyageId}/qrcode`; }
 
   dureeLabel(min?: number | null): string {
     if (min == null) return '—';
