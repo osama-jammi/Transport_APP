@@ -134,28 +134,13 @@ import * as L from 'leaflet';
             <div><span class="dk">Camion</span><span class="dv">{{ detail.camionImmatriculation || '—' }}</span></div>
             <div><span class="dk">Chauffeur</span><span class="dv">{{ detail.chauffeur || '—' }}</span></div>
             <div><span class="dk">Statut</span><span class="dv"><span class="badge" [ngClass]="statutVoyage(detail).cls">{{ statutVoyage(detail).label }}</span></span></div>
-            <div><span class="dk">Bon de livraison</span><span class="dv">
-              <ng-container *ngIf="detail.hasBl; else noBl">
-                <button class="btn btn-primary btn-sm" (click)="telechargerBL(detail)">
-                  <i class="fa-solid fa-file-arrow-down"></i> Télécharger le BL</button>
-                <span *ngIf="detail.bl" class="muted" style="margin-left:8px">Réf : {{ detail.bl }}</span>
-              </ng-container>
-              <ng-template #noBl><span class="muted">Pas encore livré</span></ng-template>
-            </span></div>
             <div><span class="dk">Chargement</span><span class="dv">{{ detail.chargementJour || '—' }} {{ detail.chargementHeure || '' }}</span></div>
             <div><span class="dk">Déchargement</span><span class="dv">{{ detail.dechargementJour || '—' }} {{ detail.dechargementHeure || '' }}</span></div>
           </div>
 
-          <div class="force-box">
-            <div>
-              <span class="dk">Code de forçage d'arrivée</span>
-              <span class="force-code">{{ detail.forceCode || '— non généré —' }}</span>
-              <span class="muted" style="font-size:11px">À communiquer au chauffeur pour valider l'arrivée hors zone.</span>
-            </div>
-            <button class="btn btn-outline btn-sm" (click)="regenererCode(detail)" [disabled]="regenCode">
-              <i class="fa-solid fa-rotate"></i> Régénérer
-            </button>
-          </div>
+          <p class="muted" style="font-size:12px;margin-top:8px">
+            <i class="fa-solid fa-circle-info"></i> Le code de forçage et le bon de livraison se gèrent désormais au niveau du <strong>Voyage</strong> (par ligne).
+          </p>
 
           <h4 class="art-title">Articles du voyage ({{ detailArticles.length }})</h4>
           <div *ngIf="detailLoading" class="spinner" style="margin:20px auto"></div>

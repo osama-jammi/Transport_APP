@@ -245,6 +245,13 @@ interface VoyageLigne {
               </div>
 
               <div *ngIf="openLivId===l.id">
+              <div style="display:flex;align-items:center;gap:10px;margin:8px 0;padding:8px;background:#faf9fb;border-radius:8px">
+                <span class="dk">Code de forçage d'arrivée</span>
+                <strong>{{ l.forceCode || '— non généré —' }}</strong>
+                <button class="btn btn-outline btn-sm" style="margin-left:auto"
+                        (click)="regenererForce(l)" [disabled]="regenForce">
+                  <i class="fa-solid fa-rotate"></i> Régénérer</button>
+              </div>
               <!-- Articles -->
               <div class="table-wrap" *ngIf="contenu[l.id]?.articles?.length" style="margin-top:8px">
                 <table>
@@ -359,6 +366,7 @@ export class VoyagesConteneursComponent implements OnInit {
   trajetLoading = false;
   artDetailId: number | null = null;
   openLivId: number | null = null;
+  regenForce = false;
   private trajetMap?: L.Map;
 
   constructor(
@@ -606,6 +614,15 @@ export class VoyagesConteneursComponent implements OnInit {
     this.svc.trajet(v.id).subscribe({
       next: t => { this.trajet = t; this.trajetLoading = false; setTimeout(() => this.afficherTrajet(), 150); },
       error: () => { this.trajet = null; this.trajetLoading = false; }
+    });
+  }
+
+  /** Régénère le code de forçage d'une livraison (ligne de voyage). */
+  regenererForce(l: GapVoyage): void {
+    this.regenForce = true;
+    this.voyageSvc.regenererForceCode(l.id).subscribe({
+      next: maj => { l.forceCode = maj.forceCode; this.regenForce = false; this.toastr.success('Nouveau code : ' + maj.forceCode); },
+      error: () => { this.regenForce = false; this.toastr.error('Échec de la régénération.'); }
     });
   }
 
