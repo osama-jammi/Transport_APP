@@ -1,0 +1,78 @@
+{
+  "expo": {
+    "name": "Transport Livraison",
+    "slug": "transport-livraison",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1e1b34"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.agileo.transport",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Nécessaire pour scanner les QR codes des articles et chauffeurs.",
+        "NSLocationWhenInUseUsageDescription": "Nécessaire pour la géolocalisation GPS des livraisons.",
+        "NSLocationAlwaysUsageDescription": "Nécessaire pour le suivi GPS en arrière-plan."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1e1b34"
+      },
+      "package": "com.agileo.transport",
+      "permissions": [
+        "CAMERA",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-camera",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "L'application utilise votre position pour suivre la livraison."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#1e1b34"
+        }
+      ]
+    ],
+    "scheme": "transport",
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "11aac58e-9d90-44ea-8dd4-076178adcf4d"
+      }
+    },
+    "owner": "jammi-1"
+  }
+}
