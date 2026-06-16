@@ -521,7 +521,10 @@ export class VoyagesConteneursComponent implements OnInit {
   fermerComboLigne(lg: VoyageLigne): void { setTimeout(() => lg.comboOpen = false, 150); }
 
   livraisonsDuChantier(lg: VoyageLigne): GapVoyage[] {
-    return this.allLivraisons.filter(l => l.projetId === lg.chantierId);
+    return this.allLivraisons.filter(l =>
+      l.projetId === lg.chantierId &&
+      // uniquement les livraisons en cours (pas livrées / archivées)
+      !['LIVRE', 'ARCHIVE'].includes((l.statutReception || '').toUpperCase()));
   }
 
   /* ─────────── Lignes : matières premières ─────────── */
