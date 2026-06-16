@@ -43,8 +43,12 @@ import * as L from 'leaflet';
           <div class="form-grid">
             <div class="field"><label>Nom du dépôt *</label><input [(ngModel)]="form.nom" placeholder="Ex : Dépôt central"></div>
             <div class="field"><label>Rayon (m)</label><input type="number" [(ngModel)]="form.rayon" placeholder="100"></div>
+            <div class="field"><label>Latitude</label>
+              <input type="number" step="any" [(ngModel)]="form.latitude" (change)="appliquerCoords()" placeholder="33.5731"></div>
+            <div class="field"><label>Longitude</label>
+              <input type="number" step="any" [(ngModel)]="form.longitude" (change)="appliquerCoords()" placeholder="-7.5898"></div>
           </div>
-          <p class="muted" style="font-size:12px;margin:6px 0">Cliquez sur la carte pour placer le dépôt.</p>
+          <p class="muted" style="font-size:12px;margin:6px 0">Cliquez sur la carte pour placer le dépôt, ou saisissez la latitude/longitude exacte.</p>
           <div id="depot-map" style="height:300px;border-radius:8px;overflow:hidden;border:1px solid #e5e7eb"></div>
           <div class="muted" style="font-size:12px;margin-top:6px" *ngIf="form.latitude != null">
             Position : {{ form.latitude | number:'1.5-5' }}, {{ form.longitude | number:'1.5-5' }}
@@ -106,6 +110,14 @@ export class DepotsComponent implements OnInit {
     setTimeout(() => map.invalidateSize(), 60);
   }
   private detruireMap(): void { if (this.map) { this.map.remove(); this.map = undefined; this.marker = undefined; } }
+
+  /** Saisie manuelle des coordonnées → place/centre le marqueur sur la carte. */
+  appliquerCoords(): void {
+    if (this.form.latitude == null || this.form.longitude == null || !this.map) return;
+    const pos: L.LatLngTuple = [this.form.latitude, this.form.longitude];
+    if (this.marker) this.marker.setLatLng(pos); else this.marker = L.marker(pos).addTo(this.map);
+    this.map.setView(pos, 15);
+  }
 
   enregistrer(): void {
     if (!this.form.nom) { this.toastr.warning('Le nom du dépôt est obligatoire.'); return; }
