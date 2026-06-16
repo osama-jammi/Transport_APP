@@ -239,6 +239,8 @@ export interface CommandeMp {
   marche?: string;
   tiers?: string;
   date?: string;
+  pieceFournisseur?: string;
+  reference?: string;
 }
 
 /** Matière première lue depuis Divalto (table MOUV). */
@@ -252,6 +254,7 @@ export interface MatierePremiere {
   marche?: string;
   tiers?: string;
   devise?: string;
+  of?: string;
 }
 
 export interface PositionGps {

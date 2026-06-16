@@ -7,52 +7,60 @@ import { CommandeMp, MatierePremiere } from '../core/models';
   selector: 'app-matieres-premieres',
   template: `
     <div class="toolbar">
-      <span class="badge badge-blue"><i class="fa-solid fa-database"></i> Matières premières (Divalto, lecture seule)</span>
+      <span class="badge badge-blue"><i class="fa-solid fa-database"></i> Commandes matières premières (Divalto, lecture seule)</span>
       <div class="search"><i class="fa-solid fa-magnifying-glass"></i>
-        <input [(ngModel)]="q" placeholder="Rechercher une commande (n°, affaire, fournisseur)…"></div>
+        <input [(ngModel)]="q" placeholder="Rechercher (n°, affaire, fournisseur, réf)…"></div>
       <button class="btn btn-outline right" (click)="chargerCommandes()" [disabled]="loadingCmd">
         <i class="fa-solid fa-rotate"></i> Actualiser</button>
     </div>
 
-    <div class="chart-grid" style="grid-template-columns:1fr 2fr">
-      <!-- Étape 1 : commandes -->
-      <div class="card"><div class="card-head"><h2>Commandes</h2></div>
-        <div class="card-body" style="padding:0">
-          <div *ngIf="loadingCmd" class="spinner"></div>
-          <div *ngIf="!loadingCmd && commandesFiltrees().length===0" class="empty" style="padding:20px">
-            <i class="fa-solid fa-file-invoice"></i> Aucune commande</div>
-          <div class="table-wrap" *ngIf="!loadingCmd && commandesFiltrees().length">
-            <table>
-              <thead><tr><th>N°</th><th>Affaire</th><th>Fournisseur</th></tr></thead>
-              <tbody>
-                <tr *ngFor="let c of commandesFiltrees()" class="row-link"
-                    [class.checked]="c.cdno===selected?.cdno" (click)="choisir(c)">
-                  <td><code>{{ c.cdno }}</code></td>
-                  <td>{{ c.projet || c.marche || '—' }}</td>
-                  <td>{{ c.tiers || '—' }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
+    <div class="card"><div class="card-body" style="padding:0">
+      <div *ngIf="loadingCmd" class="spinner"></div>
+      <div *ngIf="!loadingCmd && commandesFiltrees().length===0" class="empty">
+        <i class="fa-solid fa-file-invoice"></i> Aucune commande</div>
+      <div class="table-wrap" *ngIf="!loadingCmd && commandesFiltrees().length">
+        <table>
+          <thead><tr><th>N°</th><th>Date</th><th>Affaire</th><th>Fournisseur</th>
+            <th>Pièce fournisseur</th><th>Votre réf</th><th></th></tr></thead>
+          <tbody>
+            <tr *ngFor="let c of commandesFiltrees()" class="row-link" (click)="choisir(c)">
+              <td><code>{{ c.cdno }}</code></td>
+              <td>{{ c.date ? (c.date | date:'dd/MM/yy') : '—' }}</td>
+              <td>{{ c.projet || c.marche || '—' }}</td>
+              <td>{{ c.tiers || '—' }}</td>
+              <td>{{ c.pieceFournisseur || '—' }}</td>
+              <td>{{ c.reference || '—' }}</td>
+              <td><button class="btn btn-outline btn-sm" (click)="choisir(c); $event.stopPropagation()">
+                <i class="fa-solid fa-eye"></i> Lignes</button></td>
+            </tr>
+          </tbody>
+        </table>
       </div>
+    </div></div>
 
-      <!-- Étape 2 : lignes de la commande sélectionnée -->
-      <div class="card">
-        <div class="card-head"><h2>{{ selected ? 'Lignes de la commande #' + selected.cdno : 'Sélectionnez une commande' }}</h2></div>
-        <div class="card-body" style="padding:0">
-          <div *ngIf="loadingLignes" class="spinner"></div>
-          <div *ngIf="!loadingLignes && selected && lignes.length===0" class="empty" style="padding:20px">
+    <!-- Modal des lignes de la commande -->
+    <div class="modal-backdrop" *ngIf="selected" (click)="fermer($event)">
+      <div class="modal" style="max-width:900px" (click)="$event.stopPropagation()">
+        <div class="m-head"><h3>Commande #{{ selected.cdno }} — {{ selected.projet || selected.marche || '' }}</h3>
+          <button class="x" (click)="selected=null">&times;</button></div>
+        <div class="m-body">
+          <div class="detail-grid">
+            <div><span class="dk">Fournisseur</span><span class="dv">{{ selected.tiers || '—' }}</span></div>
+            <div><span class="dk">Pièce fournisseur</span><span class="dv">{{ selected.pieceFournisseur || '—' }}</span></div>
+            <div><span class="dk">Votre réf</span><span class="dv">{{ selected.reference || '—' }}</span></div>
+            <div><span class="dk">Date</span><span class="dv">{{ selected.date ? (selected.date | date:'dd/MM/yy') : '—' }}</span></div>
+          </div>
+          <div *ngIf="loadingLignes" class="spinner" style="margin:20px auto"></div>
+          <div *ngIf="!loadingLignes && lignes.length===0" class="empty" style="padding:20px">
             <i class="fa-solid fa-boxes-stacked"></i> Aucune ligne</div>
-          <div *ngIf="!selected" class="empty" style="padding:30px">
-            <i class="fa-solid fa-arrow-left"></i> Choisissez une commande à gauche</div>
           <div class="table-wrap" *ngIf="!loadingLignes && lignes.length">
             <table>
-              <thead><tr><th>Référence</th><th>Désignation</th><th>Quantité</th><th>Unité</th></tr></thead>
+              <thead><tr><th>Référence</th><th>Désignation</th><th>OF</th><th>Quantité</th><th>Unité</th></tr></thead>
               <tbody>
                 <tr *ngFor="let m of lignes">
                   <td><code>{{ m.reference || '—' }}</code></td>
                   <td><strong>{{ m.designation || '—' }}</strong></td>
+                  <td><code>{{ m.of || '—' }}</code></td>
                   <td>{{ m.quantite ?? '—' }}</td>
                   <td>{{ m.unite || '—' }}</td>
                 </tr>
@@ -60,6 +68,7 @@ import { CommandeMp, MatierePremiere } from '../core/models';
             </table>
           </div>
         </div>
+        <div class="m-foot"><button class="btn btn-outline" (click)="selected=null">Fermer</button></div>
       </div>
     </div>
   `
@@ -88,7 +97,8 @@ export class MatieresPremieresComponent implements OnInit {
     const t = this.q.toLowerCase().trim();
     if (!t) return this.commandes;
     return this.commandes.filter(c =>
-      `${c.cdno} ${c.projet || ''} ${c.marche || ''} ${c.tiers || ''}`.toLowerCase().includes(t));
+      `${c.cdno} ${c.projet || ''} ${c.marche || ''} ${c.tiers || ''} ${c.pieceFournisseur || ''} ${c.reference || ''}`
+        .toLowerCase().includes(t));
   }
 
   choisir(c: CommandeMp): void {
@@ -100,4 +110,6 @@ export class MatieresPremieresComponent implements OnInit {
       error: () => { this.loadingLignes = false; this.toastr.error('Impossible de lire les lignes (Divalto).'); }
     });
   }
+
+  fermer(e: Event): void { if (e.target === e.currentTarget) this.selected = null; }
 }

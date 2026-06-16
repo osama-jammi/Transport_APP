@@ -22,20 +22,6 @@ import * as L from 'leaflet';
         <i class="fa-solid fa-magnifying-glass"></i>
         <input [(ngModel)]="q" placeholder="Rechercher (client, camion, chauffeur, transporteur)…">
       </div>
-      <div class="flex">
-        <select [(ngModel)]="vue" (change)="charger()" class="btn btn-outline">
-          <option value="en-cours">Livraisons en cours</option>
-          <option value="archives">Livraisons archivées</option>
-        </select>
-        <ng-container *ngIf="vue==='archives'">
-          <input type="date" [(ngModel)]="dateDebut" class="btn btn-outline">
-          <input type="date" [(ngModel)]="dateFin" class="btn btn-outline">
-          <button class="btn btn-outline" (click)="charger()"><i class="fa-solid fa-filter"></i></button>
-        </ng-container>
-      </div>
-      <button class="btn btn-primary right" (click)="ouvrir()">
-        <i class="fa-solid fa-plus"></i> Nouvelle livraison
-      </button>
     </div>
 
     <div class="card"><div class="card-body" style="padding:0">
