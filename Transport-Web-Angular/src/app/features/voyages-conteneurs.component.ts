@@ -303,7 +303,7 @@ interface VoyageLigne {
             <i class="fa-solid fa-cubes"></i> Aucune matière première</div>
           <div class="table-wrap" *ngIf="detailMatieres.length">
             <table>
-              <thead><tr><th>Désignation</th><th>Réf</th><th>OF</th><th>Affaire</th><th>Qté</th></tr></thead>
+              <thead><tr><th>Désignation</th><th>Réf</th><th>OF</th><th>Affaire</th><th>Qté</th><th>QR</th></tr></thead>
               <tbody>
                 <tr *ngFor="let m of detailMatieres">
                   <td><strong>{{ m.designation || '—' }}</strong></td>
@@ -311,6 +311,12 @@ interface VoyageLigne {
                   <td><code>{{ m.of || '—' }}</code></td>
                   <td>{{ m.projet || '—' }}</td>
                   <td>{{ m.quantite ?? '—' }}</td>
+                  <td style="white-space:nowrap">
+                    <img [src]="qrMatiereUrl(m.id)" alt="QR" style="width:48px;height:48px;vertical-align:middle">
+                    <a class="btn btn-outline btn-sm" style="margin-left:6px"
+                       [href]="qrMatiereUrl(m.id)" [download]="'qr-mp-' + m.id + '.png'" target="_blank" title="Télécharger le QR">
+                      <i class="fa-solid fa-download"></i></a>
+                  </td>
                 </tr>
               </tbody>
             </table>
