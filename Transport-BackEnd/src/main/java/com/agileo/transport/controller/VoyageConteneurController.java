@@ -4,9 +4,11 @@ import com.agileo.transport.Dtos.request.VoyageConteneurRequestDTO;
 import com.agileo.transport.Dtos.response.GapVoyageDTO;
 import com.agileo.transport.Dtos.response.VoyageConteneurDTO;
 import com.agileo.transport.Dtos.response.TrajetVoyageResponseDTO;
+import com.agileo.transport.service.ArticleService;
 import com.agileo.transport.service.GapReadService;
 import com.agileo.transport.service.GpsService;
 import io.swagger.v3.oas.annotations.Operation;
+import org.springframework.http.MediaType;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -27,10 +29,13 @@ public class VoyageConteneurController {
 
     private final GapReadService gapReadService;
     private final GpsService gpsService;
+    private final ArticleService articleService;
 
-    public VoyageConteneurController(GapReadService gapReadService, GpsService gpsService) {
+    public VoyageConteneurController(GapReadService gapReadService, GpsService gpsService,
+                                     ArticleService articleService) {
         this.gapReadService = gapReadService;
         this.gpsService = gpsService;
+        this.articleService = articleService;
     }
 
     @GetMapping
@@ -84,5 +89,11 @@ public class VoyageConteneurController {
     @Operation(summary = "Trajet GPS agrégé du voyage (toutes ses livraisons)")
     public ResponseEntity<TrajetVoyageResponseDTO> trajet(@PathVariable Long id) {
         return ResponseEntity.ok(gpsService.getTrajetAgrege(id, gapReadService.getLivraisonIdsDuVoyage(id)));
+    }
+
+    @GetMapping(value = "/{id}/qrcode", produces = MediaType.IMAGE_PNG_VALUE)
+    @Operation(summary = "QR code du voyage (scanné = scan de toutes ses lignes)")
+    public ResponseEntity<byte[]> qrCode(@PathVariable Long id) {
+        return ResponseEntity.ok(articleService.generateQrCodeForVoyage(id));
     }
 }

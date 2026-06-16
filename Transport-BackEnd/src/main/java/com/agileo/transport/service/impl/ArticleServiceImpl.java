@@ -108,6 +108,12 @@ public class ArticleServiceImpl implements ArticleService {
         return encodeQr("DETAIL_MP:" + detailMpId);
     }
 
+    @Override
+    public byte[] generateQrCodeForVoyage(Long voyageId) {
+        // QR du voyage : scanné, il vaut le scan de toutes ses lignes.
+        return encodeQr("VOYAGE:" + voyageId);
+    }
+
     /** Scan d'une ligne de livraison GAP (QR = "DETAIL:{id}") → met à jour son statut. */
     private ArticleResponseDTO scanDetailGap(String qrCode, String phase) {
         Long detailId;
@@ -127,8 +133,30 @@ public class ArticleServiceImpl implements ArticleService {
         return dto;
     }
 
+    /** Scan d'un voyage entier (QR = "VOYAGE:{id}") → marque toutes ses lignes. */
+    private ArticleResponseDTO scanVoyageGap(String qrCode, String phase) {
+        Long voyageId;
+        try {
+            voyageId = Long.parseLong(qrCode.substring("VOYAGE:".length()).trim());
+        } catch (NumberFormatException e) {
+            throw new EntityNotFoundException("QR voyage invalide : " + qrCode);
+        }
+        boolean chargement = "CHARGEMENT".equalsIgnoreCase(phase);
+        int n = gapReadService.scanAllDetailsForVoyage(voyageId, phase);
+        ArticleResponseDTO dto = new ArticleResponseDTO();
+        dto.setId(voyageId);
+        dto.setNom("Voyage #" + voyageId + " — " + n + " ligne(s) scannée(s)");
+        dto.setStatutScan(chargement
+                ? Article.StatutScan.SCANNE_CHARGEMENT : Article.StatutScan.SCANNE_LIVRAISON);
+        return dto;
+    }
+
     @Override
     public ArticleResponseDTO scan(String qrCode, String phase) {
+        // QR d'un voyage entier ("VOYAGE:{id}") → scanne toutes ses lignes d'un coup
+        if (qrCode != null && qrCode.startsWith("VOYAGE:")) {
+            return scanVoyageGap(qrCode, phase);
+        }
         // Nouveau format : QR d'une ligne de livraison GAP ("DETAIL:{id}")
         if (qrCode != null && qrCode.startsWith("DETAIL:")) {
             return scanDetailGap(qrCode, phase);

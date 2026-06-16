@@ -569,4 +569,25 @@ public class GapReadService {
         return gapJdbcTemplate.queryForList(
                 "SELECT id FROM livraisons WHERE voyage_id = ?", Long.class, voyageId);
     }
+
+    /**
+     * Scan groupé : marque toutes les lignes (detail_livraison) des livraisons d'un voyage
+     * selon la phase. Renvoie le nombre de lignes mises à jour.
+     */
+    public int scanAllDetailsForVoyage(Long voyageId, String phase) {
+        String statut = "CHARGEMENT".equalsIgnoreCase(phase) ? "SCANNE_CHARGEMENT" : "SCANNE_LIVRAISON";
+        Timestamp now = Timestamp.valueOf(LocalDateTime.now());
+        int n = gapJdbcTemplate.update(
+                "UPDATE dl SET dl.statut_reception = ?, dl.modifier_le = ? " +
+                        "FROM detail_livraison dl JOIN livraisons l ON dl.id_livraison = l.id " +
+                        "WHERE l.voyage_id = ?", statut, now, voyageId);
+        // Passe les livraisons du voyage à 'CHARGE' au chargement (sauf déjà 'LIVRE')
+        if ("CHARGEMENT".equalsIgnoreCase(phase)) {
+            gapJdbcTemplate.update(
+                    "UPDATE livraisons SET statut_reception = 'CHARGE', modifier_le = ? " +
+                            "WHERE voyage_id = ? AND (statut_reception IS NULL OR statut_reception <> 'LIVRE')",
+                    now, voyageId);
+        }
+        return n;
+    }
 }

@@ -19,6 +19,8 @@ public interface ArticleService {
     byte[] generateQrCodeForDetail(Long detailId);
     /** Génère un QR code pour une ligne de matière première (detail_livraison_mp) */
     byte[] generateQrCodeForMatiere(Long detailMpId);
+    /** Génère un QR code pour un voyage entier (scanne toutes ses lignes d'un coup) */
+    byte[] generateQrCodeForVoyage(Long voyageId);
     /** Scan d'un article au chargement ou à la livraison */
     ArticleResponseDTO scan(String qrCode, String phase);
 }
