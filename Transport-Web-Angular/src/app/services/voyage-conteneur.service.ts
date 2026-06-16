@@ -18,6 +18,9 @@ export class VoyageConteneurService {
   update(id: number, req: VoyageConteneurRequest): Observable<void> {
     return this.http.put<void>(`${this.base}/${id}`, req);
   }
+  delete(id: number): Observable<void> {
+    return this.http.delete<void>(`${this.base}/${id}`);
+  }
   /** Livraisons libres ou déjà rattachées à ce voyage. */
   livraisonsAssignables(id: number): Observable<GapVoyage[]> {
     return this.http.get<GapVoyage[]>(`${this.base}/${id}/livraisons-assignables`);

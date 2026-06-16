@@ -601,6 +601,13 @@ public class GapReadService {
                 }, voyageId);
     }
 
+    /** Supprime un voyage conteneur : détache ses livraisons, supprime ses MP, puis le voyage. */
+    public void deleteVoyageConteneur(Long voyageId) {
+        gapJdbcTemplate.update("UPDATE livraisons SET voyage_id = NULL WHERE voyage_id = ?", voyageId);
+        gapJdbcTemplate.update("DELETE FROM voyage_matiere WHERE voyage_id = ?", voyageId);
+        gapJdbcTemplate.update("DELETE FROM voyage WHERE id = ?", voyageId);
+    }
+
     /** Ids des livraisons d'un voyage (pour agréger leurs positions GPS). */
     public List<Long> getLivraisonIdsDuVoyage(Long voyageId) {
         return gapJdbcTemplate.queryForList(

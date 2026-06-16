@@ -62,6 +62,8 @@ interface VoyageLigne {
                   <i class="fa-solid fa-eye"></i> Détails</button>
                 <button class="btn btn-outline btn-sm" (click)="ouvrir(v)" title="Gérer les livraisons">
                   <i class="fa-solid fa-pen"></i> Gérer</button>
+                <button class="btn btn-danger btn-sm" (click)="supprimer(v)" title="Supprimer">
+                  <i class="fa-solid fa-trash"></i></button>
               </td>
             </tr>
           </tbody>
@@ -197,9 +199,17 @@ interface VoyageLigne {
 
           <div *ngFor="let l of detailLivraisons" class="card" style="margin-bottom:12px">
             <div class="card-body">
-              <strong>#{{ l.id }} — {{ l.projetDesignation || l.projetCode || 'Sans chantier' }}</strong>
-              <span class="badge badge-gray" style="margin-left:8px">{{ l.statutReception || '—' }}</span>
+              <div class="row-link" (click)="openLivId = openLivId===l.id ? null : l.id"
+                   style="display:flex;align-items:center;gap:8px">
+                <i class="fa-solid" [ngClass]="openLivId===l.id ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
+                <strong>#{{ l.id }} — {{ l.projetDesignation || l.projetCode || 'Sans chantier' }}</strong>
+                <span class="badge badge-gray">{{ l.statutReception || '—' }}</span>
+                <button *ngIf="l.hasBl" class="btn btn-outline btn-sm" style="margin-left:auto"
+                        (click)="telechargerBL(l); $event.stopPropagation()" title="Télécharger le BL">
+                  <i class="fa-solid fa-file-arrow-down"></i> BL</button>
+              </div>
 
+              <div *ngIf="openLivId===l.id">
               <!-- Articles -->
               <div class="table-wrap" *ngIf="contenu[l.id]?.articles?.length" style="margin-top:8px">
                 <table>
@@ -242,6 +252,7 @@ interface VoyageLigne {
 
               <div *ngIf="!contenu[l.id]?.articles?.length && !contenu[l.id]?.matieres?.length"
                    class="muted" style="margin-top:6px;font-size:12px">Aucun contenu</div>
+              </div>
             </div>
           </div>
 
@@ -307,6 +318,7 @@ export class VoyagesConteneursComponent implements OnInit {
   trajet: TrajetVoyage | null = null;
   trajetLoading = false;
   artDetailId: number | null = null;
+  openLivId: number | null = null;
   private trajetMap?: L.Map;
 
   constructor(
@@ -362,6 +374,14 @@ export class VoyagesConteneursComponent implements OnInit {
         });
       }
       if (this.lignes.length === 0) this.ajouterLigne();
+    });
+  }
+
+  supprimer(v: VoyageConteneur): void {
+    if (!confirm(`Supprimer le voyage #${v.id} ? Les livraisons seront détachées (non supprimées).`)) return;
+    this.svc.delete(v.id).subscribe({
+      next: () => { this.toastr.success('Voyage supprimé.'); this.charger(); },
+      error: () => this.toastr.error('Échec de la suppression.')
     });
   }
 
@@ -495,6 +515,20 @@ export class VoyagesConteneursComponent implements OnInit {
     this.svc.trajet(v.id).subscribe({
       next: t => { this.trajet = t; this.trajetLoading = false; setTimeout(() => this.afficherTrajet(), 150); },
       error: () => { this.trajet = null; this.trajetLoading = false; }
+    });
+  }
+
+  /** Télécharge le bon de livraison d'une livraison du voyage. */
+  telechargerBL(l: GapVoyage): void {
+    this.voyageSvc.telechargerBL(l.id).subscribe({
+      next: blob => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = `bon-livraison-${l.id}`; a.target = '_blank';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+      },
+      error: () => this.toastr.error('Bon de livraison indisponible.')
     });
   }
 

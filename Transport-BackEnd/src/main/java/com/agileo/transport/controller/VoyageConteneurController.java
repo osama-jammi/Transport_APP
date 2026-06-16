@@ -77,6 +77,13 @@ public class VoyageConteneurController {
         return jour.atTime(heure != null ? heure : LocalTime.MIDNIGHT);
     }
 
+    @org.springframework.web.bind.annotation.DeleteMapping("/{id}")
+    @Operation(summary = "Supprimer un voyage conteneur")
+    public ResponseEntity<Void> delete(@PathVariable Long id) {
+        gapReadService.deleteVoyageConteneur(id);
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping("/{id}/livraisons-assignables")
     @Operation(summary = "Livraisons libres ou déjà rattachées à ce voyage (pour la sélection)")
     public ResponseEntity<List<GapVoyageDTO>> assignables(@PathVariable Long id) {
