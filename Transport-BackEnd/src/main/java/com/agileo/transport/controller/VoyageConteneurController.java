@@ -52,6 +52,9 @@ public class VoyageConteneurController {
         if (id != null && dto.getLivraisonIds() != null) {
             gapReadService.setLivraisonsDuVoyage(id, dto.getLivraisonIds());
         }
+        if (id != null) {
+            gapReadService.saveVoyageMatieres(id, dto.getMatieres(), "transport-app");
+        }
         return ResponseEntity.ok(id);
     }
 
@@ -65,6 +68,7 @@ public class VoyageConteneurController {
         if (dto.getLivraisonIds() != null) {
             gapReadService.setLivraisonsDuVoyage(id, dto.getLivraisonIds());
         }
+        gapReadService.saveVoyageMatieres(id, dto.getMatieres(), "transport-app");
         return ResponseEntity.noContent().build();
     }
 
@@ -89,6 +93,12 @@ public class VoyageConteneurController {
     @Operation(summary = "Trajet GPS agrégé du voyage (toutes ses livraisons)")
     public ResponseEntity<TrajetVoyageResponseDTO> trajet(@PathVariable Long id) {
         return ResponseEntity.ok(gpsService.getTrajetAgrege(id, gapReadService.getLivraisonIdsDuVoyage(id)));
+    }
+
+    @GetMapping("/{id}/matieres")
+    @Operation(summary = "Lignes de matières premières rattachées au voyage")
+    public ResponseEntity<List<com.agileo.transport.Dtos.response.MatierePremiereDTO>> matieres(@PathVariable Long id) {
+        return ResponseEntity.ok(gapReadService.getVoyageMatieres(id));
     }
 
     @GetMapping(value = "/{id}/qrcode", produces = MediaType.IMAGE_PNG_VALUE)

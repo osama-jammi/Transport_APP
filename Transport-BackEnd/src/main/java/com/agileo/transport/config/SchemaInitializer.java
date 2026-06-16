@@ -136,6 +136,25 @@ public class SchemaInitializer {
                 "IF COL_LENGTH('livraisons','type_livraison') IS NULL " +
                         "ALTER TABLE livraisons ADD type_livraison VARCHAR(30) NULL",
                 "livraisons.type_livraison");
+        // Lignes de matières premières rattachées DIRECTEMENT à un voyage (sans livraison).
+        // Divalto reste en lecture seule : on ne fait que copier ici les lignes choisies.
+        exec(gapJdbcTemplate,
+                "IF OBJECT_ID('voyage_matiere','U') IS NULL " +
+                        "CREATE TABLE voyage_matiere (" +
+                        " id BIGINT IDENTITY(1,1) PRIMARY KEY," +
+                        " voyage_id BIGINT NULL," +
+                        " projet VARCHAR(50) NULL," +          // chantier (code CHxxxx)
+                        " cdno BIGINT NULL," +                 // commande Divalto (CDNO)
+                        " ref VARCHAR(50) NULL," +
+                        " designation VARCHAR(255) NULL," +
+                        " of_no VARCHAR(50) NULL," +
+                        " quantite FLOAT NULL," +
+                        " unite VARCHAR(20) NULL," +
+                        " date_livraison datetime2 NULL," +
+                        " creer_par VARCHAR(255) NULL," +
+                        " creer_le datetime2 NULL)",
+                "table voyage_matiere");
+
         // Lignes de matières premières (issues de Divalto) rattachées à une livraison.
         // Table dédiée car les MP n'ont pas d'id_article GAP (detail_livraison est article-only).
         exec(gapJdbcTemplate,

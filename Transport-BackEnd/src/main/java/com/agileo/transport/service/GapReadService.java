@@ -5,6 +5,7 @@ import com.agileo.transport.Dtos.response.GapChantierDTO;
 import com.agileo.transport.Dtos.response.GapChauffeurDTO;
 import com.agileo.transport.Dtos.response.GapVoyageArticleDTO;
 import com.agileo.transport.Dtos.request.MatiereLigneDTO;
+import com.agileo.transport.Dtos.request.VoyageMatiereLigneDTO;
 import com.agileo.transport.Dtos.response.GapVoyageDTO;
 import com.agileo.transport.Dtos.response.MatierePremiereDTO;
 import com.agileo.transport.Dtos.response.VoyageConteneurDTO;
@@ -562,6 +563,40 @@ public class GapReadService {
                 "LEFT JOIN ateliers  ate ON l.id_atelier   = ate.id " +
                 "WHERE l.voyage_id = ? ORDER BY l.date_livraison DESC";
         return gapJdbcTemplate.query(sql, VOYAGE_MAPPER, voyageId);
+    }
+
+    /** Remplace les lignes de matières premières rattachées directement à un voyage. */
+    public void saveVoyageMatieres(Long voyageId, List<VoyageMatiereLigneDTO> matieres, String user) {
+        gapJdbcTemplate.update("DELETE FROM voyage_matiere WHERE voyage_id = ?", voyageId);
+        if (matieres == null || matieres.isEmpty()) return;
+        String sql = "INSERT INTO voyage_matiere " +
+                "(voyage_id, projet, cdno, ref, designation, of_no, quantite, unite, date_livraison, creer_par, creer_le) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        Timestamp now = Timestamp.valueOf(LocalDateTime.now());
+        for (VoyageMatiereLigneDTO m : matieres) {
+            double q = (m.getQuantite() != null && m.getQuantite() > 0) ? m.getQuantite() : 1.0;
+            Timestamp dl = m.getDateLivraison() != null ? Timestamp.valueOf(m.getDateLivraison().atStartOfDay()) : null;
+            gapJdbcTemplate.update(sql, voyageId, m.getProjet(), m.getCdno(), m.getRef(),
+                    m.getDesignation(), m.getOf(), q, m.getUnite(), dl, user, now);
+        }
+    }
+
+    /** Lignes de matières premières d'un voyage (table voyage_matiere). */
+    public List<MatierePremiereDTO> getVoyageMatieres(Long voyageId) {
+        return gapJdbcTemplate.query(
+                "SELECT id, projet, ref, designation, of_no, quantite, unite FROM voyage_matiere " +
+                        "WHERE voyage_id = ? ORDER BY id",
+                (rs, i) -> {
+                    MatierePremiereDTO d = new MatierePremiereDTO();
+                    d.setId(rs.getLong("id"));
+                    d.setProjet(rs.getString("projet"));
+                    d.setReference(rs.getString("ref"));
+                    d.setDesignation(rs.getString("designation"));
+                    d.setOf(rs.getString("of_no"));
+                    d.setQuantite(rs.getDouble("quantite"));
+                    d.setUnite(rs.getString("unite"));
+                    return d;
+                }, voyageId);
     }
 
     /** Ids des livraisons d'un voyage (pour agréger leurs positions GPS). */
