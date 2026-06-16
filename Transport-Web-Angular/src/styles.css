@@ -180,8 +180,8 @@ td code, .mono { font-family: ui-monospace, Menlo, monospace; font-size: 12px; c
   border-radius: 8px; cursor: pointer; transition: border-color .15s, background .15s; }
 .art-item:hover { border-color: #d9cfd6; }
 .art-item.checked { border-color: var(--primary); background: var(--primary-light); }
-.art-item input { width: 16px; height: 16px; accent-color: var(--primary); }
-.art-info { display: flex; flex-direction: column; gap: 1px; overflow: hidden; }
+.art-item input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--primary); flex: 0 0 16px; }
+.art-info { display: flex; flex-direction: column; gap: 1px; overflow: hidden; flex: 1 1 auto; min-width: 0; }
 .art-info strong { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .art-info .muted { font-size: 11px; }
 
@@ -263,7 +263,8 @@ td code, .mono { font-family: ui-monospace, Menlo, monospace; font-size: 12px; c
 .type-toggle button.active { background: var(--primary); color: #fff; border-color: var(--primary); }
 
 /* Champ quantité par article sélectionné */
-.qte-input { width: 110px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px;
+.qte-input { width: 110px; flex: 0 0 110px; min-width: 110px; padding: 8px 10px;
+  border: 1px solid var(--border); border-radius: 6px;
   font-size: 14px; text-align: center; margin-left: auto; box-sizing: border-box; }
 .qte-input:focus { outline: none; border-color: var(--primary); }
 
