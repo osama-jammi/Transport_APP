@@ -18,6 +18,8 @@ public class VoyageConteneurRequestDTO {
     private LocalTime dechargementHeure;
     /** Lignes de matières premières rattachées directement au voyage (lecture seule Divalto). */
     private List<VoyageMatiereLigneDTO> matieres;
+    /** Dates (chargement/déchargement) prévues par livraison rattachée. */
+    private List<LivraisonDateDTO> livraisonDates;
     /** Local de départ (géofence de chargement). */
     private String localNom;
     private Double localLat;

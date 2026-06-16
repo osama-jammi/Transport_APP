@@ -54,6 +54,7 @@ public class VoyageConteneurController {
         }
         if (id != null) {
             gapReadService.saveVoyageMatieres(id, dto.getMatieres(), "transport-app");
+            gapReadService.applyLivraisonDates(dto.getLivraisonDates());
             gapReadService.updateVoyageLocal(id, dto.getLocalNom(), dto.getLocalLat(), dto.getLocalLng(), dto.getLocalRayon());
         }
         return ResponseEntity.ok(id);
@@ -70,6 +71,7 @@ public class VoyageConteneurController {
             gapReadService.setLivraisonsDuVoyage(id, dto.getLivraisonIds());
         }
         gapReadService.saveVoyageMatieres(id, dto.getMatieres(), "transport-app");
+        gapReadService.applyLivraisonDates(dto.getLivraisonDates());
         gapReadService.updateVoyageLocal(id, dto.getLocalNom(), dto.getLocalLat(), dto.getLocalLng(), dto.getLocalRayon());
         return ResponseEntity.noContent().build();
     }

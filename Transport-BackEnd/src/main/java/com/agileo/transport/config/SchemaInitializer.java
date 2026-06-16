@@ -173,9 +173,16 @@ public class SchemaInitializer {
                         " quantite FLOAT NULL," +
                         " unite VARCHAR(20) NULL," +
                         " date_livraison datetime2 NULL," +
+                        " date_chargement datetime2 NULL," +
+                        " date_dechargement datetime2 NULL," +
                         " creer_par VARCHAR(255) NULL," +
                         " creer_le datetime2 NULL)",
                 "table voyage_matiere");
+        // Colonnes ajoutées si la table existait déjà (heures par ligne)
+        exec(gapJdbcTemplate, "IF COL_LENGTH('voyage_matiere','date_chargement') IS NULL " +
+                "ALTER TABLE voyage_matiere ADD date_chargement datetime2 NULL", "voyage_matiere.date_chargement");
+        exec(gapJdbcTemplate, "IF COL_LENGTH('voyage_matiere','date_dechargement') IS NULL " +
+                "ALTER TABLE voyage_matiere ADD date_dechargement datetime2 NULL", "voyage_matiere.date_dechargement");
 
         // Lignes de matières premières (issues de Divalto) rattachées à une livraison.
         // Table dédiée car les MP n'ont pas d'id_article GAP (detail_livraison est article-only).

@@ -4,6 +4,7 @@ import com.agileo.transport.Dtos.response.GapArticleDTO;
 import com.agileo.transport.Dtos.response.GapChantierDTO;
 import com.agileo.transport.Dtos.response.GapChauffeurDTO;
 import com.agileo.transport.Dtos.response.GapVoyageArticleDTO;
+import com.agileo.transport.Dtos.request.LivraisonDateDTO;
 import com.agileo.transport.Dtos.request.MatiereLigneDTO;
 import com.agileo.transport.Dtos.request.VoyageMatiereLigneDTO;
 import com.agileo.transport.Dtos.response.GapVoyageDTO;
@@ -581,14 +582,33 @@ public class GapReadService {
         gapJdbcTemplate.update("DELETE FROM voyage_matiere WHERE voyage_id = ?", voyageId);
         if (matieres == null || matieres.isEmpty()) return;
         String sql = "INSERT INTO voyage_matiere " +
-                "(voyage_id, projet, cdno, ref, designation, of_no, quantite, unite, date_livraison, creer_par, creer_le) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                "(voyage_id, projet, cdno, ref, designation, of_no, quantite, unite, " +
+                "date_livraison, date_chargement, date_dechargement, creer_par, creer_le) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         Timestamp now = Timestamp.valueOf(LocalDateTime.now());
         for (VoyageMatiereLigneDTO m : matieres) {
             double q = (m.getQuantite() != null && m.getQuantite() > 0) ? m.getQuantite() : 1.0;
             Timestamp dl = m.getDateLivraison() != null ? Timestamp.valueOf(m.getDateLivraison().atStartOfDay()) : null;
+            Timestamp dc = m.getDateChargement() != null ? Timestamp.valueOf(m.getDateChargement()) : null;
+            Timestamp dd = m.getDateDechargement() != null ? Timestamp.valueOf(m.getDateDechargement()) : null;
             gapJdbcTemplate.update(sql, voyageId, m.getProjet(), m.getCdno(), m.getRef(),
-                    m.getDesignation(), m.getOf(), q, m.getUnite(), dl, user, now);
+                    m.getDesignation(), m.getOf(), q, m.getUnite(), dl, dc, dd, user, now);
+        }
+    }
+
+    /** Applique les dates prévues (chargement/déchargement) sur les livraisons rattachées. */
+    public void applyLivraisonDates(List<LivraisonDateDTO> dates) {
+        if (dates == null) return;
+        Timestamp now = Timestamp.valueOf(LocalDateTime.now());
+        for (LivraisonDateDTO d : dates) {
+            if (d.getId() == null) continue;
+            gapJdbcTemplate.update(
+                    "UPDATE livraisons SET date_chargement = ?, date_dechargement = ?, " +
+                            "date_livraison = COALESCE(?, date_livraison), modifier_le = ? WHERE id = ?",
+                    d.getChargement() != null ? Timestamp.valueOf(d.getChargement()) : null,
+                    d.getDechargement() != null ? Timestamp.valueOf(d.getDechargement()) : null,
+                    d.getChargement() != null ? Timestamp.valueOf(d.getChargement()) : null,
+                    now, d.getId());
         }
     }
 

@@ -222,8 +222,10 @@ export interface VoyageConteneurRequest {
   dechargementHeure?: string;
   matieres?: {
     projet?: string; cdno?: number; ref?: string; designation?: string;
-    of?: string; quantite?: number; unite?: string; dateLivraison?: string;
+    of?: string; quantite?: number; unite?: string;
+    dateLivraison?: string; dateChargement?: string; dateDechargement?: string;
   }[];
+  livraisonDates?: { id: number; chargement?: string; dechargement?: string }[];
   localNom?: string;
   localLat?: number;
   localLng?: number;

@@ -20,7 +20,10 @@ interface VoyageLigne {
   chantierCode?: string;
   filtreChantier: string;
   comboOpen: boolean;
-  date?: string;
+  chargementJour?: string;
+  chargementHeure?: string;
+  dechargementJour?: string;
+  dechargementHeure?: string;
   type: 'ARTICLE' | 'MATIERE_PREMIERE';
   selectedLiv: Record<number, boolean>;
   commandes: CommandeMp[];
@@ -89,17 +92,22 @@ interface VoyageLigne {
             </div>
           </div>
 
-          <div class="form-grid" style="margin-top:10px">
-            <div class="field"><label>Chargement prévu (jour)</label><input type="date" [(ngModel)]="form.chargementJour"></div>
-            <div class="field"><label>Heure</label><input type="time" [(ngModel)]="form.chargementHeure"></div>
-            <div class="field"><label>Déchargement prévu (jour)</label><input type="date" [(ngModel)]="form.dechargementJour"></div>
-            <div class="field"><label>Heure</label><input type="time" [(ngModel)]="form.dechargementHeure"></div>
-          </div>
-          <div class="form-grid">
-            <div class="field"><label>Local de départ</label><input [(ngModel)]="form.localNom" placeholder="Nom du dépôt"></div>
-            <div class="field"><label>Latitude</label><input type="number" step="any" [(ngModel)]="form.localLat"></div>
-            <div class="field"><label>Longitude</label><input type="number" step="any" [(ngModel)]="form.localLng"></div>
-            <div class="field"><label>Rayon (m)</label><input type="number" [(ngModel)]="form.localRayon"></div>
+          <div style="margin-top:10px">
+            <button class="btn btn-outline btn-sm" (click)="toggleLocal()">
+              <i class="fa-solid fa-location-dot"></i>
+              {{ localOpen ? 'Masquer le local de départ' : 'Mettre un local de départ (optionnel)' }}
+            </button>
+            <div *ngIf="localOpen" style="margin-top:8px;padding:10px;border:1px solid var(--border);border-radius:8px">
+              <div class="form-grid">
+                <div class="field"><label>Nom du dépôt</label><input [(ngModel)]="form.localNom" placeholder="Ex : Dépôt central"></div>
+                <div class="field"><label>Rayon (m)</label><input type="number" [(ngModel)]="form.localRayon" placeholder="100"></div>
+              </div>
+              <p class="muted" style="font-size:12px;margin:6px 0">Cliquez sur la carte pour placer le point de départ.</p>
+              <div id="local-map" style="height:260px;border-radius:8px;overflow:hidden;border:1px solid #e5e7eb"></div>
+              <div class="muted" style="font-size:12px;margin-top:6px" *ngIf="form.localLat != null">
+                Position : {{ form.localLat | number:'1.5-5' }}, {{ form.localLng | number:'1.5-5' }}
+              </div>
+            </div>
           </div>
 
           <h4 class="art-title">Lignes du voyage</h4>
@@ -121,7 +129,12 @@ interface VoyageLigne {
                     </div>
                   </div>
                 </div>
-                <div class="field"><label>Date de livraison</label><input type="date" [(ngModel)]="lg.date"></div>
+              </div>
+              <div class="form-grid">
+                <div class="field"><label>Chargement prévu (jour)</label><input type="date" [(ngModel)]="lg.chargementJour"></div>
+                <div class="field"><label>Heure</label><input type="time" [(ngModel)]="lg.chargementHeure"></div>
+                <div class="field"><label>Déchargement prévu (jour)</label><input type="date" [(ngModel)]="lg.dechargementJour"></div>
+                <div class="field"><label>Heure</label><input type="time" [(ngModel)]="lg.dechargementHeure"></div>
               </div>
 
               <div class="type-toggle">
@@ -325,10 +338,10 @@ export class VoyagesConteneursComponent implements OnInit {
   chantiers: Chantier[] = [];
   allLivraisons: GapVoyage[] = [];   // livraisons assignables (filtrées par chantier dans chaque ligne)
   lignes: VoyageLigne[] = [];
-  form: {
-    chargementJour?: string; chargementHeure?: string; dechargementJour?: string; dechargementHeure?: string;
-    localNom?: string; localLat?: number; localLng?: number; localRayon?: number;
-  } = {};
+  form: { localNom?: string; localLat?: number; localLng?: number; localRayon?: number } = {};
+  localOpen = false;
+  private localMap?: L.Map;
+  private localMarker?: L.Marker;
 
   // Détail (consultation)
   detail: VoyageConteneur | null = null;
@@ -367,12 +380,10 @@ export class VoyagesConteneursComponent implements OnInit {
     this.filtreChauffeur = v && v.chauffeur ? v.chauffeur : '';
     this.comboOpen = false;
     this.lignes = [];
-    const split = (iso?: string) => iso ? { j: iso.slice(0, 10), h: iso.slice(11, 16) } : { j: undefined, h: undefined };
-    const c = split(v?.chargement); const d = split(v?.dechargement);
     this.form = {
-      chargementJour: c.j, chargementHeure: c.h, dechargementJour: d.j, dechargementHeure: d.h,
       localNom: v?.localNom, localLat: v?.localLat, localLng: v?.localLng, localRayon: v?.localRayon
     };
+    this.localOpen = !!(v && v.localNom);
     this.modal = true;
     const vid = v ? v.id : 0;
     forkJoin({
@@ -422,7 +433,7 @@ export class VoyagesConteneursComponent implements OnInit {
   ajouterLigne(): void { this.lignes.push(this.nouvelleLigne()); }
   retirerLigne(i: number): void { this.lignes.splice(i, 1); }
 
-  fermer(e: Event): void { if (e.target === e.currentTarget) this.modal = false; }
+  fermer(e: Event): void { if (e.target === e.currentTarget) { this.detruireLocalMap(); this.modal = false; } }
 
   chauffeursFiltres(): GapChauffeur[] {
     const t = this.filtreChauffeur.toLowerCase().trim();
@@ -436,6 +447,36 @@ export class VoyagesConteneursComponent implements OnInit {
     this.comboOpen = false;
   }
   fermerCombo(): void { setTimeout(() => this.comboOpen = false, 150); }
+
+  /* ─────────── Local de départ (carte) ─────────── */
+  toggleLocal(): void {
+    this.localOpen = !this.localOpen;
+    if (this.localOpen) setTimeout(() => this.afficherLocalMap(), 100);
+    else this.detruireLocalMap();
+  }
+  private afficherLocalMap(): void {
+    const el = document.getElementById('local-map');
+    if (!el) return;
+    this.detruireLocalMap();
+    const start: L.LatLngTuple = (this.form.localLat != null && this.form.localLng != null)
+      ? [this.form.localLat, this.form.localLng] : [33.5731, -7.5898]; // défaut : Casablanca
+    const map = L.map('local-map').setView(start, this.form.localLat != null ? 15 : 11);
+    this.localMap = map;
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
+    if (this.form.localLat != null) this.localMarker = L.marker(start).addTo(map);
+    map.on('click', (e: L.LeafletMouseEvent) => {
+      this.form.localLat = +e.latlng.lat.toFixed(6);
+      this.form.localLng = +e.latlng.lng.toFixed(6);
+      if (this.localMarker) this.localMarker.setLatLng(e.latlng);
+      else this.localMarker = L.marker(e.latlng).addTo(map);
+    });
+    setTimeout(() => map.invalidateSize(), 60);
+  }
+  private detruireLocalMap(): void { if (this.localMap) { this.localMap.remove(); this.localMap = undefined; this.localMarker = undefined; } }
+
+  private combine(jour?: string, heure?: string): string | undefined {
+    return jour ? `${jour}T${heure || '00:00'}` : undefined;
+  }
 
   /* ─────────── Lignes : chantier ─────────── */
   chantiersFiltres(lg: VoyageLigne): Chantier[] {
@@ -483,10 +524,16 @@ export class VoyagesConteneursComponent implements OnInit {
   enregistrer(): void {
     if (!this.chauffeurId) { this.toastr.warning('Veuillez choisir un chauffeur.'); return; }
     const livraisonIds: number[] = [];
+    const livraisonDates: NonNullable<VoyageConteneurRequest['livraisonDates']> = [];
     const matieres: NonNullable<VoyageConteneurRequest['matieres']> = [];
     for (const lg of this.lignes) {
+      const ch = this.combine(lg.chargementJour, lg.chargementHeure);
+      const de = this.combine(lg.dechargementJour, lg.dechargementHeure);
       if (lg.type === 'ARTICLE') {
-        Object.keys(lg.selectedLiv).filter(k => lg.selectedLiv[+k]).forEach(k => livraisonIds.push(+k));
+        Object.keys(lg.selectedLiv).filter(k => lg.selectedLiv[+k]).forEach(k => {
+          livraisonIds.push(+k);
+          livraisonDates.push({ id: +k, chargement: ch, dechargement: de });
+        });
       } else {
         lg.lignesMp.filter(m => lg.selectedMp[m.reference || '']).forEach(m => {
           const ref = m.reference || '';
@@ -494,15 +541,13 @@ export class VoyagesConteneursComponent implements OnInit {
             projet: lg.chantierCode, cdno: lg.commandeId, ref,
             designation: m.designation, of: m.of, unite: m.unite,
             quantite: lg.qteMp[ref] && lg.qteMp[ref] > 0 ? lg.qteMp[ref] : 1,
-            dateLivraison: lg.date
+            dateChargement: ch, dateDechargement: de
           });
         });
       }
     }
     const req: VoyageConteneurRequest = {
-      chauffeurId: this.chauffeurId, livraisonIds, matieres,
-      chargementJour: this.form.chargementJour, chargementHeure: this.form.chargementHeure,
-      dechargementJour: this.form.dechargementJour, dechargementHeure: this.form.dechargementHeure,
+      chauffeurId: this.chauffeurId, livraisonIds, livraisonDates, matieres,
       localNom: this.form.localNom, localLat: this.form.localLat,
       localLng: this.form.localLng, localRayon: this.form.localRayon
     };

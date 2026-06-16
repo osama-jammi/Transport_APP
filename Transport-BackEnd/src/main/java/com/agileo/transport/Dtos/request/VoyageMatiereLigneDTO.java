@@ -3,6 +3,7 @@ package com.agileo.transport.Dtos.request;
 import lombok.Data;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 /** Une ligne de matière première rattachée directement à un voyage (copiée depuis Divalto). */
 @Data
@@ -15,4 +16,6 @@ public class VoyageMatiereLigneDTO {
     private Double quantite;
     private String unite;
     private LocalDate dateLivraison;
+    private LocalDateTime dateChargement;
+    private LocalDateTime dateDechargement;
 }
