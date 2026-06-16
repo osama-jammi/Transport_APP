@@ -160,6 +160,14 @@ public class GapReadService {
         dto.setChargement(tc != null ? tc.toLocalDateTime() : null);
         Timestamp td = rs.getTimestamp("date_dechargement");
         dto.setDechargement(td != null ? td.toLocalDateTime() : null);
+        Timestamp rc = rs.getTimestamp("real_chargement");
+        dto.setRealChargement(rc != null ? rc.toLocalDateTime() : null);
+        Timestamp rd = rs.getTimestamp("real_dechargement");
+        dto.setRealDechargement(rd != null ? rd.toLocalDateTime() : null);
+        dto.setLocalNom(rs.getString("local_nom"));
+        double llat = rs.getDouble("local_lat"); dto.setLocalLat(rs.wasNull() ? null : llat);
+        double llng = rs.getDouble("local_lng"); dto.setLocalLng(rs.wasNull() ? null : llng);
+        int lr = rs.getInt("local_rayon"); dto.setLocalRayon(rs.wasNull() ? null : lr);
         return dto;
     };
 
@@ -495,6 +503,7 @@ public class GapReadService {
     public List<VoyageConteneurDTO> getVoyagesConteneurs() {
         String sql = "SELECT v.id, v.date_voyage, v.id_chauffeur, ch.nom AS ch_nom, ch.prenom AS ch_prenom, " +
                 "v.statut, v.force_code, v.date_chargement, v.date_dechargement, " +
+                "v.real_chargement, v.real_dechargement, v.local_nom, v.local_lat, v.local_lng, v.local_rayon, " +
                 "(SELECT COUNT(*) FROM livraisons l WHERE l.voyage_id = v.id) AS nb_livraisons, " +
                 "(SELECT COUNT(*) FROM voyage_matiere vm WHERE vm.voyage_id = v.id) AS nb_matieres " +
                 "FROM voyage v LEFT JOIN chauffeur ch ON v.id_chauffeur = ch.id " +
@@ -601,6 +610,13 @@ public class GapReadService {
                 }, voyageId);
     }
 
+    /** Met à jour le local de départ (géofence de chargement) d'un voyage. */
+    public void updateVoyageLocal(Long voyageId, String nom, Double lat, Double lng, Integer rayon) {
+        gapJdbcTemplate.update(
+                "UPDATE voyage SET local_nom = ?, local_lat = ?, local_lng = ?, local_rayon = ? WHERE id = ?",
+                nom, lat, lng, rayon, voyageId);
+    }
+
     /** Supprime un voyage conteneur : détache ses livraisons, supprime ses MP, puis le voyage. */
     public void deleteVoyageConteneur(Long voyageId) {
         gapJdbcTemplate.update("UPDATE livraisons SET voyage_id = NULL WHERE voyage_id = ?", voyageId);
@@ -631,6 +647,13 @@ public class GapReadService {
                     "UPDATE livraisons SET statut_reception = 'CHARGE', modifier_le = ? " +
                             "WHERE voyage_id = ? AND (statut_reception IS NULL OR statut_reception <> 'LIVRE')",
                     now, voyageId);
+            // Heure réelle de chargement (première fois seulement)
+            gapJdbcTemplate.update(
+                    "UPDATE voyage SET real_chargement = COALESCE(real_chargement, ?) WHERE id = ?", now, voyageId);
+        } else {
+            // Heure réelle de déchargement (première fois seulement)
+            gapJdbcTemplate.update(
+                    "UPDATE voyage SET real_dechargement = COALESCE(real_dechargement, ?) WHERE id = ?", now, voyageId);
         }
         return n;
     }

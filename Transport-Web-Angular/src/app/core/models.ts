@@ -203,8 +203,14 @@ export interface VoyageConteneur {
   forceCode?: string;
   nbLivraisons?: number;
   nbMatieres?: number;
-  chargement?: string;
-  dechargement?: string;
+  chargement?: string;        // prévu (admin)
+  dechargement?: string;      // prévu (admin)
+  realChargement?: string;    // réel (chauffeur)
+  realDechargement?: string;  // réel (chauffeur)
+  localNom?: string;
+  localLat?: number;
+  localLng?: number;
+  localRayon?: number;
 }
 
 export interface VoyageConteneurRequest {
@@ -218,6 +224,10 @@ export interface VoyageConteneurRequest {
     projet?: string; cdno?: number; ref?: string; designation?: string;
     of?: string; quantite?: number; unite?: string; dateLivraison?: string;
   }[];
+  localNom?: string;
+  localLat?: number;
+  localLng?: number;
+  localRayon?: number;
 }
 
 /** Un point du trajet GPS d'un voyage. */

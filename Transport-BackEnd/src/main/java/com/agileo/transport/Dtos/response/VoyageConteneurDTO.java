@@ -18,6 +18,12 @@ public class VoyageConteneurDTO {
     private String forceCode;
     private int nbLivraisons;       // nb de livraisons rattachées
     private int nbMatieres;         // nb de lignes de matières premières
-    private LocalDateTime chargement;
-    private LocalDateTime dechargement;
+    private LocalDateTime chargement;       // prévu (admin)
+    private LocalDateTime dechargement;     // prévu (admin)
+    private LocalDateTime realChargement;   // réel (chauffeur)
+    private LocalDateTime realDechargement; // réel (chauffeur)
+    private String localNom;
+    private Double localLat;
+    private Double localLng;
+    private Integer localRayon;
 }

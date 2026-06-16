@@ -89,6 +89,20 @@ interface VoyageLigne {
             </div>
           </div>
 
+          <div class="form-grid" style="margin-top:10px">
+            <div class="field"><label>Chargement prévu (jour)</label><input type="date" [(ngModel)]="form.chargementJour"></div>
+            <div class="field"><label>Heure</label><input type="time" [(ngModel)]="form.chargementHeure"></div>
+            <div class="field"><label>Déchargement prévu (jour)</label><input type="date" [(ngModel)]="form.dechargementJour"></div>
+            <div class="field"><label>Heure</label><input type="time" [(ngModel)]="form.dechargementHeure"></div>
+          </div>
+          <div class="form-grid">
+            <div class="field"><label>Local de départ</label><input [(ngModel)]="form.localNom" placeholder="Nom du dépôt"></div>
+            <div class="field"><label>Latitude</label><input type="number" step="any" [(ngModel)]="form.localLat"></div>
+            <div class="field"><label>Longitude</label><input type="number" step="any" [(ngModel)]="form.localLng"></div>
+            <div class="field"><label>Rayon (m)</label><input type="number" [(ngModel)]="form.localRayon"></div>
+          </div>
+
+          <h4 class="art-title">Lignes du voyage</h4>
           <div *ngFor="let lg of lignes; let i = index" class="card" style="margin:10px 0">
             <div class="card-body">
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
@@ -176,8 +190,11 @@ interface VoyageLigne {
           <div class="detail-grid">
             <div><span class="dk">Chauffeur</span><span class="dv">{{ detail.chauffeur || '—' }}</span></div>
             <div><span class="dk">Statut</span><span class="dv"><span class="badge badge-orange">{{ detail.statut || '—' }}</span></span></div>
-            <div><span class="dk">Chargement</span><span class="dv">{{ detail.chargement ? (detail.chargement | date:'dd/MM/yy HH:mm') : '—' }}</span></div>
-            <div><span class="dk">Déchargement</span><span class="dv">{{ detail.dechargement ? (detail.dechargement | date:'dd/MM/yy HH:mm') : '—' }}</span></div>
+            <div><span class="dk">Local de départ</span><span class="dv">{{ detail.localNom || '—' }}</span></div>
+            <div><span class="dk">Chargement prévu</span><span class="dv">{{ detail.chargement ? (detail.chargement | date:'dd/MM/yy HH:mm') : '—' }}</span></div>
+            <div><span class="dk">Chargement réel</span><span class="dv">{{ detail.realChargement ? (detail.realChargement | date:'dd/MM/yy HH:mm') : '—' }}</span></div>
+            <div><span class="dk">Déchargement prévu</span><span class="dv">{{ detail.dechargement ? (detail.dechargement | date:'dd/MM/yy HH:mm') : '—' }}</span></div>
+            <div><span class="dk">Déchargement réel</span><span class="dv">{{ detail.realDechargement ? (detail.realDechargement | date:'dd/MM/yy HH:mm') : '—' }}</span></div>
           </div>
 
           <!-- QR du voyage : un seul scan vaut le scan de toutes les lignes -->
@@ -308,6 +325,10 @@ export class VoyagesConteneursComponent implements OnInit {
   chantiers: Chantier[] = [];
   allLivraisons: GapVoyage[] = [];   // livraisons assignables (filtrées par chantier dans chaque ligne)
   lignes: VoyageLigne[] = [];
+  form: {
+    chargementJour?: string; chargementHeure?: string; dechargementJour?: string; dechargementHeure?: string;
+    localNom?: string; localLat?: number; localLng?: number; localRayon?: number;
+  } = {};
 
   // Détail (consultation)
   detail: VoyageConteneur | null = null;
@@ -346,6 +367,12 @@ export class VoyagesConteneursComponent implements OnInit {
     this.filtreChauffeur = v && v.chauffeur ? v.chauffeur : '';
     this.comboOpen = false;
     this.lignes = [];
+    const split = (iso?: string) => iso ? { j: iso.slice(0, 10), h: iso.slice(11, 16) } : { j: undefined, h: undefined };
+    const c = split(v?.chargement); const d = split(v?.dechargement);
+    this.form = {
+      chargementJour: c.j, chargementHeure: c.h, dechargementJour: d.j, dechargementHeure: d.h,
+      localNom: v?.localNom, localLat: v?.localLat, localLng: v?.localLng, localRayon: v?.localRayon
+    };
     this.modal = true;
     const vid = v ? v.id : 0;
     forkJoin({
@@ -472,7 +499,13 @@ export class VoyagesConteneursComponent implements OnInit {
         });
       }
     }
-    const req: VoyageConteneurRequest = { chauffeurId: this.chauffeurId, livraisonIds, matieres };
+    const req: VoyageConteneurRequest = {
+      chauffeurId: this.chauffeurId, livraisonIds, matieres,
+      chargementJour: this.form.chargementJour, chargementHeure: this.form.chargementHeure,
+      dechargementJour: this.form.dechargementJour, dechargementHeure: this.form.dechargementHeure,
+      localNom: this.form.localNom, localLat: this.form.localLat,
+      localLng: this.form.localLng, localRayon: this.form.localRayon
+    };
     this.saving = true;
     const ok = () => {
       this.toastr.success(this.editId ? 'Voyage modifié.' : 'Voyage créé.');

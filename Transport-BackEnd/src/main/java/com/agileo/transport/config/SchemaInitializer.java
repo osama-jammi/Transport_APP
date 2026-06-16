@@ -131,6 +131,28 @@ public class SchemaInitializer {
                 "IF COL_LENGTH('voyage','date_dechargement') IS NULL " +
                         "ALTER TABLE voyage ADD date_dechargement datetime2 NULL",
                 "voyage.date_dechargement");
+        // Heures réelles (captées côté chauffeur lors des scans)
+        exec(gapJdbcTemplate,
+                "IF COL_LENGTH('voyage','real_chargement') IS NULL " +
+                        "ALTER TABLE voyage ADD real_chargement datetime2 NULL",
+                "voyage.real_chargement");
+        exec(gapJdbcTemplate,
+                "IF COL_LENGTH('voyage','real_dechargement') IS NULL " +
+                        "ALTER TABLE voyage ADD real_dechargement datetime2 NULL",
+                "voyage.real_dechargement");
+        // Local de départ (géofence de chargement) au niveau du voyage
+        exec(gapJdbcTemplate,
+                "IF COL_LENGTH('voyage','local_nom') IS NULL " +
+                        "ALTER TABLE voyage ADD local_nom VARCHAR(255) NULL", "voyage.local_nom");
+        exec(gapJdbcTemplate,
+                "IF COL_LENGTH('voyage','local_lat') IS NULL " +
+                        "ALTER TABLE voyage ADD local_lat FLOAT NULL", "voyage.local_lat");
+        exec(gapJdbcTemplate,
+                "IF COL_LENGTH('voyage','local_lng') IS NULL " +
+                        "ALTER TABLE voyage ADD local_lng FLOAT NULL", "voyage.local_lng");
+        exec(gapJdbcTemplate,
+                "IF COL_LENGTH('voyage','local_rayon') IS NULL " +
+                        "ALTER TABLE voyage ADD local_rayon INT NULL", "voyage.local_rayon");
         // Type de livraison : ARTICLE ou MATIERE_PREMIERE
         exec(gapJdbcTemplate,
                 "IF COL_LENGTH('livraisons','type_livraison') IS NULL " +
