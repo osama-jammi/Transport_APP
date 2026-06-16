@@ -17,4 +17,5 @@ public class MatierePremiereDTO {
     private String marche;      // MARCHE
     private String tiers;       // TIERS (fournisseur)
     private String devise;      // DEV
+    private String of;          // OFNO (ordre de fabrication)
 }

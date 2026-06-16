@@ -36,7 +36,7 @@ public class DivaltoReadService {
         dto.setId(rs.getLong("MOUV_ID"));
         dto.setReference(trim(rs.getString("REF")));
         dto.setDesignation(trim(rs.getString("DES")));
-        dto.setQuantite(rs.getDouble("QTE1"));
+        dto.setQuantite(rs.getDouble("CDQTE"));
         String refun = trim(rs.getString("REFUN"));
         String venun = trim(rs.getString("VENUN"));
         dto.setUnite(refun != null && !refun.isEmpty() ? refun : venun);
@@ -44,6 +44,7 @@ public class DivaltoReadService {
         dto.setMarche(trim(rs.getString("MARCHE")));
         dto.setTiers(trim(rs.getString("TIERS")));
         dto.setDevise(trim(rs.getString("DEV")));
+        dto.setOf(trim(rs.getString("OFNO")));
         return dto;
     };
 
@@ -56,6 +57,8 @@ public class DivaltoReadService {
         dto.setTiers(trim(rs.getString("TIERS")));
         Timestamp d = rs.getTimestamp("PIDT");
         dto.setDate(d != null ? d.toLocalDateTime() : null);
+        dto.setPieceFournisseur(trim(rs.getString("PINOTIERS")));
+        dto.setReference(trim(rs.getString("PIREF")));
         return dto;
     };
 
@@ -64,7 +67,7 @@ public class DivaltoReadService {
      * Filtre : PICOD = 2, DOS = 1, TICOD = 'F', CE4 = 1.
      */
     public List<CommandeMpDTO> getCommandes() {
-        String sql = "SELECT TOP (500) PINO, PREFPINO, PROJET, MARCHE, TIERS, PIDT " +
+        String sql = "SELECT TOP (500) PINO, PREFPINO, PROJET, MARCHE, TIERS, PIDT, PINOTIERS, PIREF " +
                 "FROM ENT WHERE PICOD = 2 AND DOS = 1 AND TICOD = 'F' AND CE4 = 1 " +
                 "ORDER BY PINO DESC";
         return divaltoJdbcTemplate.query(sql, COMMANDE_MAPPER);
@@ -75,7 +78,7 @@ public class DivaltoReadService {
      * Filtre : CDNO = ?, DOS = 1, TICOD = 'F', PICOD = 2. Lecture seule.
      */
     public List<MatierePremiereDTO> getMatieresByCommande(Long cdno) {
-        String sql = "SELECT MOUV_ID, REF, DES, QTE1, REFUN, VENUN, PROJET, MARCHE, TIERS, DEV " +
+        String sql = "SELECT MOUV_ID, REF, DES, CDQTE, REFUN, VENUN, PROJET, MARCHE, TIERS, DEV, OFNO " +
                 "FROM MOUV WHERE CDNO = ? AND DOS = 1 AND TICOD = 'F' AND PICOD = 2 " +
                 "ORDER BY DES";
         return divaltoJdbcTemplate.query(sql, MAPPER, cdno);

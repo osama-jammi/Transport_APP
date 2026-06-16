@@ -17,4 +17,6 @@ public class CommandeMpDTO {
     private String marche;    // MARCHE
     private String tiers;     // TIERS (fournisseur)
     private LocalDateTime date; // PIDT
+    private String pieceFournisseur; // PINOTIERS (n° pièce fournisseur)
+    private String reference;        // PIREF (votre référence)
 }
