@@ -83,16 +83,8 @@ import * as L from 'leaflet';
             </div>
           </div>
 
-          <!-- Type de contenu : Articles ou Matières premières -->
-          <div class="type-toggle">
-            <button type="button" [class.active]="typeLivraison==='ARTICLE'" (click)="setType('ARTICLE')">
-              <i class="fa-solid fa-boxes-stacked"></i> Articles</button>
-            <button type="button" [class.active]="typeLivraison==='MATIERE_PREMIERE'" (click)="setType('MATIERE_PREMIERE')">
-              <i class="fa-solid fa-cubes"></i> Matières premières</button>
-          </div>
-
           <!-- Sélection des articles actifs -->
-          <div class="art-section" *ngIf="typeLivraison==='ARTICLE'">
+          <div class="art-section">
             <div class="art-head">
               <label>Articles à transporter <span class="muted">({{ selectedCount() }} sélectionné(s))</span></label>
               <button type="button" class="btn btn-outline btn-sm" (click)="toggleAll()">
@@ -120,42 +112,6 @@ import * as L from 'leaflet';
             </div>
           </div>
 
-          <!-- Sélection des matières premières (Divalto) -->
-          <div class="art-section" *ngIf="typeLivraison==='MATIERE_PREMIERE'">
-            <div class="art-head">
-              <label>Matières premières à transporter <span class="muted">({{ selectedMpCount() }} sélectionnée(s))</span></label>
-            </div>
-            <div class="field" style="margin-bottom:10px">
-              <label>Commande (Divalto)</label>
-              <select [(ngModel)]="commandeMpId" (change)="chargerLignesMp()">
-                <option [ngValue]="undefined" disabled>— Choisir une commande —</option>
-                <option *ngFor="let c of commandesMp" [ngValue]="c.cdno">
-                  #{{ c.cdno }} — {{ c.projet || c.marche || '—' }}<span *ngIf="c.tiers"> · {{ c.tiers }}</span>
-                </option>
-              </select>
-            </div>
-            <input class="filtre-input" [(ngModel)]="filtreMatiere"
-                   placeholder="🔍 Filtrer les lignes (désignation, réf)…" style="margin-bottom:10px">
-            <div *ngIf="matieresLoading" class="spinner" style="margin:18px auto"></div>
-            <div *ngIf="!matieresLoading && commandeMpId && matieresDispo.length===0" class="empty" style="padding:20px">
-              <i class="fa-solid fa-cubes"></i> Aucune ligne pour cette commande
-            </div>
-            <div *ngIf="!commandeMpId" class="empty" style="padding:20px">
-              <i class="fa-solid fa-file-invoice"></i> Choisissez d'abord une commande
-            </div>
-            <div class="art-list" *ngIf="!matieresLoading && matieresDispo.length">
-              <label class="art-item" *ngFor="let m of matieresFiltres()" [class.checked]="selectedMp[m.reference || '']">
-                <input type="checkbox" [(ngModel)]="selectedMp[m.reference || '']" (change)="onToggleMp(m)">
-                <div class="art-info">
-                  <strong>{{ m.designation || m.reference }}</strong>
-                  <span class="muted">{{ m.reference }} · {{ m.unite || '—' }}<span *ngIf="m.projet"> · {{ m.projet }}</span></span>
-                </div>
-                <input *ngIf="selectedMp[m.reference || '']" type="number" min="1" step="1" class="qte-input"
-                       [(ngModel)]="quantitesMp[m.reference || '']" (click)="$event.stopPropagation()"
-                       title="Quantité à livrer" placeholder="Qté">
-              </label>
-            </div>
-          </div>
         </div>
         <div class="m-foot">
           <button class="btn btn-outline" (click)="modal=false">Annuler</button>
@@ -471,25 +427,14 @@ export class VoyagesComponent implements OnInit {
 
   enregistrer(): void {
     if (!this.form.chantierId) { this.toastr.warning('Veuillez choisir un chantier.'); return; }
-    this.form.typeLivraison = this.typeLivraison;
-    if (this.typeLivraison === 'MATIERE_PREMIERE') {
-      // Lignes de matières premières + quantités
-      const refs = this.selectedMpRefs();
-      this.form.matieres = refs.map(ref => {
-        const m = this.matieresDispo.find(x => (x.reference || '') === ref);
-        const q = this.quantitesMp[ref];
-        return { ref, designation: m?.designation, unite: m?.unite, quantite: q && q > 0 ? q : 1 };
-      });
-      this.form.articleIds = []; this.form.articleQuantites = {};
-    } else {
-      this.form.articleIds = this.selectedIds();
-      const q: Record<number, number> = {};
-      this.form.articleIds.forEach(id => {
-        q[id] = this.quantites[id] && this.quantites[id] > 0 ? this.quantites[id] : 1;
-      });
-      this.form.articleQuantites = q;
-      this.form.matieres = [];
-    }
+    // Livraison = articles uniquement (les matières premières se gèrent au niveau du Voyage)
+    this.form.typeLivraison = 'ARTICLE';
+    this.form.articleIds = this.selectedIds();
+    const q: Record<number, number> = {};
+    this.form.articleIds.forEach(id => {
+      q[id] = this.quantites[id] && this.quantites[id] > 0 ? this.quantites[id] : 1;
+    });
+    this.form.articleQuantites = q;
     this.saving = true;
     const obs = this.editId
       ? this.svc.update(this.editId, this.form)
