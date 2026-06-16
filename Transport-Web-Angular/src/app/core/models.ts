@@ -202,6 +202,7 @@ export interface VoyageConteneur {
   statut?: string;
   forceCode?: string;
   nbLivraisons?: number;
+  nbMatieres?: number;
   chargement?: string;
   dechargement?: string;
 }

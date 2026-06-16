@@ -155,6 +155,7 @@ public class GapReadService {
         dto.setStatut(rs.getString("statut"));
         dto.setForceCode(rs.getString("force_code"));
         dto.setNbLivraisons(rs.getInt("nb_livraisons"));
+        dto.setNbMatieres(rs.getInt("nb_matieres"));
         Timestamp tc = rs.getTimestamp("date_chargement");
         dto.setChargement(tc != null ? tc.toLocalDateTime() : null);
         Timestamp td = rs.getTimestamp("date_dechargement");
@@ -494,7 +495,8 @@ public class GapReadService {
     public List<VoyageConteneurDTO> getVoyagesConteneurs() {
         String sql = "SELECT v.id, v.date_voyage, v.id_chauffeur, ch.nom AS ch_nom, ch.prenom AS ch_prenom, " +
                 "v.statut, v.force_code, v.date_chargement, v.date_dechargement, " +
-                "(SELECT COUNT(*) FROM livraisons l WHERE l.voyage_id = v.id) AS nb_livraisons " +
+                "(SELECT COUNT(*) FROM livraisons l WHERE l.voyage_id = v.id) AS nb_livraisons, " +
+                "(SELECT COUNT(*) FROM voyage_matiere vm WHERE vm.voyage_id = v.id) AS nb_matieres " +
                 "FROM voyage v LEFT JOIN chauffeur ch ON v.id_chauffeur = ch.id " +
                 "ORDER BY v.id DESC";
         return gapJdbcTemplate.query(sql, CONTENEUR_MAPPER);

@@ -17,6 +17,7 @@ public class VoyageConteneurDTO {
     private String statut;
     private String forceCode;
     private int nbLivraisons;       // nb de livraisons rattachées
+    private int nbMatieres;         // nb de lignes de matières premières
     private LocalDateTime chargement;
     private LocalDateTime dechargement;
 }

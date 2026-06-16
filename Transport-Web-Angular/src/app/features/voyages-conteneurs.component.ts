@@ -48,13 +48,14 @@ interface VoyageLigne {
       </div>
       <div class="table-wrap" *ngIf="!loading && voyages.length">
         <table>
-          <thead><tr><th>ID</th><th>Date</th><th>Chauffeur</th><th>Livraisons</th><th>Statut</th><th></th></tr></thead>
+          <thead><tr><th>ID</th><th>Date</th><th>Chauffeur</th><th>Livraisons</th><th>Mat. premières</th><th>Statut</th><th></th></tr></thead>
           <tbody>
             <tr *ngFor="let v of voyages">
               <td><code>#{{ v.id }}</code></td>
               <td>{{ v.dateVoyage ? (v.dateVoyage | date:'dd/MM/yy HH:mm') : '—' }}</td>
               <td>{{ v.chauffeur || '—' }}</td>
               <td><span class="badge badge-gray">{{ v.nbLivraisons ?? 0 }}</span></td>
+              <td><span class="badge badge-blue">{{ v.nbMatieres ?? 0 }}</span></td>
               <td><span class="badge badge-orange">{{ v.statut || '—' }}</span></td>
               <td class="flex">
                 <button class="btn btn-outline btn-sm" (click)="consulter(v)" title="Consulter le détail">
@@ -70,7 +71,7 @@ interface VoyageLigne {
 
     <!-- Modal créer / gérer un voyage -->
     <div class="modal-backdrop" *ngIf="modal" (click)="fermer($event)">
-      <div class="modal" style="max-width:760px" (click)="$event.stopPropagation()">
+      <div class="modal" style="max-width:1040px" (click)="$event.stopPropagation()">
         <div class="m-head"><h3>{{ editId ? 'Voyage #' + editId : 'Nouveau voyage' }}</h3>
           <button class="x" (click)="modal=false">&times;</button></div>
         <div class="m-body">
@@ -141,13 +142,13 @@ interface VoyageLigne {
                   <div *ngIf="lg.loadingMp" class="spinner" style="margin:12px auto"></div>
                   <div class="art-list" *ngIf="lg.commandeId && !lg.loadingMp">
                     <div *ngIf="lg.lignesMp.length===0" class="muted" style="font-size:12px;padding:8px">Aucune ligne.</div>
-                    <label class="art-item" *ngFor="let m of lg.lignesMp" [class.checked]="lg.selectedMp[m.reference||'']">
+                    <div class="art-item" *ngFor="let m of lg.lignesMp" [class.checked]="lg.selectedMp[m.reference||'']">
                       <input type="checkbox" [(ngModel)]="lg.selectedMp[m.reference||'']" (change)="onToggleMp(lg, m)">
                       <div class="art-info"><strong>{{ m.designation || m.reference }}</strong>
                         <span class="muted">{{ m.reference }} · OF {{ m.of || '—' }} · dispo {{ m.quantite ?? '—' }}</span></div>
-                      <input *ngIf="lg.selectedMp[m.reference||'']" type="number" min="1" class="qte-input"
-                             [(ngModel)]="lg.qteMp[m.reference||'']" (click)="$event.stopPropagation()" placeholder="Qté">
-                    </label>
+                      <input *ngIf="lg.selectedMp[m.reference||'']" type="number" min="1" step="any" class="qte-input"
+                             [(ngModel)]="lg.qteMp[m.reference||'']" placeholder="Qté">
+                    </div>
                   </div>
                 </div>
               </div>
