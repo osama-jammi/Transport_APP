@@ -98,8 +98,10 @@ export default function ScanArticleScreen() {
   const handleScan = async ({ data }: { data: string }) => {
     if (scanned || loading) return;
 
-    // Si on attendait un article precis, verifier la correspondance
-    if (articleQr && data !== articleQr) {
+    // QR d'un voyage entier : accepte directement (le backend scanne toutes les lignes)
+    const estQrVoyage = typeof data === 'string' && data.startsWith('VOYAGE:');
+    // Si on attendait un article precis, verifier la correspondance (sauf QR voyage)
+    if (!estQrVoyage && articleQr && data !== articleQr) {
       feedbackErreur();
       Alert.alert(
         'Mauvais article',
