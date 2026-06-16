@@ -1,0 +1,48 @@
+# ============ MODÈLE — copier en application-prod.properties et renseigner les secrets ============
+# ⚠️ Ne committez PAS application-prod.properties (il contient des secrets ; il est gitignoré).
+
+spring.application.name=Transport-Livraison
+server.port=8082
+server.servlet.context-path=/Transport_DEV
+
+# ============ KEYCLOAK ============
+keycloak.admin.server-url=http://localhost:8080
+keycloak.admin.realm=agileo-realm
+keycloak.admin.client-id=admin-cli
+keycloak.admin.username=admin
+keycloak.admin.password=CHANGE_ME
+
+spring.security.oauth2.resourceserver.jwt.issuer-uri=http://localhost:8080/realms/agileo-realm
+spring.security.oauth2.resourceserver.jwt.jwk-set-uri=http://localhost:8080/realms/agileo-realm/protocol/openid-connect/certs
+agileo.keycloak.client-id=agileo-backend
+agileo.keycloak.client-secret=CHANGE_ME
+
+# ============ CORS ============
+cors.allowed-origins=http://localhost:4200
+cors.allowed-methods=GET,POST,PUT,DELETE,OPTIONS,PATCH
+cors.allowed-headers=*
+cors.allow-credentials=true
+
+# ============ DataSources (renseigner host + identifiants) ============
+spring.datasource.primary.jdbc-url=jdbc:sqlserver://HOST:1433;databaseName=Transport_PROD;encrypt=true;trustServerCertificate=true;
+spring.datasource.primary.username=CHANGE_ME
+spring.datasource.primary.password=CHANGE_ME
+spring.datasource.primary.driver-class-name=com.microsoft.sqlserver.jdbc.SQLServerDriver
+
+spring.datasource.gap.jdbc-url=jdbc:sqlserver://HOST:1433;databaseName=GapDev;encrypt=true;trustServerCertificate=true;
+spring.datasource.gap.username=CHANGE_ME
+spring.datasource.gap.password=CHANGE_ME
+spring.datasource.gap.driver-class-name=com.microsoft.sqlserver.jdbc.SQLServerDriver
+
+spring.datasource.divalto.jdbc-url=jdbc:sqlserver://HOST:1433;databaseName=RB217_MIG;encrypt=true;trustServerCertificate=true;
+spring.datasource.divalto.username=CHANGE_ME
+spring.datasource.divalto.password=CHANGE_ME
+spring.datasource.divalto.driver-class-name=com.microsoft.sqlserver.jdbc.SQLServerDriver
+spring.datasource.divalto.hikari.initialization-fail-timeout=-1
+
+# ============ JPA ============
+spring.jpa.hibernate.ddl-auto=none
+spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.SQLServerDialect
+spring.jpa.open-in-view=false
+
+# Voir application-prod.properties (local) pour les réglages complets.

@@ -1,0 +1,19 @@
+target/
+*.class
+*.jar
+*.war
+*.ear
+.idea/
+*.iml
+.mvn/
+!.mvn/wrapper/maven-wrapper.jar
+
+# Secrets : ne pas committer les properties réelles (utiliser les .example)
+application-dev.properties
+application-prod.properties
+src/main/resources/application-dev.properties
+src/main/resources/application-prod.properties
+
+# Fichiers uploadés / temporaires
+uploads/
+temp/
