@@ -500,16 +500,36 @@ public class GapReadService {
         return key != null ? key.longValue() : null;
     }
 
-    /** Liste des voyages conteneurs, avec chauffeur et nombre de livraisons. */
-    public List<VoyageConteneurDTO> getVoyagesConteneurs() {
+    /** Liste des voyages conteneurs (en cours par défaut, ou archivés). */
+    public List<VoyageConteneurDTO> getVoyagesConteneurs(boolean archives) {
+        String filtre = archives
+                ? "WHERE v.statut = 'ARCHIVE' "
+                : "WHERE (v.statut IS NULL OR v.statut <> 'ARCHIVE') ";
         String sql = "SELECT v.id, v.date_voyage, v.id_chauffeur, ch.nom AS ch_nom, ch.prenom AS ch_prenom, " +
                 "v.statut, v.force_code, v.date_chargement, v.date_dechargement, " +
                 "v.real_chargement, v.real_dechargement, v.local_nom, v.local_lat, v.local_lng, v.local_rayon, " +
                 "(SELECT COUNT(*) FROM livraisons l WHERE l.voyage_id = v.id) AS nb_livraisons, " +
                 "(SELECT COUNT(*) FROM voyage_matiere vm WHERE vm.voyage_id = v.id) AS nb_matieres " +
                 "FROM voyage v LEFT JOIN chauffeur ch ON v.id_chauffeur = ch.id " +
-                "ORDER BY v.id DESC";
+                filtre + "ORDER BY v.id DESC";
         return gapJdbcTemplate.query(sql, CONTENEUR_MAPPER);
+    }
+
+    /** Archive un voyage (par clic). */
+    public void archiverVoyageConteneur(Long voyageId) {
+        gapJdbcTemplate.update(
+                "UPDATE voyage SET statut = 'ARCHIVE', modifier_le = ? WHERE id = ?",
+                Timestamp.valueOf(LocalDateTime.now()), voyageId);
+    }
+
+    /** Archive automatiquement les voyages déchargés depuis plus de 24 h. Renvoie le nb archivés. */
+    public int archiverVoyagesLivresAuto() {
+        return gapJdbcTemplate.update(
+                "UPDATE voyage SET statut = 'ARCHIVE', modifier_le = ? " +
+                        "WHERE (statut IS NULL OR statut <> 'ARCHIVE') " +
+                        "AND real_dechargement IS NOT NULL AND real_dechargement < ?",
+                Timestamp.valueOf(LocalDateTime.now()),
+                Timestamp.valueOf(LocalDateTime.now().minusHours(24)));
     }
 
     /** Met à jour le chauffeur et les heures d'un voyage conteneur. */

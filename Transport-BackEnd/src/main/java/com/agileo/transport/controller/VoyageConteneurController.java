@@ -39,8 +39,16 @@ public class VoyageConteneurController {
     }
 
     @GetMapping
-    public ResponseEntity<List<VoyageConteneurDTO>> getAll() {
-        return ResponseEntity.ok(gapReadService.getVoyagesConteneurs());
+    public ResponseEntity<List<VoyageConteneurDTO>> getAll(
+            @org.springframework.web.bind.annotation.RequestParam(defaultValue = "false") boolean archives) {
+        return ResponseEntity.ok(gapReadService.getVoyagesConteneurs(archives));
+    }
+
+    @org.springframework.web.bind.annotation.PatchMapping("/{id}/archiver")
+    @Operation(summary = "Archiver un voyage")
+    public ResponseEntity<Void> archiver(@PathVariable Long id) {
+        gapReadService.archiverVoyageConteneur(id);
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping

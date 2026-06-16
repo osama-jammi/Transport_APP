@@ -38,7 +38,10 @@ interface VoyageLigne {
   selector: 'app-voyages-conteneurs',
   template: `
     <div class="toolbar">
-      <span class="badge badge-blue"><i class="fa-solid fa-truck-fast"></i> Un voyage regroupe plusieurs livraisons</span>
+      <select [(ngModel)]="vue" (change)="charger()" class="btn btn-outline">
+        <option value="en-cours">Voyages en cours</option>
+        <option value="archives">Voyages archivés</option>
+      </select>
       <button class="btn btn-primary right" (click)="ouvrir()">
         <i class="fa-solid fa-plus"></i> Nouveau voyage
       </button>
@@ -65,6 +68,8 @@ interface VoyageLigne {
                   <i class="fa-solid fa-eye"></i> Détails</button>
                 <button class="btn btn-outline btn-sm" (click)="ouvrir(v)" title="Gérer les livraisons">
                   <i class="fa-solid fa-pen"></i> Gérer</button>
+                <button *ngIf="vue==='en-cours'" class="btn btn-outline btn-sm" (click)="archiver(v)" title="Archiver">
+                  <i class="fa-solid fa-box-archive"></i></button>
                 <button class="btn btn-danger btn-sm" (click)="supprimer(v)" title="Supprimer">
                   <i class="fa-solid fa-trash"></i></button>
               </td>
@@ -327,6 +332,7 @@ interface VoyageLigne {
 export class VoyagesConteneursComponent implements OnInit {
   voyages: VoyageConteneur[] = [];
   loading = true;
+  vue: 'en-cours' | 'archives' = 'en-cours';
   modal = false; saving = false;
   editId: number | null = null;
 
@@ -368,9 +374,16 @@ export class VoyagesConteneursComponent implements OnInit {
 
   charger(): void {
     this.loading = true;
-    this.svc.getAll().subscribe({
+    this.svc.getAll(this.vue === 'archives').subscribe({
       next: d => { this.voyages = d; this.loading = false; },
       error: () => { this.voyages = []; this.loading = false; this.toastr.error('Impossible de charger les voyages.'); }
+    });
+  }
+
+  archiver(v: VoyageConteneur): void {
+    this.svc.archiver(v.id).subscribe({
+      next: () => { this.toastr.success('Voyage archivé.'); this.charger(); },
+      error: () => this.toastr.error('Échec de l’archivage.')
     });
   }
 

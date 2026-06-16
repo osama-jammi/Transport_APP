@@ -9,8 +9,11 @@ export class VoyageConteneurService {
   private base = `${environment.apiUrl}/voyages-conteneurs`;
   constructor(private http: HttpClient) {}
 
-  getAll(): Observable<VoyageConteneur[]> {
-    return this.http.get<VoyageConteneur[]>(this.base);
+  getAll(archives = false): Observable<VoyageConteneur[]> {
+    return this.http.get<VoyageConteneur[]>(`${this.base}?archives=${archives}`);
+  }
+  archiver(id: number): Observable<void> {
+    return this.http.patch<void>(`${this.base}/${id}/archiver`, {});
   }
   create(req: VoyageConteneurRequest): Observable<number> {
     return this.http.post<number>(this.base, req);
