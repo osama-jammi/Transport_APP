@@ -67,9 +67,14 @@ public class DivaltoReadService {
      * Filtre : PICOD = 2, DOS = 1, TICOD = 'F', CE4 = 1.
      */
     public List<CommandeMpDTO> getCommandes() {
-        String sql = "SELECT TOP (500) PINO, PREFPINO, PROJET, MARCHE, TIERS, PIDT, PINOTIERS, PIREF " +
-                "FROM ENT WHERE PICOD = 2 AND DOS = 1 AND TICOD = 'F' AND CE4 = 1 " +
-                "ORDER BY PINO DESC";
+        String sql = "SELECT TOP (500) e.PINO, e.PREFPINO, " +
+                "COALESCE(pr.LIB80, e.PROJET) AS PROJET, e.MARCHE, " +
+                "COALESCE(f.NOM, e.TIERS) AS TIERS, e.PIDT, e.PINOTIERS, e.PIREF " +
+                "FROM ENT e " +
+                "LEFT JOIN PRJAP pr ON e.PROJET = pr.AFFAIRE " +
+                "LEFT JOIN FOU   f  ON e.TIERS  = f.TIERS " +
+                "WHERE e.PICOD = 2 AND e.DOS = 1 AND e.TICOD = 'F' AND e.CE4 = 1 " +
+                "ORDER BY e.PINO DESC";
         return divaltoJdbcTemplate.query(sql, COMMANDE_MAPPER);
     }
 
@@ -78,9 +83,14 @@ public class DivaltoReadService {
      * Filtre : CDNO = ?, DOS = 1, TICOD = 'F', PICOD = 2. Lecture seule.
      */
     public List<MatierePremiereDTO> getMatieresByCommande(Long cdno) {
-        String sql = "SELECT MOUV_ID, REF, DES, CDQTE, REFUN, VENUN, PROJET, MARCHE, TIERS, DEV, OFNO " +
-                "FROM MOUV WHERE CDNO = ? AND DOS = 1 AND TICOD = 'F' AND PICOD = 2 " +
-                "ORDER BY DES";
+        String sql = "SELECT m.MOUV_ID, m.REF, m.DES, m.CDQTE, m.REFUN, m.VENUN, " +
+                "COALESCE(pr.LIB80, m.PROJET) AS PROJET, m.MARCHE, " +
+                "COALESCE(f.NOM, m.TIERS) AS TIERS, m.DEV, m.OFNO " +
+                "FROM MOUV m " +
+                "LEFT JOIN PRJAP pr ON m.PROJET = pr.AFFAIRE " +
+                "LEFT JOIN FOU   f  ON m.TIERS  = f.TIERS " +
+                "WHERE m.CDNO = ? AND m.DOS = 1 AND m.TICOD = 'F' AND m.PICOD = 2 " +
+                "ORDER BY m.DES";
         return divaltoJdbcTemplate.query(sql, MAPPER, cdno);
     }
 }
