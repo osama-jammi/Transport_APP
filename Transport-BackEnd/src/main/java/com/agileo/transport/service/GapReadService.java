@@ -635,17 +635,22 @@ public class GapReadService {
     /** Lignes de matières premières d'un voyage (table voyage_matiere). */
     public List<MatierePremiereDTO> getVoyageMatieres(Long voyageId) {
         return gapJdbcTemplate.query(
-                "SELECT id, projet, ref, designation, of_no, quantite, unite FROM voyage_matiere " +
-                        "WHERE voyage_id = ? ORDER BY id",
+                "SELECT id, projet, cdno, ref, designation, of_no, quantite, unite, date_chargement, date_dechargement " +
+                        "FROM voyage_matiere WHERE voyage_id = ? ORDER BY id",
                 (rs, i) -> {
                     MatierePremiereDTO d = new MatierePremiereDTO();
                     d.setId(rs.getLong("id"));
                     d.setProjet(rs.getString("projet"));
+                    long cd = rs.getLong("cdno"); d.setCdno(rs.wasNull() ? null : cd);
                     d.setReference(rs.getString("ref"));
                     d.setDesignation(rs.getString("designation"));
                     d.setOf(rs.getString("of_no"));
                     d.setQuantite(rs.getDouble("quantite"));
                     d.setUnite(rs.getString("unite"));
+                    Timestamp dc = rs.getTimestamp("date_chargement");
+                    d.setDateChargement(dc != null ? dc.toLocalDateTime() : null);
+                    Timestamp dd = rs.getTimestamp("date_dechargement");
+                    d.setDateDechargement(dd != null ? dd.toLocalDateTime() : null);
                     return d;
                 }, voyageId);
     }

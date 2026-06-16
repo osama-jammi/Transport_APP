@@ -263,8 +263,8 @@ td code, .mono { font-family: ui-monospace, Menlo, monospace; font-size: 12px; c
 .type-toggle button.active { background: var(--primary); color: #fff; border-color: var(--primary); }
 
 /* Champ quantité par article sélectionné */
-.qte-input { width: 64px; padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px;
-  font-size: 13px; text-align: center; margin-left: auto; box-sizing: border-box; }
+.qte-input { width: 110px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px;
+  font-size: 14px; text-align: center; margin-left: auto; box-sizing: border-box; }
 .qte-input:focus { outline: none; border-color: var(--primary); }
 
 /* ---------- Helpers ---------- */

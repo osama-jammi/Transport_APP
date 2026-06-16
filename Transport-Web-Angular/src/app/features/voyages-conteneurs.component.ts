@@ -262,7 +262,12 @@ interface VoyageLigne {
                         <td><strong>{{ a.designation || '—' }}</strong></td>
                         <td>{{ a.quantite ?? '—' }}</td>
                         <td><span class="badge badge-gray">{{ a.statutReception || '—' }}</span></td>
-                        <td><img [src]="qrArticleUrl(a.id)" alt="QR" style="width:48px;height:48px"></td>
+                        <td style="white-space:nowrap" (click)="$event.stopPropagation()">
+                          <img [src]="qrArticleUrl(a.id)" alt="QR" style="width:48px;height:48px;vertical-align:middle">
+                          <a class="btn btn-outline btn-sm" style="margin-left:6px"
+                             [href]="qrArticleUrl(a.id)" [download]="'qr-article-' + a.id + '.png'" target="_blank" title="Télécharger le QR">
+                            <i class="fa-solid fa-download"></i></a>
+                        </td>
                       </tr>
                       <tr *ngIf="artDetailId===a.id">
                         <td colspan="4" class="muted" style="font-size:12px;background:#faf9fb">
@@ -436,6 +441,34 @@ export class VoyagesConteneursComponent implements OnInit {
           lg.chantierCode = ch?.code; lg.filtreChantier = ch ? ch.nom : (livs[0].projetDesignation || '');
           livs.forEach(l => lg.selectedLiv[l.id] = true);
           this.lignes.push(lg);
+        });
+        // Reconstruit les lignes « matières premières » (groupées par chantier + commande)
+        this.svc.matieres(v.id).subscribe({
+          next: mps => {
+            const grp = new Map<string, MatierePremiere[]>();
+            mps.forEach(m => {
+              const k = `${m.projet || ''}|${m.cdno || ''}`;
+              if (!grp.has(k)) grp.set(k, []);
+              grp.get(k)!.push(m);
+            });
+            grp.forEach(items => {
+              const first = items[0];
+              const lg = this.nouvelleLigne();
+              lg.type = 'MATIERE_PREMIERE';
+              lg.chantierCode = first.projet;
+              const ch = chantiers.find(c => c.code === first.projet);
+              if (ch) { lg.chantierId = ch.id; lg.filtreChantier = ch.nom; } else { lg.filtreChantier = first.projet || ''; }
+              lg.commandeId = first.cdno;
+              const split = (iso?: string) => iso ? { j: iso.slice(0, 10), h: iso.slice(11, 16) } : { j: undefined, h: undefined };
+              const c = split(first.dateChargement); const d = split(first.dateDechargement);
+              lg.chargementJour = c.j; lg.chargementHeure = c.h; lg.dechargementJour = d.j; lg.dechargementHeure = d.h;
+              lg.lignesMp = items;
+              items.forEach(m => { const r = m.reference || ''; lg.selectedMp[r] = true; lg.qteMp[r] = m.quantite || 1; });
+              if (first.cdno) this.matiereSvc.getCommandes(first.projet).subscribe({ next: cmds => lg.commandes = cmds, error: () => {} });
+              this.lignes.push(lg);
+            });
+          },
+          error: () => {}
         });
       }
       if (this.lignes.length === 0) this.ajouterLigne();

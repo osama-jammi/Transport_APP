@@ -273,6 +273,9 @@ export interface MatierePremiere {
   tiers?: string;
   devise?: string;
   of?: string;
+  cdno?: number;
+  dateChargement?: string;
+  dateDechargement?: string;
 }
 
 export interface PositionGps {

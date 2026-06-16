@@ -18,4 +18,7 @@ public class MatierePremiereDTO {
     private String tiers;       // TIERS (fournisseur)
     private String devise;      // DEV
     private String of;          // OFNO (ordre de fabrication)
+    private Long cdno;          // commande (pour les MP rattachées à un voyage)
+    private java.time.LocalDateTime dateChargement;
+    private java.time.LocalDateTime dateDechargement;
 }
