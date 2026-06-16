@@ -70,7 +70,8 @@ export class AppComponent implements OnInit {
     { path: '/flotte',     label: 'Flotte',     icon: 'fa-truck' },
     { path: '/chantiers',  label: 'Chantiers',  icon: 'fa-helmet-safety' },
     { path: '/articles',   label: 'Articles',   icon: 'fa-boxes-stacked' },
-    { path: '/matieres-premieres', label: 'Matières premières', icon: 'fa-cubes' }
+    { path: '/matieres-premieres', label: 'Matières premières', icon: 'fa-cubes' },
+    { path: '/depots',     label: 'Dépôt',      icon: 'fa-warehouse' }
   ];
 
   constructor(private keycloak: KeycloakService) {}

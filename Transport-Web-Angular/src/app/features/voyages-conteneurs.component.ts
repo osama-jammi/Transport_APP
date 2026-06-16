@@ -6,11 +6,12 @@ import { VoyageConteneurService } from '../services/voyage-conteneur.service';
 import { ChauffeurService } from '../services/chauffeur.service';
 import { ChantierService } from '../services/chantier.service';
 import { MatierePremiereService } from '../services/matiere-premiere.service';
+import { DepotService } from '../services/depot.service';
 import { VoyageService } from '../services/voyage.service';
 import { environment } from '../../environments/environment';
 import {
   VoyageConteneur, VoyageConteneurRequest, GapVoyage, GapChauffeur, Chantier,
-  CommandeMp, GapVoyageArticle, MatierePremiere, TrajetVoyage
+  CommandeMp, GapVoyageArticle, MatierePremiere, TrajetVoyage, Depot
 } from '../core/models';
 import * as L from 'leaflet';
 
@@ -97,22 +98,13 @@ interface VoyageLigne {
             </div>
           </div>
 
-          <div style="margin-top:10px">
-            <button class="btn btn-outline btn-sm" (click)="toggleLocal()">
-              <i class="fa-solid fa-location-dot"></i>
-              {{ localOpen ? 'Masquer le local de départ' : 'Mettre un local de départ (optionnel)' }}
-            </button>
-            <div *ngIf="localOpen" style="margin-top:8px;padding:10px;border:1px solid var(--border);border-radius:8px">
-              <div class="form-grid">
-                <div class="field"><label>Nom du dépôt</label><input [(ngModel)]="form.localNom" placeholder="Ex : Dépôt central"></div>
-                <div class="field"><label>Rayon (m)</label><input type="number" [(ngModel)]="form.localRayon" placeholder="100"></div>
-              </div>
-              <p class="muted" style="font-size:12px;margin:6px 0">Cliquez sur la carte pour placer le point de départ.</p>
-              <div id="local-map" style="height:260px;border-radius:8px;overflow:hidden;border:1px solid #e5e7eb"></div>
-              <div class="muted" style="font-size:12px;margin-top:6px" *ngIf="form.localLat != null">
-                Position : {{ form.localLat | number:'1.5-5' }}, {{ form.localLng | number:'1.5-5' }}
-              </div>
-            </div>
+          <div class="field" style="margin-top:10px">
+            <label>Local de départ (optionnel)</label>
+            <select [(ngModel)]="depotId" (change)="choisirDepot()">
+              <option [ngValue]="undefined">— Aucun —</option>
+              <option *ngFor="let dp of depots" [ngValue]="dp.id">{{ dp.nom }}</option>
+            </select>
+            <small class="muted" *ngIf="depotId == null">Les dépôts se gèrent dans le menu « Dépôt ».</small>
           </div>
 
           <h4 class="art-title">Lignes du voyage</h4>
@@ -363,9 +355,8 @@ export class VoyagesConteneursComponent implements OnInit {
   allLivraisons: GapVoyage[] = [];   // livraisons assignables (filtrées par chantier dans chaque ligne)
   lignes: VoyageLigne[] = [];
   form: { localNom?: string; localLat?: number; localLng?: number; localRayon?: number } = {};
-  localOpen = false;
-  private localMap?: L.Map;
-  private localMarker?: L.Marker;
+  depots: Depot[] = [];
+  depotId?: number;
 
   // Détail (consultation)
   detail: VoyageConteneur | null = null;
@@ -385,6 +376,7 @@ export class VoyagesConteneursComponent implements OnInit {
     private chauffeurSvc: ChauffeurService,
     private chantierSvc: ChantierService,
     private matiereSvc: MatierePremiereService,
+    private depotSvc: DepotService,
     private voyageSvc: VoyageService,
     private toastr: ToastrService
   ) {}
@@ -415,16 +407,19 @@ export class VoyagesConteneursComponent implements OnInit {
     this.form = {
       localNom: v?.localNom, localLat: v?.localLat, localLng: v?.localLng, localRayon: v?.localRayon
     };
-    this.localOpen = !!(v && v.localNom);
+    this.depotId = undefined;
     this.modal = true;
     const vid = v ? v.id : 0;
     forkJoin({
       chauffeurs: this.chauffeurSvc.getFromGap().pipe(catchError(() => of([] as GapChauffeur[]))),
       chantiers:  this.chantierSvc.getFromGap().pipe(catchError(() => of([] as Chantier[]))),
+      depots:     this.depotSvc.getAll().pipe(catchError(() => of([] as Depot[]))),
       livraisons: this.svc.livraisonsAssignables(vid).pipe(catchError(() => of([] as GapVoyage[])))
-    }).subscribe(({ chauffeurs, chantiers, livraisons }) => {
+    }).subscribe(({ chauffeurs, chantiers, depots, livraisons }) => {
       this.chauffeurs = chauffeurs;
       this.chantiers = chantiers;
+      this.depots = depots;
+      if (v?.localNom) { const dp = depots.find(d => d.nom === v.localNom); if (dp) this.depotId = dp.id; }
       this.allLivraisons = livraisons;
       // À l'édition : reconstruit une ligne « articles » par chantier déjà rattaché
       if (v) {
@@ -493,7 +488,7 @@ export class VoyagesConteneursComponent implements OnInit {
   ajouterLigne(): void { this.lignes.push(this.nouvelleLigne()); }
   retirerLigne(i: number): void { this.lignes.splice(i, 1); }
 
-  fermer(e: Event): void { if (e.target === e.currentTarget) { this.detruireLocalMap(); this.modal = false; } }
+  fermer(e: Event): void { if (e.target === e.currentTarget) this.modal = false; }
 
   chauffeursFiltres(): GapChauffeur[] {
     const t = this.filtreChauffeur.toLowerCase().trim();
@@ -508,31 +503,14 @@ export class VoyagesConteneursComponent implements OnInit {
   }
   fermerCombo(): void { setTimeout(() => this.comboOpen = false, 150); }
 
-  /* ─────────── Local de départ (carte) ─────────── */
-  toggleLocal(): void {
-    this.localOpen = !this.localOpen;
-    if (this.localOpen) setTimeout(() => this.afficherLocalMap(), 100);
-    else this.detruireLocalMap();
+  /** Sélection d'un dépôt : copie sa localisation dans le voyage (local de départ). */
+  choisirDepot(): void {
+    const dp = this.depots.find(d => d.id === this.depotId);
+    this.form.localNom = dp?.nom;
+    this.form.localLat = dp?.latitude;
+    this.form.localLng = dp?.longitude;
+    this.form.localRayon = dp?.rayon;
   }
-  private afficherLocalMap(): void {
-    const el = document.getElementById('local-map');
-    if (!el) return;
-    this.detruireLocalMap();
-    const start: L.LatLngTuple = (this.form.localLat != null && this.form.localLng != null)
-      ? [this.form.localLat, this.form.localLng] : [33.5731, -7.5898]; // défaut : Casablanca
-    const map = L.map('local-map').setView(start, this.form.localLat != null ? 15 : 11);
-    this.localMap = map;
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
-    if (this.form.localLat != null) this.localMarker = L.marker(start).addTo(map);
-    map.on('click', (e: L.LeafletMouseEvent) => {
-      this.form.localLat = +e.latlng.lat.toFixed(6);
-      this.form.localLng = +e.latlng.lng.toFixed(6);
-      if (this.localMarker) this.localMarker.setLatLng(e.latlng);
-      else this.localMarker = L.marker(e.latlng).addTo(map);
-    });
-    setTimeout(() => map.invalidateSize(), 60);
-  }
-  private detruireLocalMap(): void { if (this.localMap) { this.localMap.remove(); this.localMap = undefined; this.localMarker = undefined; } }
 
   private combine(jour?: string, heure?: string): string | undefined {
     return jour ? `${jour}T${heure || '00:00'}` : undefined;

@@ -104,6 +104,18 @@ public class SchemaInitializer {
                         "ALTER TABLE chauffeur ADD derniere_connexion datetime2 NULL",
                 "chauffeur.derniere_connexion");
 
+        // Dépôts (locaux de départ) gérés dans l'application
+        exec(gapJdbcTemplate,
+                "IF OBJECT_ID('depot','U') IS NULL " +
+                        "CREATE TABLE depot (" +
+                        " id BIGINT IDENTITY(1,1) PRIMARY KEY," +
+                        " nom VARCHAR(255) NULL," +
+                        " latitude FLOAT NULL," +
+                        " longitude FLOAT NULL," +
+                        " rayon INT NULL," +
+                        " creer_le datetime2 NULL)",
+                "table depot");
+
         // ── Restructuration : Voyage = conteneur de 1..N livraisons ──
         exec(gapJdbcTemplate,
                 "IF OBJECT_ID('voyage','U') IS NULL " +

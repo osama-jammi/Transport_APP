@@ -9,6 +9,7 @@ import { FlotteComponent } from './features/flotte.component';
 import { ChantiersComponent } from './features/chantiers.component';
 import { ArticlesComponent } from './features/articles.component';
 import { MatieresPremieresComponent } from './features/matieres-premieres.component';
+import { DepotsComponent } from './features/depots.component';
 import { GpsComponent } from './features/gps.component';
 import { RapportsComponent } from './features/rapports.component';
 
@@ -24,6 +25,7 @@ const routes: Routes = [
   { path: 'chantiers',  component: ChantiersComponent,  canActivate: [AuthGuard] },
   { path: 'articles',   component: ArticlesComponent,   canActivate: [AuthGuard] },
   { path: 'matieres-premieres', component: MatieresPremieresComponent, canActivate: [AuthGuard] },
+  { path: 'depots',     component: DepotsComponent,     canActivate: [AuthGuard] },
   { path: 'gps',        component: GpsComponent,        canActivate: [AuthGuard] },
   { path: 'rapports',   component: RapportsComponent,   canActivate: [AuthGuard] },
   { path: '**', redirectTo: 'dashboard' }

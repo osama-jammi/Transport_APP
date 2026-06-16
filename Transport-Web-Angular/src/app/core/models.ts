@@ -249,6 +249,15 @@ export interface TrajetVoyage {
   points?: TrajetPoint[];
 }
 
+/** Dépôt (local de départ) géolocalisé. */
+export interface Depot {
+  id?: number;
+  nom?: string;
+  latitude?: number;
+  longitude?: number;
+  rayon?: number;
+}
+
 /** Commande (entête ENT Divalto) servant à choisir les matières premières. */
 export interface CommandeMp {
   cdno: number;

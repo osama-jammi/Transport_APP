@@ -7,6 +7,7 @@ import com.agileo.transport.Dtos.response.GapVoyageArticleDTO;
 import com.agileo.transport.Dtos.request.LivraisonDateDTO;
 import com.agileo.transport.Dtos.request.MatiereLigneDTO;
 import com.agileo.transport.Dtos.request.VoyageMatiereLigneDTO;
+import com.agileo.transport.Dtos.response.DepotDTO;
 import com.agileo.transport.Dtos.response.GapVoyageDTO;
 import com.agileo.transport.Dtos.response.MatierePremiereDTO;
 import com.agileo.transport.Dtos.response.VoyageConteneurDTO;
@@ -653,6 +654,47 @@ public class GapReadService {
                     d.setDateDechargement(dd != null ? dd.toLocalDateTime() : null);
                     return d;
                 }, voyageId);
+    }
+
+    // ─────────────── DÉPÔTS (locaux de départ) ───────────────
+
+    private static final RowMapper<DepotDTO> DEPOT_MAPPER = (rs, i) -> {
+        DepotDTO d = new DepotDTO();
+        d.setId(rs.getLong("id"));
+        d.setNom(rs.getString("nom"));
+        double lat = rs.getDouble("latitude"); d.setLatitude(rs.wasNull() ? null : lat);
+        double lng = rs.getDouble("longitude"); d.setLongitude(rs.wasNull() ? null : lng);
+        int r = rs.getInt("rayon"); d.setRayon(rs.wasNull() ? null : r);
+        return d;
+    };
+
+    public List<DepotDTO> getDepots() {
+        return gapJdbcTemplate.query("SELECT id, nom, latitude, longitude, rayon FROM depot ORDER BY nom", DEPOT_MAPPER);
+    }
+
+    public Long createDepot(String nom, Double lat, Double lng, Integer rayon) {
+        String sql = "INSERT INTO depot (nom, latitude, longitude, rayon, creer_le) VALUES (?, ?, ?, ?, ?)";
+        KeyHolder kh = new GeneratedKeyHolder();
+        gapJdbcTemplate.update(con -> {
+            PreparedStatement ps = con.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
+            ps.setString(1, nom);
+            if (lat != null) ps.setDouble(2, lat); else ps.setNull(2, Types.DOUBLE);
+            if (lng != null) ps.setDouble(3, lng); else ps.setNull(3, Types.DOUBLE);
+            if (rayon != null) ps.setInt(4, rayon); else ps.setNull(4, Types.INTEGER);
+            ps.setTimestamp(5, Timestamp.valueOf(LocalDateTime.now()));
+            return ps;
+        }, kh);
+        Number k = kh.getKey();
+        return k != null ? k.longValue() : null;
+    }
+
+    public void updateDepot(Long id, String nom, Double lat, Double lng, Integer rayon) {
+        gapJdbcTemplate.update("UPDATE depot SET nom = ?, latitude = ?, longitude = ?, rayon = ? WHERE id = ?",
+                nom, lat, lng, rayon, id);
+    }
+
+    public void deleteDepot(Long id) {
+        gapJdbcTemplate.update("DELETE FROM depot WHERE id = ?", id);
     }
 
     /** Met à jour le local de départ (géofence de chargement) d'un voyage. */
