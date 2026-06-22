@@ -64,6 +64,27 @@ public class SchemaInitializer {
                         "ALTER TABLE position_gps ALTER COLUMN camion_id BIGINT NULL",
                 "position_gps.camion_id nullable");
 
+        // Chauffeur lié à une position GPS (suivi même sans voyage)
+        exec(primaryJdbcTemplate,
+                "IF COL_LENGTH('position_gps','chauffeur_id') IS NULL " +
+                        "ALTER TABLE position_gps ADD chauffeur_id BIGINT NULL",
+                "position_gps.chauffeur_id");
+
+        // Fonctionnalités activables/désactivables (espace administrateur)
+        exec(primaryJdbcTemplate,
+                "IF OBJECT_ID('feature_flag','U') IS NULL " +
+                        "CREATE TABLE feature_flag (" +
+                        " cle VARCHAR(60) PRIMARY KEY," +
+                        " libelle VARCHAR(150) NULL," +
+                        " actif BIT NOT NULL CONSTRAINT DF_feature_flag_actif DEFAULT 1)",
+                "table feature_flag");
+        // Le suivi GPS est fusionné dans « suivi-trajets » : plus de flag « tracking » séparé.
+        seedFeature("suivi-trajets", "Suivi des trajets (carte + GPS chauffeurs)");
+        seedFeature("cloture-mp", "Clôture des matières premières");
+        seedFeature("historique-voyages", "Historique des voyages");
+        // Purge de l'ancienne fonctionnalité « tracking » (fusionnée dans « suivi-trajets »).
+        exec(primaryJdbcTemplate, "DELETE FROM feature_flag WHERE cle = 'tracking'", "feature_flag:tracking (purge)");
+
         // ── Base GAP (livraisons) ──
         exec(gapJdbcTemplate,
                 "IF COL_LENGTH('livraisons','date_chargement') IS NULL " +
@@ -103,6 +124,12 @@ public class SchemaInitializer {
                 "IF COL_LENGTH('chauffeur','derniere_connexion') IS NULL " +
                         "ALTER TABLE chauffeur ADD derniere_connexion datetime2 NULL",
                 "chauffeur.derniere_connexion");
+
+        // Chauffeur GAP actif/inactif : contrôle l'accès à l'app mobile (défaut actif)
+        exec(gapJdbcTemplate,
+                "IF COL_LENGTH('chauffeur','actif') IS NULL " +
+                        "ALTER TABLE chauffeur ADD actif BIT NOT NULL CONSTRAINT DF_chauffeur_gap_actif DEFAULT 1",
+                "chauffeur.actif (GAP)");
 
         // Dépôts (locaux de départ) gérés dans l'application
         exec(gapJdbcTemplate,
@@ -195,6 +222,16 @@ public class SchemaInitializer {
                 "ALTER TABLE voyage_matiere ADD date_chargement datetime2 NULL", "voyage_matiere.date_chargement");
         exec(gapJdbcTemplate, "IF COL_LENGTH('voyage_matiere','date_dechargement') IS NULL " +
                 "ALTER TABLE voyage_matiere ADD date_dechargement datetime2 NULL", "voyage_matiere.date_dechargement");
+        // Pièce fournisseur + quantité commandée d'origine (affichage cmd/livré/reste)
+        exec(gapJdbcTemplate, "IF COL_LENGTH('voyage_matiere','piece_fournisseur') IS NULL " +
+                "ALTER TABLE voyage_matiere ADD piece_fournisseur VARCHAR(50) NULL", "voyage_matiere.piece_fournisseur");
+        exec(gapJdbcTemplate, "IF COL_LENGTH('voyage_matiere','qte_commande') IS NULL " +
+                "ALTER TABLE voyage_matiere ADD qte_commande FLOAT NULL", "voyage_matiere.qte_commande");
+        // Statut de clôture local (EN_ATTENTE / LIVRE) — n'impacte jamais l'ERP Divalto
+        exec(gapJdbcTemplate, "IF COL_LENGTH('voyage_matiere','statut') IS NULL " +
+                "ALTER TABLE voyage_matiere ADD statut VARCHAR(20) NULL", "voyage_matiere.statut");
+        exec(gapJdbcTemplate, "IF COL_LENGTH('voyage_matiere','modifier_le') IS NULL " +
+                "ALTER TABLE voyage_matiere ADD modifier_le datetime2 NULL", "voyage_matiere.modifier_le");
 
         // Lignes de matières premières (issues de Divalto) rattachées à une livraison.
         // Table dédiée car les MP n'ont pas d'id_article GAP (detail_livraison est article-only).
@@ -225,6 +262,20 @@ public class SchemaInitializer {
                 "IF COL_LENGTH('projet','rayon_metres') IS NULL " +
                         "ALTER TABLE projet ADD rayon_metres INT NULL",
                 "projet.rayon_metres");
+        // Archivage des chantiers (projets) — défaut non archivé
+        exec(gapJdbcTemplate,
+                "IF COL_LENGTH('projet','archive') IS NULL " +
+                        "ALTER TABLE projet ADD archive BIT NOT NULL CONSTRAINT DF_projet_archive DEFAULT 0",
+                "projet.archive");
+    }
+
+    /** Insère une fonctionnalité par défaut si elle n'existe pas (active par défaut). */
+    private void seedFeature(String cle, String libelle) {
+        exec(primaryJdbcTemplate,
+                "IF NOT EXISTS (SELECT 1 FROM feature_flag WHERE cle = '" + cle + "') " +
+                        "INSERT INTO feature_flag (cle, libelle, actif) VALUES ('" + cle + "', '"
+                        + libelle.replace("'", "''") + "', 1)",
+                "feature_flag:" + cle);
     }
 
     private void exec(JdbcTemplate jdbc, String sql, String libelle) {

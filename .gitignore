@@ -1,0 +1,5 @@
+# Config locale d'outillage (ignorée localement, non versionnée)
+
+# OS / éditeurs
+.DS_Store
+Thumbs.db

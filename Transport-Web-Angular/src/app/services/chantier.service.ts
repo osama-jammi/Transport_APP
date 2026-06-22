@@ -22,12 +22,11 @@ export class ChantierService {
         latitude: g.latitude,
         longitude: g.longitude,
         rayonMetres: g.rayonMetres,
-        actif: true
+        actif: g.actif !== false
       } as Chantier)))
     );
   }
   getById(id: number): Observable<Chantier> { return this.http.get<Chantier>(`${this.base}/${id}`); }
   create(dto: ChantierRequest): Observable<Chantier> { return this.http.post<Chantier>(this.base, dto); }
   update(id: number, dto: ChantierRequest): Observable<Chantier> { return this.http.put<Chantier>(`${this.base}/${id}`, dto); }
-  archiver(id: number): Observable<void> { return this.http.patch<void>(`${this.base}/${id}/archiver`, {}); }
 }

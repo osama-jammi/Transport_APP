@@ -25,6 +25,10 @@ public class PositionGps {
     @Column(name = "voyage_id")
     private Long voyageId;
 
+    /** Chauffeur (id GAP) ayant remonté le point — permet le suivi même sans voyage. */
+    @Column(name = "chauffeur_id")
+    private Long chauffeurId;
+
     @Column(nullable = false)
     private Double latitude;
 

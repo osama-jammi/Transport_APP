@@ -20,7 +20,9 @@ interface FleetUnit { chauffeur: Chauffeur; camion?: Camion; }
     <div class="toolbar">
       <div class="search"><i class="fa-solid fa-magnifying-glass"></i>
         <input [(ngModel)]="q" placeholder="Rechercher (chauffeur, matricule, camion)…"></div>
-      <button class="btn btn-primary right" (click)="ouvrirCamion()">
+      <button class="btn btn-outline right" (click)="ouvrirChauffeur()">
+        <i class="fa-solid fa-user-plus"></i> Nouvel utilisateur</button>
+      <button class="btn btn-primary" (click)="ouvrirCamion()">
         <i class="fa-solid fa-truck"></i> Nouveau camion</button>
     </div>
 
@@ -61,6 +63,11 @@ interface FleetUnit { chauffeur: Chauffeur; camion?: Camion; }
         <div class="fleet-actions">
           <button class="btn btn-outline btn-sm" (click)="voirQr(u.chauffeur)"><i class="fa-solid fa-qrcode"></i> QR</button>
           <button *ngIf="u.camion" class="btn btn-outline btn-sm" (click)="ouvrirCamion(u.camion)"><i class="fa-solid fa-truck"></i> Camion</button>
+          <button class="btn btn-sm" [ngClass]="u.chauffeur.actif !== false ? 'btn-danger' : 'btn-primary'"
+                  (click)="basculerActifGap(u.chauffeur)"
+                  [title]="u.chauffeur.actif !== false ? 'Désactiver l\\'accès à l\\'app' : 'Activer l\\'accès à l\\'app'">
+            <i class="fa-solid" [ngClass]="u.chauffeur.actif !== false ? 'fa-user-slash' : 'fa-user-check'"></i>
+            {{ u.chauffeur.actif !== false ? 'Désactiver' : 'Activer' }}</button>
         </div>
       </div>
     </div>
@@ -71,7 +78,7 @@ interface FleetUnit { chauffeur: Chauffeur; camion?: Camion; }
       <div class="table-wrap"><table>
         <thead><tr><th>ID</th><th>Immatriculation</th><th>Type</th><th>Marque</th><th>État</th><th></th></tr></thead>
         <tbody>
-          <tr *ngFor="let c of camionsLibres()">
+          <tr *ngFor="let c of camionsLibres() | paginate:pageCam:pageSize">
             <td><code>{{ c.id }}</code></td>
             <td><strong>{{ c.immatriculation }}</strong></td>
             <td>{{ c.type || '—' }}</td>
@@ -84,18 +91,59 @@ interface FleetUnit { chauffeur: Chauffeur; camion?: Camion; }
           </tr>
         </tbody>
       </table></div>
+      <app-paginator [total]="camionsLibres().length" [page]="pageCam" [pageSize]="pageSize"
+                     (pageChange)="pageCam = $event"></app-paginator>
+    </div>
+
+    <!-- Utilisateurs (comptes app mobile) -->
+    <div class="card" *ngIf="!loading && utilisateurs.length">
+      <div class="card-head"><h2><i class="fa-solid fa-users"></i> Utilisateurs — app mobile ({{ utilisateurs.length }})</h2></div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Nom</th><th>Matricule</th><th>Rôle</th><th>Statut</th><th>Dernière connexion</th><th></th></tr></thead>
+        <tbody>
+          <tr *ngFor="let a of utilisateurs | paginate:pageUtil:pageSize">
+            <td><strong>{{ a.prenom }} {{ a.nom }}</strong></td>
+            <td><code>{{ a.matricule }}</code></td>
+            <td><span class="badge" [ngClass]="a.admin ? 'badge-orange' : 'badge-gray'">
+              <i class="fa-solid" [ngClass]="a.admin ? 'fa-user-shield' : 'fa-user'"></i>
+              {{ a.admin ? 'Administrateur' : 'Utilisateur' }}</span></td>
+            <td><span class="badge" [ngClass]="a.actif !== false ? 'badge-green' : 'badge-gray'">
+              {{ a.actif !== false ? 'Actif' : 'Inactif' }}</span></td>
+            <td>{{ a.derniereConnexion ? (a.derniereConnexion | date:'dd/MM/yy HH:mm') : 'Jamais connecté' }}</td>
+            <td class="flex">
+              <button class="btn btn-outline btn-sm" (click)="voirQrLocal(a)"><i class="fa-solid fa-qrcode"></i> QR</button>
+              <button class="btn btn-outline btn-sm" (click)="ouvrirChauffeur(a)"><i class="fa-solid fa-pen"></i></button>
+              <button class="btn btn-sm" [ngClass]="a.actif !== false ? 'btn-danger' : 'btn-primary'"
+                      (click)="basculerActifLocal(a)"
+                      [title]="a.actif !== false ? 'Désactiver' : 'Activer'">
+                <i class="fa-solid" [ngClass]="a.actif !== false ? 'fa-user-slash' : 'fa-user-check'"></i></button>
+            </td>
+          </tr>
+        </tbody>
+      </table></div>
+      <app-paginator [total]="utilisateurs.length" [page]="pageUtil" [pageSize]="pageSize"
+                     (pageChange)="pageUtil = $event"></app-paginator>
     </div>
 
     <!-- Modal chauffeur -->
     <div class="modal-backdrop" *ngIf="modalChauffeur" (click)="closeBackdrop($event,'chauffeur')">
       <div class="modal" (click)="$event.stopPropagation()">
-        <div class="m-head"><h3>{{ editChauffeurId ? 'Modifier' : 'Nouveau' }} chauffeur</h3>
+        <div class="m-head"><h3>{{ editChauffeurId ? "Modifier l'utilisateur" : 'Nouvel utilisateur' }}</h3>
           <button class="x" (click)="modalChauffeur=false">&times;</button></div>
         <div class="m-body"><div class="form-grid">
           <div class="field"><label>Nom *</label><input [(ngModel)]="formChauffeur.nom"></div>
           <div class="field"><label>Prénom *</label><input [(ngModel)]="formChauffeur.prenom"></div>
-          <div class="field"><label>Matricule *</label><input [(ngModel)]="formChauffeur.matricule"></div>
+          <div class="field"><label>Matricule *</label><input [(ngModel)]="formChauffeur.matricule">
+            <small class="muted" *ngIf="!formChauffeur.admin">Chauffeur : matricule numérique (enregistré dans GAP, visible dans la flotte).</small>
+          </div>
           <div class="field"><label>Téléphone</label><input [(ngModel)]="formChauffeur.telephone"></div>
+          <div class="field" style="grid-column:1/-1">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+              <input type="checkbox" [(ngModel)]="formChauffeur.admin" style="width:auto">
+              <span><i class="fa-solid fa-user-shield"></i> Compte administrateur / superviseur</span>
+            </label>
+            <small class="muted">Accède au tableau de bord (suivi, voyages, dépôts, analyses) dans l'app mobile.</small>
+          </div>
         </div></div>
         <div class="m-foot">
           <button class="btn btn-outline" (click)="modalChauffeur=false">Annuler</button>
@@ -167,12 +215,14 @@ interface FleetUnit { chauffeur: Chauffeur; camion?: Camion; }
 })
 export class FlotteComponent implements OnInit {
   chauffeurs: Chauffeur[] = [];
+  utilisateurs: Chauffeur[] = [];   // comptes app mobile (table locale : admin ou non)
   camions: Camion[] = [];
   loading = true; saving = false;
+  pageUtil = 1; pageCam = 1; pageSize = 10;
   q = '';
 
   modalChauffeur = false; editChauffeurId: number | null = null;
-  formChauffeur: ChauffeurRequest = { nom: '', prenom: '', matricule: '', telephone: '' };
+  formChauffeur: ChauffeurRequest = { nom: '', prenom: '', matricule: '', telephone: '', admin: false };
 
   modalCamion = false; editCamionId: number | null = null;
   formCamion: Partial<Camion> = { immatriculation: '', etat: 'LIBRE' };
@@ -200,14 +250,20 @@ export class FlotteComponent implements OnInit {
           nom: g.nom ?? '',
           prenom: g.prenom ?? '',
           matricule: g.matricule != null ? String(g.matricule) : '',
-          derniereConnexion: g.derniereConnexion
+          derniereConnexion: g.derniereConnexion,
+          actif: g.actif !== false
         } as Chauffeur))),
         catchError(() => of([] as Chauffeur[]))
       ),
-      camions:    this.camionSvc.getAll().pipe(catchError(() => of([] as Camion[])))
-    }).subscribe(({ chauffeurs, camions }) => {
+      camions:    this.camionSvc.getAll().pipe(catchError(() => of([] as Camion[]))),
+      // Comptes app mobile : tous les chauffeurs de la table locale (admin ou non, actifs ou non)
+      utilisateurs: this.chauffeurSvc.getAll().pipe(
+        catchError(() => of([] as Chauffeur[]))
+      )
+    }).subscribe(({ chauffeurs, camions, utilisateurs }) => {
       this.chauffeurs = chauffeurs;
       this.camions = camions;
+      this.utilisateurs = utilisateurs;
       this.loading = false;
     });
   }
@@ -239,8 +295,8 @@ export class FlotteComponent implements OnInit {
 
   /* ───── Chauffeur CRUD ───── */
   ouvrirChauffeur(c?: Chauffeur): void {
-    if (c) { this.editChauffeurId = c.id; this.formChauffeur = { nom: c.nom, prenom: c.prenom, matricule: c.matricule, telephone: c.telephone }; }
-    else { this.editChauffeurId = null; this.formChauffeur = { nom: '', prenom: '', matricule: '', telephone: '' }; }
+    if (c) { this.editChauffeurId = c.id; this.formChauffeur = { nom: c.nom, prenom: c.prenom, matricule: c.matricule, telephone: c.telephone, admin: c.admin ?? false }; }
+    else { this.editChauffeurId = null; this.formChauffeur = { nom: '', prenom: '', matricule: '', telephone: '', admin: false }; }
     this.modalChauffeur = true;
   }
   enregistrerChauffeur(): void {
@@ -252,10 +308,31 @@ export class FlotteComponent implements OnInit {
       ? this.chauffeurSvc.update(this.editChauffeurId, this.formChauffeur)
       : this.chauffeurSvc.create(this.formChauffeur);
     obs.subscribe({
-      next: () => { this.toastr.success('Chauffeur enregistré.'); this.modalChauffeur = false; this.saving = false; this.charger(); },
-      error: () => { this.toastr.error('Échec enregistrement.'); this.saving = false; }
+      next: () => { this.toastr.success('Enregistré.'); this.modalChauffeur = false; this.saving = false; this.charger(); },
+      error: (err: any) => { this.toastr.error(err?.error?.message || 'Échec enregistrement.'); this.saving = false; }
     });
   }
+  /** Active/désactive un chauffeur GAP (accès à l'app mobile). */
+  basculerActifGap(c: Chauffeur): void {
+    const actif = c.actif === false; // nouvelle valeur
+    const verbe = actif ? 'Activer' : 'Désactiver';
+    if (!confirm(`${verbe} l'accès de ${c.prenom} ${c.nom} à l'application ?`)) return;
+    this.chauffeurSvc.setActifGap(c.id, actif).subscribe({
+      next: () => { c.actif = actif; this.toastr.success(actif ? 'Chauffeur activé.' : 'Chauffeur désactivé.'); },
+      error: () => this.toastr.error('Échec de la mise à jour.')
+    });
+  }
+  /** Active/désactive un utilisateur local (compte app mobile). */
+  basculerActifLocal(c: Chauffeur): void {
+    const actif = c.actif === false;
+    const verbe = actif ? 'Activer' : 'Désactiver';
+    if (!confirm(`${verbe} le compte de ${c.prenom} ${c.nom} ?`)) return;
+    this.chauffeurSvc.setActif(c.id, actif).subscribe({
+      next: () => { c.actif = actif; this.toastr.success(actif ? 'Compte activé.' : 'Compte désactivé.'); },
+      error: () => this.toastr.error('Échec de la mise à jour.')
+    });
+  }
+
   supprimerChauffeur(c: Chauffeur): void {
     if (!confirm(`Supprimer ${c.nom} ${c.prenom} ?`)) return;
     this.chauffeurSvc.delete(c.id).subscribe({
@@ -307,6 +384,15 @@ export class FlotteComponent implements OnInit {
   }
 
   /* ───── QR ───── */
+  /** QR d'un administrateur (chauffeur de la table locale) pour appairage mobile. */
+  voirQrLocal(c: Chauffeur): void {
+    this.qrUrl = null; this.qrModal = true; this.qrChauffeur = c;
+    this.chauffeurSvc.qrCode(c.id).subscribe({
+      next: b => this.qrUrl = this.san.bypassSecurityTrustUrl(URL.createObjectURL(b)),
+      error: () => { this.toastr.error('QR indisponible.'); this.qrModal = false; }
+    });
+  }
+
   voirQr(c: Chauffeur): void {
     this.qrUrl = null; this.qrModal = true; this.qrChauffeur = c;
     this.chauffeurSvc.qrCodeGap(c.id).subscribe({

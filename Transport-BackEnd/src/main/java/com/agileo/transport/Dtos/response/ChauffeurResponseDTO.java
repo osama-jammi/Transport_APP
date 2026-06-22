@@ -14,6 +14,8 @@ public class ChauffeurResponseDTO {
     private String qrCode;
     private LocalDateTime derniereConnexion;
     private Boolean actif;
+    /** Compte administrateur/superviseur (accès tableau de bord mobile). */
+    private Boolean admin;
     /** Camion affecté au chauffeur (pour la remontée GPS mobile) */
     private Long camionId;
     private String camionImmatriculation;

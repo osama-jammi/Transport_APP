@@ -40,8 +40,10 @@ public class VoyageConteneurController {
 
     @GetMapping
     public ResponseEntity<List<VoyageConteneurDTO>> getAll(
-            @org.springframework.web.bind.annotation.RequestParam(defaultValue = "false") boolean archives) {
-        return ResponseEntity.ok(gapReadService.getVoyagesConteneurs(archives));
+            @org.springframework.web.bind.annotation.RequestParam(defaultValue = "false") boolean archives,
+            @org.springframework.web.bind.annotation.RequestParam(required = false) Long chauffeurId,
+            @org.springframework.web.bind.annotation.RequestParam(defaultValue = "false") boolean tout) {
+        return ResponseEntity.ok(gapReadService.getVoyagesConteneurs(archives, chauffeurId, tout));
     }
 
     @org.springframework.web.bind.annotation.PatchMapping("/{id}/archiver")
@@ -58,7 +60,7 @@ public class VoyageConteneurController {
         LocalDateTime dechargement = combiner(dto.getDechargementJour(), dto.getDechargementHeure());
         Long id = gapReadService.createVoyageConteneur(dto.getChauffeurId(), chargement, dechargement, "transport-app");
         if (id != null && dto.getLivraisonIds() != null) {
-            gapReadService.setLivraisonsDuVoyage(id, dto.getLivraisonIds());
+            gapReadService.setLivraisonsDuVoyage(id, dto.getLivraisonIds(), dto.getChauffeurId());
         }
         if (id != null) {
             gapReadService.saveVoyageMatieres(id, dto.getMatieres(), "transport-app");
@@ -76,7 +78,7 @@ public class VoyageConteneurController {
         LocalDateTime dechargement = combiner(dto.getDechargementJour(), dto.getDechargementHeure());
         gapReadService.updateVoyageConteneur(id, dto.getChauffeurId(), chargement, dechargement, "transport-app");
         if (dto.getLivraisonIds() != null) {
-            gapReadService.setLivraisonsDuVoyage(id, dto.getLivraisonIds());
+            gapReadService.setLivraisonsDuVoyage(id, dto.getLivraisonIds(), dto.getChauffeurId());
         }
         gapReadService.saveVoyageMatieres(id, dto.getMatieres(), "transport-app");
         gapReadService.applyLivraisonDates(dto.getLivraisonDates());
@@ -111,7 +113,11 @@ public class VoyageConteneurController {
     @GetMapping("/{id}/trajet")
     @Operation(summary = "Trajet GPS agrégé du voyage (toutes ses livraisons)")
     public ResponseEntity<TrajetVoyageResponseDTO> trajet(@PathVariable Long id) {
-        return ResponseEntity.ok(gpsService.getTrajetAgrege(id, gapReadService.getLivraisonIdsDuVoyage(id)));
+        // Inclut l'id du conteneur : l'app mobile remonte le trajet en le taggant
+        // directement avec le voyage conteneur (en plus des ids de livraison).
+        List<Long> ids = new java.util.ArrayList<>(gapReadService.getLivraisonIdsDuVoyage(id));
+        ids.add(id);
+        return ResponseEntity.ok(gpsService.getTrajetAgrege(id, ids));
     }
 
     @GetMapping("/{id}/matieres")
@@ -124,5 +130,31 @@ public class VoyageConteneurController {
     @Operation(summary = "QR code du voyage (scanné = scan de toutes ses lignes)")
     public ResponseEntity<byte[]> qrCode(@PathVariable Long id) {
         return ResponseEntity.ok(articleService.generateQrCodeForVoyage(id));
+    }
+
+    @GetMapping(value = "/livraisons/{livId}/qrcode", produces = MediaType.IMAGE_PNG_VALUE)
+    @Operation(summary = "QR code d'une livraison (scanné = scan de toutes ses lignes)")
+    public ResponseEntity<byte[]> qrCodeLivraison(@PathVariable Long livId) {
+        return ResponseEntity.ok(articleService.generateQrCodeForLivraison(livId));
+    }
+
+    @org.springframework.web.bind.annotation.PatchMapping("/livraisons/{livId}/detacher")
+    @Operation(summary = "Détacher une livraison du voyage (la livraison n'est pas supprimée)")
+    public ResponseEntity<Void> detacher(@PathVariable Long livId) {
+        if (gapReadService.isLivraisonScannee(livId)) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.CONFLICT,
+                    "Livraison déjà scannée : modification impossible.");
+        }
+        gapReadService.detacherLivraison(livId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @org.springframework.web.bind.annotation.PatchMapping("/matieres/{mpId}/statut")
+    @Operation(summary = "Clôturer / rouvrir une ligne de matière première (statut local, sans impact ERP)")
+    public ResponseEntity<Void> statutMatiere(@PathVariable Long mpId,
+                                              @org.springframework.web.bind.annotation.RequestParam String statut) {
+        gapReadService.updateVoyageMatiereStatut(mpId, statut);
+        return ResponseEntity.noContent().build();
     }
 }

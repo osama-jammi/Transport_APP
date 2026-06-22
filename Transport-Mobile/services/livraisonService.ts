@@ -39,18 +39,30 @@ export interface ArticleScan {
   statutScan: 'NON_SCANNE' | 'SCANNE_CHARGEMENT' | 'SCANNE_LIVRAISON';
 }
 
-/** Liste des livraisons (voyages GAP) du chauffeur connecté, mappées au modèle mobile. */
-export async function getVoyagesEnCours(chauffeurId?: number): Promise<Voyage[]> {
-  const { data } = await api.get<any[]>(ENDPOINTS.VOYAGES_EN_COURS, {
-    params: chauffeurId ? { chauffeurId } : undefined,
-  });
-  return (data || []).map((g) => ({
+/** Voyage conteneur (regroupe plusieurs livraisons) affecté à un chauffeur. */
+export interface VoyageConteneur {
+  id: number;
+  dateVoyage: string | null;
+  chauffeur?: string;
+  statut: string;            // EN_COURS / ARCHIVE
+  nbLivraisons: number;
+  nbMatieres: number;
+  chargement: string | null;     // prévu
+  dechargement: string | null;   // prévu
+  realChargement: string | null;   // chargement réel (scan)
+  realDechargement: string | null; // déchargement réel (livré)
+  localNom: string | null;
+}
+
+/** Mappe un voyage GAP (livraison) brut vers le modèle mobile. */
+function mapGapVoyage(g: any): Voyage {
+  return {
     id: g.id,
     dateCreation: g.dateLivraison,
     transporteur: '',
     camionImmatriculation: '',
     chauffeur: g.chauffeur,
-    client: g.projetDesignation || g.projetCode || `Voyage #${g.id}`,
+    client: g.projetDesignation || g.projetCode || `Livraison #${g.id}`,
     nbColis: g.nbArticles ?? 0,
     nbArticles: g.nbArticles ?? 0,
     etatChargement: (g.statutReception === 'CHARGE' || g.statutReception === 'LIVRE') ? 'TERMINE' : 'EN_COURS',
@@ -62,7 +74,41 @@ export async function getVoyagesEnCours(chauffeurId?: number): Promise<Voyage[]>
     destinationLat: g.destinationLat ?? null,
     destinationLng: g.destinationLng ?? null,
     destinationRayon: g.destinationRayon ?? null,
+  };
+}
+
+/** Liste des livraisons (voyages GAP) du chauffeur connecté, mappées au modèle mobile. */
+export async function getVoyagesEnCours(chauffeurId?: number): Promise<Voyage[]> {
+  const { data } = await api.get<any[]>(ENDPOINTS.VOYAGES_EN_COURS, {
+    params: chauffeurId ? { chauffeurId } : undefined,
+  });
+  return (data || []).map(mapGapVoyage);
+}
+
+/** Voyages conteneurs en cours du chauffeur (chaque voyage regroupe plusieurs livraisons). */
+export async function getVoyagesConteneurs(chauffeurId?: number): Promise<VoyageConteneur[]> {
+  const { data } = await api.get<any[]>(ENDPOINTS.VOYAGES_CONTENEURS, {
+    params: { archives: false, ...(chauffeurId ? { chauffeurId } : {}) },
+  });
+  return (data || []).map((v) => ({
+    id: v.id,
+    dateVoyage: v.dateVoyage ?? null,
+    chauffeur: v.chauffeur,
+    statut: v.statut ?? 'EN_COURS',
+    nbLivraisons: v.nbLivraisons ?? 0,
+    nbMatieres: v.nbMatieres ?? 0,
+    chargement: v.chargement ?? null,
+    dechargement: v.dechargement ?? null,
+    realChargement: v.realChargement ?? null,
+    realDechargement: v.realDechargement ?? null,
+    localNom: v.localNom ?? null,
   }));
+}
+
+/** Livraisons rattachées à un voyage conteneur, mappées au modèle mobile. */
+export async function getLivraisonsDuVoyage(voyageConteneurId: number): Promise<Voyage[]> {
+  const { data } = await api.get<any[]>(`${ENDPOINTS.VOYAGES_CONTENEURS}/${voyageConteneurId}/livraisons`);
+  return (data || []).map(mapGapVoyage);
 }
 
 /** Scanner un article (phase: CHARGEMENT ou LIVRAISON) */
@@ -82,14 +128,16 @@ export async function confirmerArrivee(
   return data;
 }
 
-/** Enregistre le bon de livraison (photo + référence) → voyage livré */
+/** Enregistre le bon de livraison (photo facultative + référence(s)) → voyage livré */
 export async function enregistrerBL(
   voyageId: number,
-  photoUri: string,
+  photoUri?: string | null,
   reference?: string,
 ): Promise<Voyage> {
   const form = new FormData();
-  form.append('fichier', { uri: photoUri, name: `bl-voyage-${voyageId}.jpg`, type: 'image/jpeg' } as any);
+  if (photoUri) {
+    form.append('fichier', { uri: photoUri, name: `bl-voyage-${voyageId}.jpg`, type: 'image/jpeg' } as any);
+  }
   if (reference) form.append('reference', reference);
   const { data } = await api.post<Voyage>(`/voyages/${voyageId}/bl`, form, {
     headers: { 'Content-Type': 'multipart/form-data' },

@@ -36,6 +36,10 @@ interface BarItem { label: string; value: number; color: string; }
         <div class="ic cyan"><i class="fa-solid fa-boxes-stacked"></i></div>
         <div><div class="val">{{ articles.length }}</div><div class="lbl">Articles (GAP)</div></div>
       </div>
+      <div class="stat">
+        <div class="ic blue"><i class="fa-solid fa-helmet-safety"></i></div>
+        <div><div class="val">{{ chantiers.length }}</div><div class="lbl">Chantiers</div></div>
+      </div>
     </div>
 
     <!-- Charts -->
@@ -50,16 +54,16 @@ interface BarItem { label: string; value: number; color: string; }
                         display:grid;place-items:center;text-align:center">
               <div>
                 <div style="font-size:22px;font-weight:700">{{ camions.length }}</div>
-                <div style="font-size:11px;color:#98a0ab">camions</div>
+                <div style="font-size:11px;color:#B7A892">camions</div>
               </div>
             </div>
           </div>
           <div class="donut-legend">
-            <div class="lg"><span class="dot" style="background:#28a745"></span>
+            <div class="lg"><span class="dot" style="background:#1F9D55"></span>
               Libres <strong style="margin-left:auto">{{ nbCamionsLibres }}</strong></div>
-            <div class="lg"><span class="dot" style="background:#f0932b"></span>
+            <div class="lg"><span class="dot" style="background:#D9901F"></span>
               Occupés <strong style="margin-left:auto">{{ nbCamionsOccupes }}</strong></div>
-            <div class="lg"><span class="dot" style="background:#714B67"></span>
+            <div class="lg"><span class="dot" style="background:#A67C3D"></span>
               Avec chauffeur <strong style="margin-left:auto">{{ nbCamionsAffectes }}</strong></div>
           </div>
         </div>
@@ -187,7 +191,7 @@ export class DashboardComponent implements OnInit {
       vmap.set(k, (vmap.get(k) || 0) + 1);
     });
     this.voyageBars = [...vmap.entries()]
-      .map(([label, value]) => ({ label, value, color: '#f0932b' }))
+      .map(([label, value]) => ({ label, value, color: '#C9A063' }))
       .sort((a, b) => b.value - a.value).slice(0, 6);
     this.maxVoyage = Math.max(1, ...this.voyageBars.map(b => b.value));
 
@@ -197,7 +201,7 @@ export class DashboardComponent implements OnInit {
       const k = (a.origineArticle && a.origineArticle.trim()) ? a.origineArticle : 'Non défini';
       omap.set(k, (omap.get(k) || 0) + 1);
     });
-    const palette = ['#714B67', '#28a745', '#f0932b', '#3498db', '#e4503a', '#98a0ab'];
+    const palette = ['#A67C3D', '#3B2417', '#1F9D55', '#D9901F', '#8C6E4A', '#B7A892'];
     this.origineBars = [...omap.entries()]
       .map(([label, value], i) => ({ label, value, color: palette[i % palette.length] }))
       .sort((a, b) => b.value - a.value);
@@ -212,7 +216,7 @@ export class DashboardComponent implements OnInit {
       cmap.set(k, (cmap.get(k) || 0) + 1);
     });
     this.chantierBars = [...cmap.entries()]
-      .map(([label, value]) => ({ label, value, color: '#714B67' }))
+      .map(([label, value]) => ({ label, value, color: '#A67C3D' }))
       .sort((a, b) => b.value - a.value).slice(0, 6);
     this.maxChantier = Math.max(1, ...this.chantierBars.map(b => b.value));
   }
@@ -220,7 +224,7 @@ export class DashboardComponent implements OnInit {
   donutBg(): string {
     const total = this.camions.length || 1;
     const libre = (this.nbCamionsLibres / total) * 360;
-    return `conic-gradient(#28a745 0deg ${libre}deg, #f0932b ${libre}deg 360deg)`;
+    return `conic-gradient(#1F9D55 0deg ${libre}deg, #D9901F ${libre}deg 360deg)`;
   }
 
   pct(v: number, max: number): number { return Math.round((v / (max || 1)) * 100); }

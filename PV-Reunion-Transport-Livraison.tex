@@ -1,0 +1,165 @@
+\documentclass[11pt,a4paper]{article}
+
+% ---------- Encodage & langue ----------
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+
+% ---------- Mise en page ----------
+\usepackage[margin=2.2cm]{geometry}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{lastpage}
+\usepackage{booktabs}
+
+% ---------- Couleurs (charte Riche Bois) ----------
+\definecolor{brown}{HTML}{3B2417}
+\definecolor{gold}{HTML}{A67C3D}
+\definecolor{vert}{HTML}{1F9D55}
+\definecolor{orange}{HTML}{D9901F}
+\definecolor{gris}{HTML}{6B7280}
+
+% ---------- En-tête / pied de page ----------
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{\textcolor{brown}{\textbf{Transport \& Livraison}}}
+\rhead{\textcolor{gris}{Procès-verbal de réunion}}
+\cfoot{\textcolor{gris}{\small Page \thepage\ sur \pageref{LastPage}}}
+\renewcommand{\headrulewidth}{0.6pt}
+
+% ---------- Style des titres ----------
+\titleformat{\section}{\large\bfseries\color{brown}}{\thesection.}{0.5em}{}
+\titleformat{\subsection}{\normalsize\bfseries\color{gold}}{\thesubsection}{0.5em}{}
+
+% ---------- Pastilles de statut ----------
+\newcommand{\fait}{\textcolor{vert}{\textbf{Réalisé}}}
+\newcommand{\encours}{\textcolor{orange}{\textbf{En attente}}}
+\newcommand{\aplanifier}{\textcolor{gris}{\textbf{À planifier}}}
+
+\begin{document}
+
+% ============ TITRE ============
+\begin{center}
+  {\LARGE \textbf{\textcolor{brown}{Procès-verbal de réunion}}}\\[4pt]
+  {\large Projet : Application Transport \& Livraison (DivNet -- Caisse)}\\[2pt]
+  {\normalsize Modules : Back-end (Spring Boot / GAP-Divalto), Web (Angular), Mobile (Expo)}
+\end{center}
+
+\vspace{0.6em}
+
+% ============ INFORMATIONS GÉNÉRALES ============
+\noindent
+\begin{tabular}{@{}>{\bfseries}p{3.5cm} p{12.5cm}@{}}
+  Date & 19 juin 2026 \\
+  Objet & Revue des évolutions : voyages, suivi des chauffeurs, administration \\
+  Rédacteur & Équipe développement \\
+  Participants & \rule{6cm}{0.4pt} \quad (à compléter) \\
+  Diffusion & Maîtrise d'ouvrage, équipe technique \\
+\end{tabular}
+
+\vspace{0.8em}
+\hrule
+\vspace{0.8em}
+
+% ============ ORDRE DU JOUR ============
+\section{Ordre du jour}
+\begin{enumerate}[leftmargin=*, itemsep=1pt]
+  \item Gestion des voyages et des livraisons (chauffeur, lignes, articles \& matières premières).
+  \item Codes QR et règles de scan côté mobile.
+  \item Suivi GPS des chauffeurs et historique des trajets.
+  \item Espace administrateur et activation/désactivation des fonctionnalités.
+  \item Gestion des chauffeurs (activation / désactivation de l'accès).
+  \item Authentification Keycloak dans l'application mobile.
+  \item Points transverses (chantiers, pagination, localisation obligatoire).
+\end{enumerate}
+
+% ============ DÉCISIONS & RÉALISATIONS ============
+\section{Décisions et réalisations}
+
+\subsection{Voyages et livraisons}
+\begin{itemize}[leftmargin=*, itemsep=2pt]
+  \item \fait{} -- Le chauffeur défini au niveau du \textbf{voyage} est désormais \textbf{propagé aux livraisons} rattachées (il remplace le chauffeur issu de la base GAP).
+  \item \fait{} -- Sur la page \textbf{Livraisons} (issues de GAP), les boutons \textbf{Modifier} et \textbf{Supprimer} ont été retirés (consultation seule). Dans le détail d'un voyage, action \textbf{« Retirer du voyage »} (détache la livraison sans la supprimer de GAP).
+  \item \fait{} -- Une \textbf{ligne de voyage} peut contenir \textbf{à la fois} des articles \textbf{et} des matières premières (l'un n'annule plus l'autre).
+  \item \fait{} -- Ajout d'une \textbf{recherche par ligne} portant sur les articles, les commandes \textbf{et} les lignes de commande ; chaque ligne de commande s'affiche en pleine largeur.
+  \item \fait{} -- Les \textbf{matières premières} sont présentées comme des livraisons dans le détail du voyage et peuvent être \textbf{clôturées individuellement}. \textbf{Décision : ce statut de clôture est stocké localement et n'est jamais écrit dans l'ERP Divalto.}
+  \item \fait{} -- Affichage des quantités : \textbf{Qté commandée}, \textbf{Qté livrée}, \textbf{Reste à livrer}.
+  \item \fait{} -- Libellé \textbf{« Votre référence »} remplacé par \textbf{« Pièce fournisseur »}.
+  \item \fait{} -- Suppression de la colonne \textbf{« OF »} dans les matières premières.
+  \item \fait{} -- Codes QR : en plus du QR \textbf{voyage} et \textbf{article}, ajout d'un \textbf{QR par livraison} (son scan valide toutes les lignes de la livraison).
+\end{itemize}
+
+\subsection{Suivi GPS et historique}
+\begin{itemize}[leftmargin=*, itemsep=2pt]
+  \item \fait{} -- Nouvelle page \textbf{« Suivi trajets »} : carte multi-chauffeurs, \textbf{une couleur par chauffeur}, filtres par période (aujourd'hui / hier / 7 j / 30 j / plage personnalisée) et par chauffeur.
+  \item \fait{} -- \textbf{Tous les chauffeurs sont suivis}, y compris \textbf{sans voyage en cours} (le mobile transmet l'identifiant chauffeur et un point GPS périodique).
+  \item \fait{} -- Ajout d'une vue \textbf{« Historique »} des voyages (en cours + archivés).
+\end{itemize}
+
+\subsection{Administration et chauffeurs}
+\begin{itemize}[leftmargin=*, itemsep=2pt]
+  \item \fait{} -- Nouvel espace \textbf{« Administration »} permettant d'\textbf{activer / désactiver des fonctionnalités} (suivi GPS, suivi des trajets, clôture des matières premières, historique). Le menu masque les fonctions désactivées.
+  \item \fait{} -- \textbf{Activation / désactivation d'un chauffeur} : un chauffeur désactivé ne peut plus se connecter à l'application mobile (refus à la connexion).
+\end{itemize}
+
+% ============ POINTS EN ATTENTE ============
+\section{Points en attente / à planifier}
+\begin{itemize}[leftmargin=*, itemsep=2pt]
+  \item \encours{} -- \textbf{Authentification Keycloak} pour l'administrateur dans l'application mobile (le QR code reste pour les chauffeurs). En attente de la configuration Keycloak (realm, client mobile) et de la règle d'identification de l'administrateur.
+  \item \aplanifier{} -- \textbf{Règles de scan} : une fois scanné, une livraison ne peut plus être \textbf{modifiée} ni \textbf{supprimée} ; activation possible \textbf{uniquement si livré}.
+  \item \aplanifier{} -- \textbf{Archivage des chantiers}.
+  \item \aplanifier{} -- \textbf{Pagination} sur l'ensemble des tableaux.
+  \item \aplanifier{} -- \textbf{Localisation obligatoire} (et non plus optionnelle) lors de la création d'un voyage.
+  \item \aplanifier{} -- Application effective des « interrupteurs » de fonctionnalités côté \textbf{mobile} (couper réellement le suivi GPS lorsqu'il est désactivé).
+\end{itemize}
+
+% ============ SYNTHÈSE ============
+\section{Synthèse des éléments}
+\renewcommand{\arraystretch}{1.25}
+\begin{longtable}{@{}p{0.6cm} p{11.4cm} p{3.0cm}@{}}
+  \toprule
+  \textbf{N°} & \textbf{Élément} & \textbf{Statut} \\
+  \midrule
+  \endhead
+  1  & Chauffeur du voyage propagé aux livraisons & \fait \\
+  2  & Retrait des boutons modifier/supprimer (livraisons GAP) ; « Retirer du voyage » & \fait \\
+  3  & Recherche articles \& matières premières dans les lignes & \fait \\
+  4  & Matières premières clôturables individuellement (hors ERP) & \fait \\
+  5  & Une ligne contient articles \emph{et} matières premières & \fait \\
+  6  & « Votre référence » $\rightarrow$ « Pièce fournisseur » & \fait \\
+  7  & Qté commandée / livrée / reste à livrer & \fait \\
+  8  & Suppression de la colonne « OF » & \fait \\
+  9  & QR code par livraison & \fait \\
+  10 & Suivi des trajets multi-chauffeurs (couleurs + filtres) & \fait \\
+  11 & Suivi de tous les chauffeurs (même sans voyage) & \fait \\
+  12 & Historique des voyages & \fait \\
+  13 & Espace administrateur (activation des fonctionnalités) & \fait \\
+  14 & Activation / désactivation d'un chauffeur & \fait \\
+  15 & Keycloak (administrateur) dans l'application mobile & \encours \\
+  16 & Règles de scan (pas de modification / suppression ; activable si livré) & \aplanifier \\
+  17 & Archivage des chantiers & \aplanifier \\
+  18 & Pagination de tous les tableaux & \aplanifier \\
+  19 & Localisation obligatoire à la création d'un voyage & \aplanifier \\
+  \bottomrule
+\end{longtable}
+
+% ============ PROCHAINES ÉTAPES ============
+\section{Prochaines étapes}
+\begin{enumerate}[leftmargin=*, itemsep=1pt]
+  \item Fournir la configuration Keycloak (realm, client mobile, règle d'identification administrateur) pour démarrer le point 15.
+  \item Implémenter les règles de scan (verrouillage après scan).
+  \item Traiter les points transverses : archivage des chantiers, pagination, localisation obligatoire.
+\end{enumerate}
+
+\vspace{1.2em}
+\noindent
+\begin{tabular}{@{}p{8cm} p{8cm}@{}}
+  \rule{6cm}{0.4pt} & \rule{6cm}{0.4pt} \\
+  \small Maîtrise d'ouvrage & \small Équipe technique \\
+\end{tabular}
+
+\end{document}

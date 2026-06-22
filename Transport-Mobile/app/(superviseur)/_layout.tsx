@@ -1,4 +1,5 @@
 import { Stack } from 'expo-router';
+import { COLORS } from '@/constants/theme';
 
 export default function SuperviseurLayout() {
   return (
@@ -7,7 +8,7 @@ export default function SuperviseurLayout() {
         name="index"
         options={{
           title: 'Suivi des chauffeurs',
-          headerStyle: { backgroundColor: '#6d4aff' },
+          headerStyle: { backgroundColor: COLORS.brown },
           headerTintColor: '#fff',
           headerTitleStyle: { fontWeight: 'bold' },
         }}

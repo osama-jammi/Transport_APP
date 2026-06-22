@@ -10,6 +10,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @RestController
@@ -57,5 +58,15 @@ public class RapportController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime debut,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fin) {
         return excel(rapportService.exportNonLivres(debut, fin), "non-livres.xlsx");
+    }
+
+    @GetMapping("/complet")
+    @Operation(summary = "Rapport complet « toutes statistiques » (multi-feuilles, depuis GAP)")
+    public ResponseEntity<byte[]> complet(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate debut,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fin,
+            @RequestParam(required = false) Long chantierId,
+            @RequestParam(required = false) Long chauffeurId) {
+        return excel(rapportService.exportComplet(debut, fin, chantierId, chauffeurId), "rapport-complet.xlsx");
     }
 }

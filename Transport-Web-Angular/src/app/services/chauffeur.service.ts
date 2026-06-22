@@ -25,4 +25,12 @@ export class ChauffeurService {
   qrCodeGap(id: number): Observable<Blob> {
     return this.http.get(`${this.base}/gap/${id}/qrcode`, { responseType: 'blob' });
   }
+  /** Active / désactive un chauffeur GAP (accès app mobile). */
+  setActifGap(id: number, actif: boolean): Observable<void> {
+    return this.http.patch<void>(`${this.base}/gap/${id}/actif?actif=${actif}`, {});
+  }
+  /** Active / désactive un chauffeur local (compte app mobile). */
+  setActif(id: number, actif: boolean): Observable<Chauffeur> {
+    return this.http.patch<Chauffeur>(`${this.base}/${id}/actif?actif=${actif}`, {});
+  }
 }

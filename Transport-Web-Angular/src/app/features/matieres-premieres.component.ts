@@ -9,7 +9,7 @@ import { CommandeMp, MatierePremiere } from '../core/models';
     <div class="toolbar">
       <span class="badge badge-blue"><i class="fa-solid fa-database"></i> Commandes matières premières (Divalto, lecture seule)</span>
       <div class="search"><i class="fa-solid fa-magnifying-glass"></i>
-        <input [(ngModel)]="q" placeholder="Rechercher (n°, affaire, fournisseur, réf)…"></div>
+        <input [(ngModel)]="q" (ngModelChange)="page=1" placeholder="Rechercher (n°, affaire, fournisseur, réf)…"></div>
       <button class="btn btn-outline right" (click)="chargerCommandes()" [disabled]="loadingCmd">
         <i class="fa-solid fa-rotate"></i> Actualiser</button>
     </div>
@@ -23,7 +23,7 @@ import { CommandeMp, MatierePremiere } from '../core/models';
           <thead><tr><th>N°</th><th>Date</th><th>Affaire</th><th>Fournisseur</th>
             <th>Pièce fournisseur</th><th>Votre réf</th><th></th></tr></thead>
           <tbody>
-            <tr *ngFor="let c of commandesFiltrees()" class="row-link" (click)="choisir(c)">
+            <tr *ngFor="let c of commandesFiltrees() | paginate:page:pageSize" class="row-link" (click)="choisir(c)">
               <td><code>{{ c.cdno }}</code></td>
               <td>{{ c.date ? (c.date | date:'dd/MM/yy') : '—' }}</td>
               <td>{{ c.projet || c.marche || '—' }}</td>
@@ -36,6 +36,8 @@ import { CommandeMp, MatierePremiere } from '../core/models';
           </tbody>
         </table>
       </div>
+      <app-paginator [total]="commandesFiltrees().length" [page]="page" [pageSize]="pageSize"
+                     (pageChange)="page = $event"></app-paginator>
     </div></div>
 
     <!-- Modal des lignes de la commande -->
@@ -55,12 +57,11 @@ import { CommandeMp, MatierePremiere } from '../core/models';
             <i class="fa-solid fa-boxes-stacked"></i> Aucune ligne</div>
           <div class="table-wrap" *ngIf="!loadingLignes && lignes.length">
             <table>
-              <thead><tr><th>Référence</th><th>Désignation</th><th>OF</th><th>Quantité</th><th>Unité</th></tr></thead>
+              <thead><tr><th>Référence</th><th>Désignation</th><th>Quantité</th><th>Unité</th></tr></thead>
               <tbody>
                 <tr *ngFor="let m of lignes">
                   <td><code>{{ m.reference || '—' }}</code></td>
                   <td><strong>{{ m.designation || '—' }}</strong></td>
-                  <td><code>{{ m.of || '—' }}</code></td>
                   <td>{{ m.quantite ?? '—' }}</td>
                   <td>{{ m.unite || '—' }}</td>
                 </tr>
@@ -76,6 +77,7 @@ import { CommandeMp, MatierePremiere } from '../core/models';
 export class MatieresPremieresComponent implements OnInit {
   commandes: CommandeMp[] = [];
   loadingCmd = false;
+  page = 1; pageSize = 10;
   q = '';
   selected: CommandeMp | null = null;
   lignes: MatierePremiere[] = [];

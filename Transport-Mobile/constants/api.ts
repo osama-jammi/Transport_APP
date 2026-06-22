@@ -45,6 +45,15 @@ export const ENDPOINTS = {
   VOYAGES_EN_COURS: '/voyages/gap',
   VOYAGE_BY_ID: (id: number) => `/voyages/${id}`,
 
+  // Voyages conteneurs (regroupent plusieurs livraisons), filtrés par chauffeur
+  VOYAGES_CONTENEURS: '/voyages-conteneurs',
+
+  // Tableau de bord administrateur
+  DASHBOARD_STATS: '/voyages/stats',
+  DEPOTS: '/depots',
+  CHANTIERS_GAP: '/chantiers/gap',
+  CHAUFFEURS_GAP: '/chauffeurs/gap',
+
   // Articles
   SCAN_ARTICLE: '/articles/scan',
   IMPORT_GAP: '/articles/import-gap',
@@ -59,4 +68,8 @@ export const ENDPOINTS = {
 
   // Rapports
   RAPPORT_SYNTHESE: '/rapports/synthese',
+  RAPPORT_COMPLET: '/rapports/complet',
+
+  // Administration (fonctionnalités activables)
+  ADMIN_FEATURES: '/admin/features',
 };

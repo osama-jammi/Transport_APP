@@ -7,6 +7,7 @@ import com.agileo.transport.Dtos.response.GapVoyageArticleDTO;
 import com.agileo.transport.Dtos.request.LivraisonDateDTO;
 import com.agileo.transport.Dtos.request.MatiereLigneDTO;
 import com.agileo.transport.Dtos.request.VoyageMatiereLigneDTO;
+import com.agileo.transport.Dtos.response.DashboardStatsDTO;
 import com.agileo.transport.Dtos.response.DepotDTO;
 import com.agileo.transport.Dtos.response.GapVoyageDTO;
 import com.agileo.transport.Dtos.response.MatierePremiereDTO;
@@ -69,6 +70,8 @@ public class GapReadService {
         dto.setMatricule(rs.wasNull() ? null : matricule);
         Timestamp dc = rs.getTimestamp("derniere_connexion");
         dto.setDerniereConnexion(dc != null ? dc.toLocalDateTime() : null);
+        boolean actif = rs.getBoolean("actif");
+        dto.setActif(rs.wasNull() ? Boolean.TRUE : actif);
         return dto;
     };
 
@@ -85,6 +88,8 @@ public class GapReadService {
         dto.setLongitude(rs.wasNull() ? null : lng);
         int rayon = rs.getInt("rayon_metres");
         dto.setRayonMetres(rs.wasNull() ? null : rayon);
+        boolean archive = rs.getBoolean("archive");
+        dto.setActif(rs.wasNull() ? Boolean.TRUE : !archive);
         return dto;
     };
 
@@ -184,15 +189,38 @@ public class GapReadService {
 
     /** Tous les chauffeurs depuis GAP. */
     public List<GapChauffeurDTO> getChauffeurs() {
-        String sql = "SELECT id, nom, prenom, matricule, derniere_connexion FROM chauffeur ORDER BY nom, prenom";
+        String sql = "SELECT id, nom, prenom, matricule, derniere_connexion, actif FROM chauffeur ORDER BY nom, prenom";
         return gapJdbcTemplate.query(sql, CHAUFFEUR_MAPPER);
     }
 
     /** Un chauffeur GAP par son id (null si absent). */
     public GapChauffeurDTO getChauffeurById(Long id) {
         List<GapChauffeurDTO> list = gapJdbcTemplate.query(
-                "SELECT id, nom, prenom, matricule, derniere_connexion FROM chauffeur WHERE id = ?", CHAUFFEUR_MAPPER, id);
+                "SELECT id, nom, prenom, matricule, derniere_connexion, actif FROM chauffeur WHERE id = ?", CHAUFFEUR_MAPPER, id);
         return list.isEmpty() ? null : list.get(0);
+    }
+
+    /** Active / désactive un chauffeur GAP (contrôle l'accès à l'app mobile). */
+    public void updateChauffeurActif(Long chauffeurId, boolean actif) {
+        gapJdbcTemplate.update("UPDATE chauffeur SET actif = ? WHERE id = ?", actif ? 1 : 0, chauffeurId);
+    }
+
+    /** Crée un chauffeur dans GAP (apparaît dans la grille de la flotte) et renvoie son id généré. */
+    public Long createChauffeur(String nom, String prenom, Integer matricule, String user) {
+        String sql = "INSERT INTO chauffeur (nom, prenom, matricule, creer_par, creer_le) " +
+                "VALUES (?, ?, ?, ?, ?)";
+        KeyHolder kh = new GeneratedKeyHolder();
+        gapJdbcTemplate.update(con -> {
+            PreparedStatement ps = con.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
+            ps.setString(1, nom);
+            ps.setString(2, prenom);
+            if (matricule != null) ps.setInt(3, matricule); else ps.setNull(3, Types.INTEGER);
+            ps.setString(4, user);
+            ps.setTimestamp(5, Timestamp.valueOf(LocalDateTime.now()));
+            return ps;
+        }, kh);
+        Number key = kh.getKey();
+        return key != null ? key.longValue() : null;
     }
 
     /** Enregistre la dernière connexion mobile d'un chauffeur GAP (scan QR). */
@@ -204,7 +232,7 @@ public class GapReadService {
 
     /** Tous les chantiers (projets) depuis GAP. */
     public List<GapChantierDTO> getChantiers() {
-        String sql = "SELECT id, code, designation, status, latitude, longitude, rayon_metres " +
+        String sql = "SELECT id, code, designation, status, latitude, longitude, rayon_metres, archive " +
                 "FROM projet ORDER BY designation";
         return gapJdbcTemplate.query(sql, CHANTIER_MAPPER);
     }
@@ -212,7 +240,7 @@ public class GapReadService {
     /** Un chantier (projet) GAP par son id. */
     public GapChantierDTO getChantierById(Long id) {
         List<GapChantierDTO> list = gapJdbcTemplate.query(
-                "SELECT id, code, designation, status, latitude, longitude, rayon_metres " +
+                "SELECT id, code, designation, status, latitude, longitude, rayon_metres, archive " +
                         "FROM projet WHERE id = ?", CHANTIER_MAPPER, id);
         return list.isEmpty() ? null : list.get(0);
     }
@@ -405,6 +433,23 @@ public class GapReadService {
         }
     }
 
+    /**
+     * Vrai dès qu'une livraison a été scannée : au moins une de ses lignes porte
+     * un statut de scan, ou son en-tête est passé à 'CHARGE'/'LIVRE'. Une livraison
+     * scannée ne peut plus être modifiée ni supprimée.
+     */
+    public boolean isLivraisonScannee(Long livraisonId) {
+        Integer lignes = gapJdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM detail_livraison WHERE id_livraison = ? " +
+                        "AND statut_reception IN ('SCANNE_CHARGEMENT','SCANNE_LIVRAISON','LIVRE')",
+                Integer.class, livraisonId);
+        if (lignes != null && lignes > 0) return true;
+        Integer entete = gapJdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM livraisons WHERE id = ? AND statut_reception IN ('CHARGE','LIVRE')",
+                Integer.class, livraisonId);
+        return entete != null && entete > 0;
+    }
+
     /** Enregistre le code de forçage d'arrivée d'un voyage. */
     public void updateForceCode(Long livraisonId, String code) {
         gapJdbcTemplate.update(
@@ -503,9 +548,25 @@ public class GapReadService {
 
     /** Liste des voyages conteneurs (en cours par défaut, ou archivés). */
     public List<VoyageConteneurDTO> getVoyagesConteneurs(boolean archives) {
-        String filtre = archives
-                ? "WHERE v.statut = 'ARCHIVE' "
-                : "WHERE (v.statut IS NULL OR v.statut <> 'ARCHIVE') ";
+        return getVoyagesConteneurs(archives, null);
+    }
+
+    /** Voyages conteneurs, optionnellement filtrés par chauffeur (app mobile). */
+    public List<VoyageConteneurDTO> getVoyagesConteneurs(boolean archives, Long chauffeurId) {
+        return getVoyagesConteneurs(archives, chauffeurId, false);
+    }
+
+    /**
+     * Voyages conteneurs. Si {@code tous} = true → historique complet (en cours + archivés),
+     * sinon filtré par {@code archives}. Optionnellement filtré par chauffeur.
+     */
+    public List<VoyageConteneurDTO> getVoyagesConteneurs(boolean archives, Long chauffeurId, boolean tous) {
+        String filtre = tous
+                ? "WHERE 1 = 1 "
+                : (archives
+                    ? "WHERE v.statut = 'ARCHIVE' "
+                    : "WHERE (v.statut IS NULL OR v.statut <> 'ARCHIVE') ");
+        if (chauffeurId != null) filtre += "AND v.id_chauffeur = ? ";
         String sql = "SELECT v.id, v.date_voyage, v.id_chauffeur, ch.nom AS ch_nom, ch.prenom AS ch_prenom, " +
                 "v.statut, v.force_code, v.date_chargement, v.date_dechargement, " +
                 "v.real_chargement, v.real_dechargement, v.local_nom, v.local_lat, v.local_lng, v.local_rayon, " +
@@ -513,7 +574,26 @@ public class GapReadService {
                 "(SELECT COUNT(*) FROM voyage_matiere vm WHERE vm.voyage_id = v.id) AS nb_matieres " +
                 "FROM voyage v LEFT JOIN chauffeur ch ON v.id_chauffeur = ch.id " +
                 filtre + "ORDER BY v.id DESC";
-        return gapJdbcTemplate.query(sql, CONTENEUR_MAPPER);
+        return chauffeurId != null
+                ? gapJdbcTemplate.query(sql, CONTENEUR_MAPPER, chauffeurId)
+                : gapJdbcTemplate.query(sql, CONTENEUR_MAPPER);
+    }
+
+    /** Association voyage conteneur -> chauffeur (id + nom), pour le suivi des trajets. */
+    public List<com.agileo.transport.Dtos.response.VoyageChauffeurDTO> getVoyageChauffeurs() {
+        String sql = "SELECT v.id, v.id_chauffeur, ch.nom AS ch_nom, ch.prenom AS ch_prenom " +
+                "FROM voyage v LEFT JOIN chauffeur ch ON v.id_chauffeur = ch.id";
+        return gapJdbcTemplate.query(sql, (rs, i) -> {
+            com.agileo.transport.Dtos.response.VoyageChauffeurDTO d =
+                    new com.agileo.transport.Dtos.response.VoyageChauffeurDTO();
+            d.setVoyageId(rs.getLong("id"));
+            long ci = rs.getLong("id_chauffeur"); d.setChauffeurId(rs.wasNull() ? null : ci);
+            String nom = rs.getString("ch_nom");
+            String prenom = rs.getString("ch_prenom");
+            String label = ((prenom != null ? prenom : "") + " " + (nom != null ? nom : "")).trim();
+            d.setChauffeur(label.isEmpty() ? null : label);
+            return d;
+        });
     }
 
     /** Archive un voyage (par clic). */
@@ -543,6 +623,12 @@ public class GapReadService {
                 chargement != null ? Timestamp.valueOf(chargement) : null,
                 dechargement != null ? Timestamp.valueOf(dechargement) : null,
                 user, Timestamp.valueOf(LocalDateTime.now()), voyageId);
+        // Le chauffeur se gère au niveau du voyage : on le propage à ses livraisons.
+        if (chauffeurId != null) {
+            gapJdbcTemplate.update(
+                    "UPDATE livraisons SET id_chauffeur = ?, modifier_le = ? WHERE voyage_id = ?",
+                    chauffeurId, Timestamp.valueOf(LocalDateTime.now()), voyageId);
+        }
     }
 
     /**
@@ -550,14 +636,36 @@ public class GapReadService {
      * celles déjà liées, puis on rattache la nouvelle sélection.
      */
     public void setLivraisonsDuVoyage(Long voyageId, List<Long> livraisonIds) {
+        setLivraisonsDuVoyage(voyageId, livraisonIds, null);
+    }
+
+    /**
+     * Définit la liste des livraisons rattachées à un voyage et, si {@code chauffeurId}
+     * est fourni, force le chauffeur de chaque livraison rattachée à celui du voyage
+     * (le chauffeur se gère au niveau du voyage, pas de la livraison GAP).
+     */
+    public void setLivraisonsDuVoyage(Long voyageId, List<Long> livraisonIds, Long chauffeurId) {
         gapJdbcTemplate.update("UPDATE livraisons SET voyage_id = NULL WHERE voyage_id = ?", voyageId);
         if (livraisonIds != null) {
             Timestamp now = Timestamp.valueOf(LocalDateTime.now());
             for (Long id : livraisonIds) {
-                gapJdbcTemplate.update(
-                        "UPDATE livraisons SET voyage_id = ?, modifier_le = ? WHERE id = ?", voyageId, now, id);
+                if (chauffeurId != null) {
+                    gapJdbcTemplate.update(
+                            "UPDATE livraisons SET voyage_id = ?, id_chauffeur = ?, modifier_le = ? WHERE id = ?",
+                            voyageId, chauffeurId, now, id);
+                } else {
+                    gapJdbcTemplate.update(
+                            "UPDATE livraisons SET voyage_id = ?, modifier_le = ? WHERE id = ?", voyageId, now, id);
+                }
             }
         }
+    }
+
+    /** Détache une livraison de son voyage (voyage_id = NULL). La livraison n'est pas supprimée. */
+    public void detacherLivraison(Long livraisonId) {
+        gapJdbcTemplate.update(
+                "UPDATE livraisons SET voyage_id = NULL, modifier_le = ? WHERE id = ?",
+                Timestamp.valueOf(LocalDateTime.now()), livraisonId);
     }
 
     /**
@@ -604,8 +712,9 @@ public class GapReadService {
         if (matieres == null || matieres.isEmpty()) return;
         String sql = "INSERT INTO voyage_matiere " +
                 "(voyage_id, projet, cdno, ref, designation, of_no, quantite, unite, " +
+                "piece_fournisseur, qte_commande, statut, " +
                 "date_livraison, date_chargement, date_dechargement, creer_par, creer_le) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'EN_ATTENTE', ?, ?, ?, ?, ?)";
         Timestamp now = Timestamp.valueOf(LocalDateTime.now());
         for (VoyageMatiereLigneDTO m : matieres) {
             double q = (m.getQuantite() != null && m.getQuantite() > 0) ? m.getQuantite() : 1.0;
@@ -613,8 +722,16 @@ public class GapReadService {
             Timestamp dc = m.getDateChargement() != null ? Timestamp.valueOf(m.getDateChargement()) : null;
             Timestamp dd = m.getDateDechargement() != null ? Timestamp.valueOf(m.getDateDechargement()) : null;
             gapJdbcTemplate.update(sql, voyageId, m.getProjet(), m.getCdno(), m.getRef(),
-                    m.getDesignation(), m.getOf(), q, m.getUnite(), dl, dc, dd, user, now);
+                    m.getDesignation(), m.getOf(), q, m.getUnite(),
+                    m.getPieceFournisseur(), m.getQteCommande(), dl, dc, dd, user, now);
         }
+    }
+
+    /** Clôture / rouvre une ligne de matière première (statut stocké localement, sans impact ERP). */
+    public void updateVoyageMatiereStatut(Long matiereId, String statut) {
+        gapJdbcTemplate.update(
+                "UPDATE voyage_matiere SET statut = ?, modifier_le = ? WHERE id = ?",
+                statut, Timestamp.valueOf(LocalDateTime.now()), matiereId);
     }
 
     /** Applique les dates prévues (chargement/déchargement) sur les livraisons rattachées. */
@@ -636,7 +753,8 @@ public class GapReadService {
     /** Lignes de matières premières d'un voyage (table voyage_matiere). */
     public List<MatierePremiereDTO> getVoyageMatieres(Long voyageId) {
         return gapJdbcTemplate.query(
-                "SELECT id, projet, cdno, ref, designation, of_no, quantite, unite, date_chargement, date_dechargement " +
+                "SELECT id, projet, cdno, ref, designation, of_no, quantite, unite, " +
+                        "piece_fournisseur, qte_commande, statut, date_chargement, date_dechargement " +
                         "FROM voyage_matiere WHERE voyage_id = ? ORDER BY id",
                 (rs, i) -> {
                     MatierePremiereDTO d = new MatierePremiereDTO();
@@ -648,6 +766,9 @@ public class GapReadService {
                     d.setOf(rs.getString("of_no"));
                     d.setQuantite(rs.getDouble("quantite"));
                     d.setUnite(rs.getString("unite"));
+                    d.setPieceFournisseur(rs.getString("piece_fournisseur"));
+                    double qc = rs.getDouble("qte_commande"); d.setQteCommande(rs.wasNull() ? null : qc);
+                    d.setStatut(rs.getString("statut"));
                     Timestamp dc = rs.getTimestamp("date_chargement");
                     d.setDateChargement(dc != null ? dc.toLocalDateTime() : null);
                     Timestamp dd = rs.getTimestamp("date_dechargement");
@@ -721,6 +842,26 @@ public class GapReadService {
      * Scan groupé : marque toutes les lignes (detail_livraison) des livraisons d'un voyage
      * selon la phase. Renvoie le nombre de lignes mises à jour.
      */
+    /** Scanne toutes les lignes d'UNE livraison (QR par livraison). Renvoie le nb de lignes. */
+    public int scanAllDetailsForLivraison(Long livraisonId, String phase) {
+        String statut = "CHARGEMENT".equalsIgnoreCase(phase) ? "SCANNE_CHARGEMENT" : "SCANNE_LIVRAISON";
+        Timestamp now = Timestamp.valueOf(LocalDateTime.now());
+        int n = gapJdbcTemplate.update(
+                "UPDATE detail_livraison SET statut_reception = ?, modifier_le = ? WHERE id_livraison = ?",
+                statut, now, livraisonId);
+        if ("CHARGEMENT".equalsIgnoreCase(phase)) {
+            gapJdbcTemplate.update(
+                    "UPDATE livraisons SET statut_reception = 'CHARGE', modifier_le = ? " +
+                            "WHERE id = ? AND (statut_reception IS NULL OR statut_reception <> 'LIVRE')",
+                    now, livraisonId);
+        } else {
+            gapJdbcTemplate.update(
+                    "UPDATE livraisons SET statut_reception = 'LIVRE', modifier_le = ? WHERE id = ?",
+                    now, livraisonId);
+        }
+        return n;
+    }
+
     public int scanAllDetailsForVoyage(Long voyageId, String phase) {
         String statut = "CHARGEMENT".equalsIgnoreCase(phase) ? "SCANNE_CHARGEMENT" : "SCANNE_LIVRAISON";
         Timestamp now = Timestamp.valueOf(LocalDateTime.now());
@@ -743,5 +884,209 @@ public class GapReadService {
                     "UPDATE voyage SET real_dechargement = COALESCE(real_dechargement, ?) WHERE id = ?", now, voyageId);
         }
         return n;
+    }
+
+    /** Indicateurs du tableau de bord (sans filtre = aujourd'hui, tous chantiers/chauffeurs). */
+    public DashboardStatsDTO getDashboardStats() {
+        return getDashboardStats(null, null, null, null);
+    }
+
+    /**
+     * Indicateurs du tableau de bord administrateur, calculés à la volée depuis GAP,
+     * filtrables par chantier (projet), chauffeur et plage de dates.
+     * Sans plage de dates → période = aujourd'hui. Tolérant aux erreurs.
+     */
+    public DashboardStatsDTO getDashboardStats(Long projetId, Long chauffeurId,
+                                               java.time.LocalDate debut, java.time.LocalDate fin) {
+        DashboardStatsDTO s = new DashboardStatsDTO();
+
+        boolean rangeDonne = debut != null && fin != null;
+
+        // Filtre chantier/chauffeur (hors date) commun à la table livraisons (alias l)
+        StringBuilder cf = new StringBuilder(" AND (l.statut_reception IS NULL OR l.statut_reception <> 'ARCHIVE') ");
+        java.util.List<Object> cp = new java.util.ArrayList<>();
+        if (projetId != null)    { cf.append(" AND l.id_projet = ? ");    cp.add(projetId); }
+        if (chauffeurId != null) { cf.append(" AND l.id_chauffeur = ? "); cp.add(chauffeurId); }
+
+        // Clause « période » = plage de dates si fournie, sinon aujourd'hui
+        StringBuilder pf = new StringBuilder();
+        java.util.List<Object> pp = new java.util.ArrayList<>();
+        if (rangeDonne) {
+            pf.append(" AND CAST(l.date_livraison AS DATE) BETWEEN ? AND ? ");
+            pp.add(java.sql.Date.valueOf(debut));
+            pp.add(java.sql.Date.valueOf(fin));
+        } else {
+            pf.append(" AND CAST(l.date_livraison AS DATE) = CAST(GETDATE() AS DATE) ");
+        }
+        pf.append(cf);
+        pp.addAll(cp);
+        String periode = pf.toString();
+        Object[] periodeArgs = pp.toArray();
+
+        // Synthèse de la période (un seul passage)
+        try {
+            gapJdbcTemplate.query(
+                "SELECT COUNT(*) AS total, " +
+                "  SUM(CASE WHEN l.statut_reception = 'LIVRE' THEN 1 ELSE 0 END) AS livres, " +
+                "  SUM(CASE WHEN l.statut_reception IS NULL OR l.statut_reception = 'EN_ATTENTE' THEN 1 ELSE 0 END) AS attente, " +
+                "  COUNT(DISTINCT l.id_projet) AS chantiers, " +
+                "  COUNT(DISTINCT l.id_chauffeur) AS chauffeurs " +
+                "FROM livraisons l WHERE 1=1 " + periode,
+                rs -> {
+                    int total = rs.getInt("total");
+                    int livres = rs.getInt("livres");
+                    int attente = rs.getInt("attente");
+                    s.setVoyagesAujourdhui(total);
+                    s.setLivresAujourdhui(livres);
+                    s.setEnAttenteAujourdhui(attente);
+                    s.setEnCoursAujourdhui(Math.max(0, total - livres - attente));
+                    s.setChantiersActifs(rs.getInt("chantiers"));
+                    s.setChauffeursActifs(rs.getInt("chauffeurs"));
+                }, periodeArgs);
+        } catch (Exception ignore) { /* GAP indisponible : compteurs à 0 */ }
+
+        s.setArticlesAujourdhui(intQuery(
+            "SELECT COUNT(*) FROM detail_livraison dl JOIN livraisons l ON dl.id_livraison = l.id " +
+            "WHERE 1=1 " + periode, periodeArgs));
+
+        // Total (toutes dates) pour le chantier/chauffeur filtré
+        s.setVoyagesTotal(intQuery(
+            "SELECT COUNT(*) FROM livraisons l WHERE 1=1 " + cf, cp.toArray()));
+
+        // Durée moyenne réelle chargement → déchargement (minutes), filtrée
+        try {
+            StringBuilder dw = new StringBuilder(
+                " WHERE v.real_chargement IS NOT NULL AND v.real_dechargement IS NOT NULL " +
+                " AND v.real_dechargement >= v.real_chargement ");
+            java.util.List<Object> dp = new java.util.ArrayList<>();
+            if (rangeDonne) {
+                dw.append(" AND CAST(v.real_chargement AS DATE) BETWEEN ? AND ? ");
+                dp.add(java.sql.Date.valueOf(debut));
+                dp.add(java.sql.Date.valueOf(fin));
+            }
+            if (chauffeurId != null) { dw.append(" AND v.id_chauffeur = ? "); dp.add(chauffeurId); }
+            if (projetId != null) {
+                dw.append(" AND EXISTS (SELECT 1 FROM livraisons l WHERE l.voyage_id = v.id AND l.id_projet = ?) ");
+                dp.add(projetId);
+            }
+            Double moy = gapJdbcTemplate.queryForObject(
+                "SELECT AVG(CAST(DATEDIFF(MINUTE, v.real_chargement, v.real_dechargement) AS FLOAT)) " +
+                "FROM voyage v" + dw, Double.class, dp.toArray());
+            s.setDureeMoyenneMinutes(moy != null ? (int) Math.round(moy) : null);
+        } catch (Exception ignore) { s.setDureeMoyenneMinutes(null); }
+
+        // Répartition par chantier (sur la période)
+        try {
+            s.setParChantier(gapJdbcTemplate.query(
+                "SELECT TOP 20 COALESCE(p.designation, '—') AS chantier, COUNT(*) AS total, " +
+                "  SUM(CASE WHEN l.statut_reception = 'LIVRE' THEN 1 ELSE 0 END) AS livres " +
+                "FROM livraisons l LEFT JOIN projet p ON l.id_projet = p.id " +
+                "WHERE 1=1 " + periode + " " +
+                "GROUP BY p.designation ORDER BY COUNT(*) DESC",
+                (rs, i) -> new DashboardStatsDTO.ChantierStat(
+                    rs.getString("chantier"), rs.getInt("total"), rs.getInt("livres")),
+                periodeArgs));
+        } catch (Exception ignore) { s.setParChantier(java.util.Collections.emptyList()); }
+
+        // Répartition par jour : sur la plage si fournie, sinon 7 derniers jours
+        try {
+            StringBuilder jw = new StringBuilder();
+            java.util.List<Object> jp = new java.util.ArrayList<>();
+            if (rangeDonne) {
+                jw.append(" AND CAST(l.date_livraison AS DATE) BETWEEN ? AND ? ");
+                jp.add(java.sql.Date.valueOf(debut));
+                jp.add(java.sql.Date.valueOf(fin));
+            } else {
+                jw.append(" AND l.date_livraison >= CAST(DATEADD(DAY, -6, GETDATE()) AS DATE) ");
+            }
+            jw.append(cf);
+            jp.addAll(cp);
+            s.setParJour(gapJdbcTemplate.query(
+                "SELECT CONVERT(varchar(10), l.date_livraison, 23) AS jour, COUNT(*) AS total, " +
+                "  SUM(CASE WHEN l.statut_reception = 'LIVRE' THEN 1 ELSE 0 END) AS livres " +
+                "FROM livraisons l WHERE 1=1 " + jw + " " +
+                "GROUP BY CONVERT(varchar(10), l.date_livraison, 23) ORDER BY jour",
+                (rs, i) -> new DashboardStatsDTO.JourStat(
+                    rs.getString("jour"), rs.getInt("total"), rs.getInt("livres")),
+                jp.toArray()));
+        } catch (Exception ignore) { s.setParJour(java.util.Collections.emptyList()); }
+
+        return s;
+    }
+
+    /**
+     * Productivité par chauffeur sur la période (livraisons GAP), filtrable
+     * chantier / chauffeur / plage de dates. Sans plage → aujourd'hui.
+     * Tolérant aux erreurs : renvoie une liste vide si GAP est indisponible.
+     */
+    public java.util.List<DashboardStatsDTO.ChauffeurStat> getChauffeurStats(
+            Long projetId, Long chauffeurId, java.time.LocalDate debut, java.time.LocalDate fin) {
+
+        boolean rangeDonne = debut != null && fin != null;
+
+        // Clause période + filtres commune aux deux sous-requêtes (alias l)
+        StringBuilder w = new StringBuilder(
+                " AND (l.statut_reception IS NULL OR l.statut_reception <> 'ARCHIVE') ");
+        java.util.List<Object> wp = new java.util.ArrayList<>();
+        if (rangeDonne) {
+            w.append(" AND CAST(l.date_livraison AS DATE) BETWEEN ? AND ? ");
+            wp.add(java.sql.Date.valueOf(debut));
+            wp.add(java.sql.Date.valueOf(fin));
+        } else {
+            w.append(" AND CAST(l.date_livraison AS DATE) = CAST(GETDATE() AS DATE) ");
+        }
+        if (projetId != null)    { w.append(" AND l.id_projet = ? ");    wp.add(projetId); }
+        if (chauffeurId != null) { w.append(" AND l.id_chauffeur = ? "); wp.add(chauffeurId); }
+        String periode = w.toString();
+
+        // Args : période pour la table livraisons (t) + période pour les articles (a)
+        java.util.List<Object> args = new java.util.ArrayList<>();
+        args.addAll(wp);  // sous-requête t
+        args.addAll(wp);  // sous-requête a
+
+        String sql =
+            "SELECT ch.nom, ch.prenom, ch.matricule, " +
+            "  t.total, t.livres, t.attente, COALESCE(a.articles, 0) AS articles " +
+            "FROM chauffeur ch " +
+            "JOIN ( " +
+            "  SELECT l.id_chauffeur, COUNT(*) AS total, " +
+            "    SUM(CASE WHEN l.statut_reception = 'LIVRE' THEN 1 ELSE 0 END) AS livres, " +
+            "    SUM(CASE WHEN l.statut_reception IS NULL OR l.statut_reception = 'EN_ATTENTE' THEN 1 ELSE 0 END) AS attente " +
+            "  FROM livraisons l WHERE 1=1 " + periode +
+            "  GROUP BY l.id_chauffeur " +
+            ") t ON t.id_chauffeur = ch.id " +
+            "LEFT JOIN ( " +
+            "  SELECT l.id_chauffeur, COUNT(*) AS articles " +
+            "  FROM detail_livraison dl JOIN livraisons l ON dl.id_livraison = l.id " +
+            "  WHERE 1=1 " + periode +
+            "  GROUP BY l.id_chauffeur " +
+            ") a ON a.id_chauffeur = ch.id " +
+            "ORDER BY t.total DESC";
+
+        try {
+            return gapJdbcTemplate.query(sql, (rs, i) -> {
+                String prenom = rs.getString("prenom");
+                String nom = rs.getString("nom");
+                String nomComplet = ((prenom != null ? prenom : "") + " " + (nom != null ? nom : "")).trim();
+                Object mat = rs.getObject("matricule");
+                return new DashboardStatsDTO.ChauffeurStat(
+                        nomComplet.isEmpty() ? "—" : nomComplet,
+                        mat != null ? String.valueOf(mat) : "",
+                        rs.getInt("total"), rs.getInt("livres"),
+                        rs.getInt("attente"), rs.getInt("articles"));
+            }, args.toArray());
+        } catch (Exception ignore) {
+            return java.util.Collections.emptyList();
+        }
+    }
+
+    /** Compteur entier tolérant aux erreurs (renvoie 0 si la requête échoue). */
+    private int intQuery(String sql, Object... params) {
+        try {
+            Integer n = gapJdbcTemplate.queryForObject(sql, Integer.class, params);
+            return n != null ? n : 0;
+        } catch (Exception ignore) {
+            return 0;
+        }
     }
 }

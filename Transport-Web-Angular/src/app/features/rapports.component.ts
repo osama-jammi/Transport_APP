@@ -16,6 +16,22 @@ interface RapportCard { type: RapportType; titre: string; desc: string; icon: st
       </div>
     </div>
 
+    <!-- Rapport complet : toutes les statistiques en un seul classeur -->
+    <div class="card" style="cursor:pointer;border:1px solid var(--accent)" (click)="exporterComplet()">
+      <div class="card-body" style="display:flex;align-items:center;gap:16px">
+        <div style="width:48px;height:48px;border-radius:12px;display:grid;place-items:center;
+                    background:var(--accent);color:#fff;font-size:20px;flex:0 0 auto">
+          <i class="fa-solid fa-file-excel"></i>
+        </div>
+        <div style="flex:1">
+          <div style="font-weight:700;font-size:1.05rem">Rapport complet — toutes statistiques</div>
+          <div class="lbl">Classeur multi-feuilles : synthèse (KPI), par chauffeur, par chantier, par jour, réserves.</div>
+        </div>
+        <i class="fa-solid" [ngClass]="loadingComplet ? 'fa-spinner fa-spin' : 'fa-file-arrow-down'"
+           style="color:var(--accent);font-size:18px"></i>
+      </div>
+    </div>
+
     <div class="stats">
       <div class="stat" *ngFor="let r of cartes" style="cursor:pointer" (click)="exporter(r)">
         <div class="ic {{r.couleur}}"><i class="fa-solid {{r.icon}}"></i></div>
@@ -35,6 +51,7 @@ interface RapportCard { type: RapportType; titre: string; desc: string; icon: st
 export class RapportsComponent {
   debut = ''; fin = '';
   loading: RapportType | null = null;
+  loadingComplet = false;
 
   cartes: RapportCard[] = [
     { type: 'synthese',   titre: 'Synthèse',        desc: 'Vue agrégée des voyages',        icon: 'fa-chart-pie',  couleur: 'blue' },
@@ -50,14 +67,31 @@ export class RapportsComponent {
     this.loading = r.type;
     this.svc.export(r.type, this.debut + 'T00:00:00', this.fin + 'T23:59:59').subscribe({
       next: blob => {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = `${r.type}.xlsx`; a.click();
-        URL.revokeObjectURL(url);
+        this.telecharger(blob, `${r.type}.xlsx`);
         this.loading = null;
         this.toastr.success(`Export « ${r.titre} » téléchargé.`);
       },
       error: () => { this.loading = null; this.toastr.error("Échec de l'export."); }
     });
+  }
+
+  exporterComplet(): void {
+    if (!this.debut || !this.fin) { this.toastr.warning('Sélectionnez une période.'); return; }
+    this.loadingComplet = true;
+    this.svc.exportComplet(this.debut, this.fin).subscribe({
+      next: blob => {
+        this.telecharger(blob, 'rapport-complet.xlsx');
+        this.loadingComplet = false;
+        this.toastr.success('Rapport complet téléchargé.');
+      },
+      error: () => { this.loadingComplet = false; this.toastr.error("Échec de l'export."); }
+    });
+  }
+
+  private telecharger(blob: Blob, nom: string): void {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = nom; a.click();
+    URL.revokeObjectURL(url);
   }
 }

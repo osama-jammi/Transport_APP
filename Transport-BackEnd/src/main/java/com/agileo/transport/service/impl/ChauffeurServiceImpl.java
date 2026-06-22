@@ -15,8 +15,10 @@ import com.google.zxing.common.BitMatrix;
 import com.google.zxing.qrcode.QRCodeWriter;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.io.ByteArrayOutputStream;
 import java.time.LocalDateTime;
@@ -51,14 +53,45 @@ public class ChauffeurServiceImpl implements ChauffeurService {
 
     @Override
     public ChauffeurResponseDTO create(ChauffeurRequestDTO dto) {
+        // Chauffeur normal (non administrateur) → enregistré dans GAP : il apparaît
+        // dans la grille de la flotte (comme les chauffeurs de l'ERP).
+        if (!Boolean.TRUE.equals(dto.getAdmin())) {
+            Long gapId = gapReadService.createChauffeur(
+                    dto.getNom(), dto.getPrenom(), parseMatriculeGap(dto.getMatricule()), "WEB");
+            ChauffeurResponseDTO out = new ChauffeurResponseDTO();
+            out.setId(gapId);
+            out.setNom(dto.getNom());
+            out.setPrenom(dto.getPrenom());
+            out.setMatricule(dto.getMatricule());
+            out.setActif(true);
+            out.setAdmin(false);
+            return out;
+        }
+        // Administrateur → base locale (compte app mobile / tableau de bord).
         Chauffeur chauffeur = Chauffeur.builder()
                 .nom(dto.getNom())
                 .prenom(dto.getPrenom())
                 .telephone(dto.getTelephone())
                 .matricule(dto.getMatricule())
+                .admin(true)
                 .qrCode(UUID.randomUUID().toString())
                 .build();
         return toDTO(chauffeurRepository.save(chauffeur));
+    }
+
+    /**
+     * Le matricule GAP est numérique (colonne int). On convertit la saisie ;
+     * vide → null, non numérique → erreur 400 explicite.
+     */
+    private Integer parseMatriculeGap(String matricule) {
+        if (matricule == null || matricule.isBlank()) return null;
+        try {
+            return Integer.valueOf(matricule.trim());
+        } catch (NumberFormatException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Le matricule d'un chauffeur doit être numérique (il est enregistré dans GAP). "
+                    + "Pour un identifiant alphanumérique, cochez « Compte administrateur ».");
+        }
     }
 
     @Override
@@ -68,6 +101,7 @@ public class ChauffeurServiceImpl implements ChauffeurService {
         chauffeur.setPrenom(dto.getPrenom());
         chauffeur.setTelephone(dto.getTelephone());
         chauffeur.setMatricule(dto.getMatricule());
+        if (dto.getAdmin() != null) chauffeur.setAdmin(dto.getAdmin());
         return toDTO(chauffeurRepository.save(chauffeur));
     }
 
@@ -128,6 +162,10 @@ public class ChauffeurServiceImpl implements ChauffeurService {
         // Ancien format : QR stocké dans la table locale
         Chauffeur chauffeur = chauffeurRepository.findByQrCode(qrCode)
                 .orElseThrow(() -> new EntityNotFoundException("QR code chauffeur invalide"));
+        if (Boolean.FALSE.equals(chauffeur.getActif())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Compte désactivé. Contactez l'administrateur.");
+        }
         chauffeur.setDerniereConnexion(LocalDateTime.now());
         return toDTO(chauffeurRepository.save(chauffeur));
     }
@@ -144,6 +182,10 @@ public class ChauffeurServiceImpl implements ChauffeurService {
         if (gap == null) {
             throw new EntityNotFoundException("Chauffeur GAP introuvable : " + gapId);
         }
+        if (Boolean.FALSE.equals(gap.getActif())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Compte désactivé. Contactez l'administrateur.");
+        }
         // Enregistre la dernière connexion (visible ensuite dans la Flotte)
         gapReadService.updateChauffeurConnexion(gapId);
         ChauffeurResponseDTO dto = new ChauffeurResponseDTO();
@@ -159,6 +201,18 @@ public class ChauffeurServiceImpl implements ChauffeurService {
             dto.setCamionImmatriculation(cam.getImmatriculation());
         });
         return dto;
+    }
+
+    @Override
+    public void setActifGap(Long gapChauffeurId, boolean actif) {
+        gapReadService.updateChauffeurActif(gapChauffeurId, actif);
+    }
+
+    @Override
+    public ChauffeurResponseDTO setActif(Long id, boolean actif) {
+        Chauffeur chauffeur = findById(id);
+        chauffeur.setActif(actif);
+        return toDTO(chauffeurRepository.save(chauffeur));
     }
 
     // ── helpers ─────────────────────────────────────────────────────────────
@@ -190,6 +244,7 @@ public class ChauffeurServiceImpl implements ChauffeurService {
         dto.setQrCode(c.getQrCode());
         dto.setDerniereConnexion(c.getDerniereConnexion());
         dto.setActif(c.getActif());
+        dto.setAdmin(Boolean.TRUE.equals(c.getAdmin()));
         // Camion affecté à ce chauffeur (pour la remontée GPS mobile)
         if (c.getId() != null) {
             camionRepository.findByChauffeurId(c.getId()).ifPresent(cam -> {

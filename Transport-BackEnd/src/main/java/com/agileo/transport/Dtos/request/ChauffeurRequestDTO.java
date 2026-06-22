@@ -16,4 +16,7 @@ public class ChauffeurRequestDTO {
 
     @NotBlank
     private String matricule;
+
+    /** Marque ce compte comme administrateur/superviseur (tableau de bord mobile). */
+    private Boolean admin;
 }

@@ -114,6 +114,30 @@ public class ArticleServiceImpl implements ArticleService {
         return encodeQr("VOYAGE:" + voyageId);
     }
 
+    @Override
+    public byte[] generateQrCodeForLivraison(Long livraisonId) {
+        // QR d'une livraison : scanné, il vaut le scan de toutes les lignes de cette livraison.
+        return encodeQr("LIVRAISON:" + livraisonId);
+    }
+
+    /** Scan d'une livraison entière (QR = "LIVRAISON:{id}") → marque toutes ses lignes. */
+    private ArticleResponseDTO scanLivraisonGap(String qrCode, String phase) {
+        Long livraisonId;
+        try {
+            livraisonId = Long.parseLong(qrCode.substring("LIVRAISON:".length()).trim());
+        } catch (NumberFormatException e) {
+            throw new EntityNotFoundException("QR livraison invalide : " + qrCode);
+        }
+        boolean chargement = "CHARGEMENT".equalsIgnoreCase(phase);
+        int n = gapReadService.scanAllDetailsForLivraison(livraisonId, phase);
+        ArticleResponseDTO dto = new ArticleResponseDTO();
+        dto.setId(livraisonId);
+        dto.setNom("Livraison #" + livraisonId + " — " + n + " ligne(s) scannée(s)");
+        dto.setStatutScan(chargement
+                ? Article.StatutScan.SCANNE_CHARGEMENT : Article.StatutScan.SCANNE_LIVRAISON);
+        return dto;
+    }
+
     /** Scan d'une ligne de livraison GAP (QR = "DETAIL:{id}") → met à jour son statut. */
     private ArticleResponseDTO scanDetailGap(String qrCode, String phase) {
         Long detailId;
@@ -156,6 +180,10 @@ public class ArticleServiceImpl implements ArticleService {
         // QR d'un voyage entier ("VOYAGE:{id}") → scanne toutes ses lignes d'un coup
         if (qrCode != null && qrCode.startsWith("VOYAGE:")) {
             return scanVoyageGap(qrCode, phase);
+        }
+        // QR d'une livraison entière ("LIVRAISON:{id}") → scanne toutes ses lignes
+        if (qrCode != null && qrCode.startsWith("LIVRAISON:")) {
+            return scanLivraisonGap(qrCode, phase);
         }
         // Nouveau format : QR d'une ligne de livraison GAP ("DETAIL:{id}")
         if (qrCode != null && qrCode.startsWith("DETAIL:")) {

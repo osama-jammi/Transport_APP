@@ -2,8 +2,10 @@ package com.agileo.transport.service;
 
 import com.agileo.transport.Dtos.request.PositionGpsRequestDTO;
 import com.agileo.transport.Dtos.response.PositionGpsResponseDTO;
+import com.agileo.transport.Dtos.response.TrajetChauffeurDTO;
 import com.agileo.transport.Dtos.response.TrajetVoyageResponseDTO;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 public interface GpsService {
@@ -17,4 +19,9 @@ public interface GpsService {
     TrajetVoyageResponseDTO getTrajetVoyage(Long voyageId);
     /** Trajet GPS agrégé d'un voyage conteneur (positions de toutes ses livraisons). */
     TrajetVoyageResponseDTO getTrajetAgrege(Long voyageConteneurId, List<Long> livraisonIds);
+    /**
+     * Trajets GPS regroupés par chauffeur sur une période (suivi multi-chauffeurs).
+     * @param chauffeurId si non nul, ne renvoie que ce chauffeur.
+     */
+    List<TrajetChauffeurDTO> getTrajetsParChauffeur(LocalDateTime debut, LocalDateTime fin, Long chauffeurId);
 }

@@ -9,8 +9,9 @@ export class VoyageConteneurService {
   private base = `${environment.apiUrl}/voyages-conteneurs`;
   constructor(private http: HttpClient) {}
 
-  getAll(archives = false): Observable<VoyageConteneur[]> {
-    return this.http.get<VoyageConteneur[]>(`${this.base}?archives=${archives}`);
+  getAll(vue: 'en-cours' | 'archives' | 'historique' = 'en-cours'): Observable<VoyageConteneur[]> {
+    if (vue === 'historique') return this.http.get<VoyageConteneur[]>(`${this.base}?tout=true`);
+    return this.http.get<VoyageConteneur[]>(`${this.base}?archives=${vue === 'archives'}`);
   }
   archiver(id: number): Observable<void> {
     return this.http.patch<void>(`${this.base}/${id}/archiver`, {});
@@ -39,5 +40,13 @@ export class VoyageConteneurService {
   /** Matières premières rattachées directement au voyage. */
   matieres(id: number): Observable<MatierePremiere[]> {
     return this.http.get<MatierePremiere[]>(`${this.base}/${id}/matieres`);
+  }
+  /** Détache une livraison du voyage (sans la supprimer de GAP). */
+  detacherLivraison(livId: number): Observable<void> {
+    return this.http.patch<void>(`${this.base}/livraisons/${livId}/detacher`, {});
+  }
+  /** Clôture / rouvre une ligne de matière première (statut local, sans impact ERP). */
+  statutMatiere(mpId: number, statut: string): Observable<void> {
+    return this.http.patch<void>(`${this.base}/matieres/${mpId}/statut?statut=${statut}`, {});
   }
 }

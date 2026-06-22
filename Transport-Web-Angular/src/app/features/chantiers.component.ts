@@ -9,7 +9,7 @@ import { Chantier, ChantierRequest } from '../core/models';
   template: `
     <div class="toolbar">
       <div class="search"><i class="fa-solid fa-magnifying-glass"></i>
-        <input [(ngModel)]="q" placeholder="Rechercher un chantier…"></div>
+        <input [(ngModel)]="q" (ngModelChange)="page=1" placeholder="Rechercher un chantier…"></div>
       <button class="btn btn-primary right" (click)="ouvrir()">
         <i class="fa-solid fa-plus"></i> Nouveau chantier</button>
     </div>
@@ -21,7 +21,7 @@ import { Chantier, ChantierRequest } from '../core/models';
         <table>
           <thead><tr><th>ID</th><th>Nom</th><th>Ville</th><th>Lieu</th><th>Coordonnées</th><th>Zone</th><th>Statut</th><th>Actions</th></tr></thead>
           <tbody>
-            <tr *ngFor="let c of filtres()">
+            <tr *ngFor="let c of filtres() | paginate:page:pageSize">
               <td><code>{{ c.id }}</code></td>
               <td><strong>{{ c.nom }}</strong></td>
               <td>{{ c.ville || '—' }}</td>
@@ -31,13 +31,13 @@ import { Chantier, ChantierRequest } from '../core/models';
               <td><span class="badge" [ngClass]="c.actif ? 'badge-green' : 'badge-gray'">{{ c.actif ? 'Actif' : 'Archivé' }}</span></td>
               <td class="flex">
                 <button class="btn btn-outline btn-sm" (click)="ouvrir(c)"><i class="fa-solid fa-pen"></i></button>
-                <button class="btn btn-outline btn-sm" (click)="archiver(c)">
-                  {{ c.actif ? 'Archiver' : 'Réactiver' }}</button>
               </td>
             </tr>
           </tbody>
         </table>
       </div>
+      <app-paginator [total]="filtres().length" [page]="page" [pageSize]="pageSize"
+                     (pageChange)="page = $event"></app-paginator>
     </div></div>
 
     <div class="modal-backdrop" *ngIf="modal" (click)="fermer($event)">
@@ -98,6 +98,7 @@ import { Chantier, ChantierRequest } from '../core/models';
 export class ChantiersComponent implements OnInit {
   chantiers: Chantier[] = [];
   loading = true; saving = false; modal = false;
+  page = 1; pageSize = 10;
   q = ''; editId: number | null = null;
   form: ChantierRequest = { nom: '', rayonMetres: 100 };
   presets = [100, 250, 500, 1000];
@@ -190,7 +191,7 @@ export class ChantiersComponent implements OnInit {
       this.circle.setRadius(rayon);
     } else {
       this.circle = L.circle([lat, lng], {
-        radius: rayon, color: '#6d4aff', fillColor: '#6d4aff', fillOpacity: 0.15, weight: 2
+        radius: rayon, color: '#3B2417', fillColor: '#3B2417', fillOpacity: 0.15, weight: 2
       }).addTo(this.map);
     }
   }
@@ -221,13 +222,6 @@ export class ChantiersComponent implements OnInit {
     obs.subscribe({
       next: () => { this.toastr.success('Chantier enregistré.'); this.close(); this.saving = false; this.charger(); },
       error: () => { this.toastr.error('Échec enregistrement.'); this.saving = false; }
-    });
-  }
-
-  archiver(c: Chantier): void {
-    this.svc.archiver(c.id).subscribe({
-      next: () => { this.toastr.success(c.actif ? 'Chantier archivé.' : 'Chantier réactivé.'); this.charger(); },
-      error: () => this.toastr.error('Échec opération.')
     });
   }
 }

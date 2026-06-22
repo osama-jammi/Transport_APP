@@ -7,14 +7,16 @@ import {
 import { useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as Notifications from 'expo-notifications';
 import type { RootState } from '@/store';
-import { setVoyages, setLoading } from '@/store/livraisonSlice';
-import { getVoyagesEnCours, type Voyage } from '@/services/livraisonService';
+import { getVoyagesConteneurs, type VoyageConteneur } from '@/services/livraisonService';
 import { clearChauffeur } from '@/store/authSlice';
 import { logout as logoutService } from '@/services/authService';
-import { startTrajetVoyage, stopTrajetVoyage } from '@/services/gpsService';
+import { startTrajetVoyage, stopTrajetVoyage, startSuiviChauffeur, stopSuiviChauffeur, setTrackingEnabled } from '@/services/gpsService';
+import { isFeatureEnabled } from '@/services/featureService';
 import { enregistrerPush } from '@/services/pushService';
+import { COLORS, GRADIENT } from '@/constants/theme';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -48,19 +50,35 @@ async function sonnerNouveauVoyage(nb: number) {
   } catch { /* Expo Go : la vibration suffit */ }
 }
 
-export default function LivraisonsScreen() {
+type Filtre = 'EN_COURS' | 'LIVRE' | 'TOUS';
+
+const FILTRES: { key: Filtre; label: string; icon: string }[] = [
+  { key: 'EN_COURS', label: 'En cours', icon: 'time-outline' },
+  { key: 'LIVRE',    label: 'Livrés',   icon: 'checkmark-done-outline' },
+  { key: 'TOUS',     label: 'Tous',     icon: 'albums-outline' },
+];
+
+// Un voyage est « livré » quand son déchargement réel est enregistré.
+const estLivre = (v: VoyageConteneur) => !!v.realDechargement;
+
+export default function VoyagesScreen() {
   const dispatch  = useDispatch();
   const router    = useRouter();
-  const { voyages, loading } = useSelector((s: RootState) => s.livraison);
   const chauffeur = useSelector((s: RootState) => s.auth.chauffeur);
+
+  const [voyages, setVoyagesState] = useState<VoyageConteneur[]>([]);
+  const [loading, setLoadingState] = useState(false);
+
+  // Filtre actif — par defaut « voyages en cours »
+  const [filtre, setFiltre] = useState<Filtre>('EN_COURS');
 
   const knownIds = useRef<Set<number> | null>(null);
 
   const load = useCallback(async (silent = false) => {
-    if (!silent) dispatch(setLoading(true));
+    if (!silent) setLoadingState(true);
     try {
-      const data = await getVoyagesEnCours(chauffeur?.id);
-      dispatch(setVoyages(data));
+      const data = await getVoyagesConteneurs(chauffeur?.id);
+      setVoyagesState(data);
       // Détecte les voyages nouvellement assignés → sonnerie + notification
       const ids = new Set(data.map(v => v.id));
       if (knownIds.current) {
@@ -71,9 +89,9 @@ export default function LivraisonsScreen() {
     } catch {
       // silencieux, retry possible via pull-to-refresh
     } finally {
-      if (!silent) dispatch(setLoading(false));
+      if (!silent) setLoadingState(false);
     }
-  }, [dispatch, chauffeur?.id]);
+  }, [chauffeur?.id]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -98,12 +116,35 @@ export default function LivraisonsScreen() {
 
   // Suivi du trajet : un point GPS toutes les 2 minutes, lié au voyage en cours
   // (le premier voyage non encore livré), pour tracer le déplacement du chauffeur.
-  const voyageActifId = voyages.find((v: Voyage) => v.etatDechargement !== 'TERMINE')?.id;
+  const voyageActifId = voyages.find((v: VoyageConteneur) => !v.realDechargement)?.id;
   useEffect(() => {
-    if (!voyageActifId) { stopTrajetVoyage(); return; }
-    startTrajetVoyage(voyageActifId, chauffeur?.camionId ?? undefined);
-    return () => stopTrajetVoyage();
-  }, [voyageActifId, chauffeur?.camionId]);
+    if (!chauffeur?.id) return;
+    let annule = false;
+
+    // Applique l'interrupteur « tracking » (admin) : coupe RÉELLEMENT le GPS s'il est
+    // désactivé, le (re)démarre sinon. Ré-évalué périodiquement pour réagir à chaud
+    // quand l'admin bascule l'interrupteur pendant que l'app tourne.
+    const appliquerSuivi = async () => {
+      // Le suivi GPS est piloté par la fonctionnalité « suivi-trajets » (qui inclut le GPS).
+      const trackingOn = await isFeatureEnabled('suivi-trajets');
+      if (annule) return;
+      setTrackingEnabled(trackingOn);
+      if (!trackingOn) return; // setTrackingEnabled(false) a déjà tout arrêté
+      if (voyageActifId) {
+        // Voyage en cours → trajet lié au voyage (avec le chauffeur)
+        stopSuiviChauffeur();
+        startTrajetVoyage(voyageActifId, chauffeur.camionId ?? undefined, chauffeur.id);
+      } else {
+        // Pas de voyage → on suit quand même le chauffeur (tracking de tous)
+        stopTrajetVoyage();
+        startSuiviChauffeur(chauffeur.id, chauffeur.camionId ?? undefined);
+      }
+    };
+
+    appliquerSuivi();
+    const t = setInterval(appliquerSuivi, 30_000);
+    return () => { annule = true; clearInterval(t); stopTrajetVoyage(); stopSuiviChauffeur(); };
+  }, [voyageActifId, chauffeur?.id, chauffeur?.camionId]);
 
   const handleLogout = () => {
     Alert.alert('Déconnexion', 'Voulez-vous vous déconnecter ?', [
@@ -119,111 +160,145 @@ export default function LivraisonsScreen() {
     ]);
   };
 
-  // Statut global du voyage : Livré > Chargé > En cours > En attente
-  const voyageStatut = (v: Voyage): { label: string; color: string } => {
-    if (v.etatDechargement === 'TERMINE') return { label: 'Livré ✓', color: '#16b364' };
-    if (v.etatChargement === 'TERMINE') return { label: 'Chargé ✓', color: '#2563eb' };
-    if (v.etatChargement === 'EN_COURS') return { label: 'En cours', color: '#8b7bff' };
-    return { label: 'En attente', color: '#F59E0B' };
+  // Compteurs (sur la liste complete, independamment du filtre)
+  const nbEnCours = voyages.filter(v => !estLivre(v)).length;
+  const nbLivres  = voyages.filter(estLivre).length;
+
+  // Liste filtree
+  const voyagesAffiches = voyages.filter(v =>
+    filtre === 'TOUS' ? true : filtre === 'LIVRE' ? estLivre(v) : !estLivre(v),
+  );
+
+  // Statut global du voyage : Livré > En route (chargé) > À charger
+  const voyageStatut = (v: VoyageConteneur): { label: string; color: string } => {
+    if (v.realDechargement) return { label: 'Livré ✓', color: COLORS.success };
+    if (v.realChargement)   return { label: 'En route', color: COLORS.goldDark };
+    return { label: 'À charger', color: COLORS.gold };
   };
 
-  const renderItem = ({ item, index }: { item: Voyage; index: number }) => {
+  const formatJour = (iso: string | null) =>
+    iso ? new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' }) : null;
+
+  const renderItem = ({ item, index }: { item: VoyageConteneur; index: number }) => {
     const st = voyageStatut(item);
+    const livre = estLivre(item);
+    const prioritaire = !livre && index === 0 && filtre !== 'LIVRE';
     return (
     <TouchableOpacity
       style={styles.card}
       activeOpacity={0.85}
-      onPress={() => router.push(`/(chauffeur)/livraison/${item.id}`)}
+      onPress={() => router.push(`/(chauffeur)/voyage/${item.id}` as any)}
     >
       <View style={styles.cardLeft}>
-        <View style={[styles.indexBadge, { backgroundColor: index === 0 ? '#EF4444' : '#8b7bff' }]}>
-          <Text style={styles.indexBadgeTxt}>{index + 1}</Text>
+        <View style={[styles.indexBadge, { backgroundColor: livre ? COLORS.success : prioritaire ? COLORS.danger : COLORS.gold }]}>
+          {livre
+            ? <Ionicons name="checkmark" size={16} color="#fff" />
+            : <Text style={styles.indexBadgeTxt}>{index + 1}</Text>}
         </View>
       </View>
       <View style={styles.cardBody}>
-        {index === 0 && (
+        {prioritaire && (
           <Text style={styles.priorityTag}>● PRIORITAIRE</Text>
         )}
-        <Text style={styles.cardTitle}>{item.client || `Voyage #${item.id}`}</Text>
+        <Text style={styles.cardTitle}>Voyage #{item.id}{formatJour(item.dateVoyage) ? ` · ${formatJour(item.dateVoyage)}` : ''}</Text>
         <View style={styles.cardMeta}>
-          <Ionicons name="car-outline" size={13} color="#64748B" />
-          <Text style={styles.cardMetaTxt}>{item.camionImmatriculation}</Text>
-          <Ionicons name="cube-outline" size={13} color="#64748B" style={{ marginLeft: 10 }} />
-          <Text style={styles.cardMetaTxt}>{item.nbColis} colis</Text>
+          <Ionicons name="cube-outline" size={13} color={COLORS.textSub} />
+          <Text style={styles.cardMetaTxt}>{item.nbLivraisons} livraison(s)</Text>
+          {item.nbMatieres > 0 ? (
+            <>
+              <Ionicons name="layers-outline" size={13} color={COLORS.textSub} style={{ marginLeft: 10 }} />
+              <Text style={styles.cardMetaTxt}>{item.nbMatieres} matière(s)</Text>
+            </>
+          ) : null}
         </View>
-        <View style={[styles.statusPill, { backgroundColor: st.color + '20' }]}>
+        {item.localNom ? (
+          <View style={styles.cardMeta}>
+            <Ionicons name="business-outline" size={13} color={COLORS.textSub} />
+            <Text style={styles.cardMetaTxt} numberOfLines={1}>Départ : {item.localNom}</Text>
+          </View>
+        ) : null}
+        <View style={[styles.statusPill, { backgroundColor: st.color + '22' }]}>
           <Text style={[styles.statusTxt, { color: st.color }]}>{st.label}</Text>
         </View>
       </View>
-      <Ionicons name="chevron-forward" size={20} color="#CBD5E1" />
+      <Ionicons name="chevron-forward" size={20} color={COLORS.textFaint} />
     </TouchableOpacity>
     );
   };
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#1e1b34" />
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.brownDeep} />
 
       {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerAvatar}>
-          <Text style={styles.headerAvatarTxt}>
-            {chauffeur?.prenom?.[0]}{chauffeur?.nom?.[0]}
-          </Text>
+      <LinearGradient colors={GRADIENT as any} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.header}>
+        <View style={styles.brandBar}>
+          <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+            <Ionicons name="log-out-outline" size={20} color="#fff" />
+          </TouchableOpacity>
         </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.headerGreet}>Bonjour 👋</Text>
-          <Text style={styles.headerName}>{chauffeur?.prenom} {chauffeur?.nom}</Text>
-          <Text style={styles.headerSub}>{chauffeur?.matricule}</Text>
-        </View>
-        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-          <Ionicons name="log-out-outline" size={20} color="#fff" />
-        </TouchableOpacity>
-      </View>
 
-      {/* Stats bar */}
-      <View style={styles.statsBar}>
-        <View style={styles.stat}>
-          <Text style={styles.statNum}>{voyages.length}</Text>
-          <Text style={styles.statLbl}>En cours</Text>
+        <View style={styles.userRow}>
+          <View style={styles.headerAvatar}>
+            <Text style={styles.headerAvatarTxt}>
+              {chauffeur?.prenom?.[0]}{chauffeur?.nom?.[0]}
+            </Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.headerGreet}>Bonjour 👋</Text>
+            <Text style={styles.headerName}>{chauffeur?.prenom} {chauffeur?.nom}</Text>
+            <Text style={styles.headerSub}>{chauffeur?.matricule}</Text>
+          </View>
         </View>
-        <View style={styles.statDiv} />
-        <View style={styles.stat}>
-          <Text style={styles.statNum}>
-            {voyages.reduce((s: number, v: Voyage) => s + (v.nbColis || 0), 0)}
-          </Text>
-          <Text style={styles.statLbl}>Colis total</Text>
-        </View>
-        <View style={styles.statDiv} />
-        <View style={styles.stat}>
-          <Text style={styles.statNum}>
-            {voyages.filter((v: Voyage) => v.etatChargement === 'TERMINE').length}
-          </Text>
-          <Text style={styles.statLbl}>Chargés</Text>
-        </View>
+      </LinearGradient>
+
+      {/* Filtres */}
+      <View style={styles.filterRow}>
+        {FILTRES.map(f => {
+          const active = filtre === f.key;
+          const n = f.key === 'EN_COURS' ? nbEnCours : f.key === 'LIVRE' ? nbLivres : voyages.length;
+          return (
+            <TouchableOpacity
+              key={f.key}
+              style={[styles.filterChip, active && styles.filterChipActive]}
+              activeOpacity={0.8}
+              onPress={() => setFiltre(f.key)}
+            >
+              <Ionicons name={f.icon as any} size={14} color={active ? COLORS.brown : COLORS.textSub} />
+              <Text style={[styles.filterTxt, active && styles.filterTxtActive]}>{f.label}</Text>
+              <View style={[styles.filterCount, active && styles.filterCountActive]}>
+                <Text style={[styles.filterCountTxt, active && styles.filterCountTxtActive]}>{n}</Text>
+              </View>
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
       {/* Section title */}
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Mes livraisons</Text>
+        <Text style={styles.sectionTitle}>
+          {filtre === 'LIVRE' ? 'Voyages livrés' : filtre === 'TOUS' ? 'Tous les voyages' : 'Voyages en cours'}
+        </Text>
         <TouchableOpacity onPress={() => load()}>
-          <Ionicons name="refresh-outline" size={20} color="#8b7bff" />
+          <Ionicons name="refresh-outline" size={20} color={COLORS.goldDark} />
         </TouchableOpacity>
       </View>
 
-      {loading && <ActivityIndicator color="#8b7bff" style={{ marginTop: 20 }} />}
+      {loading && <ActivityIndicator color={COLORS.gold} style={{ marginTop: 20 }} />}
 
       <FlatList
-        data={voyages}
+        data={voyagesAffiches}
         keyExtractor={(v) => String(v.id)}
         renderItem={renderItem}
-        refreshControl={<RefreshControl refreshing={loading} onRefresh={() => load()} colors={['#8b7bff']} />}
+        refreshControl={<RefreshControl refreshing={loading} onRefresh={() => load()} colors={[COLORS.gold]} tintColor={COLORS.gold} />}
         contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: 40 }}
         ListEmptyComponent={
           !loading ? (
             <View style={styles.empty}>
-              <Ionicons name="car-outline" size={56} color="#CBD5E1" />
-              <Text style={styles.emptyTxt}>Aucune livraison en cours</Text>
+              <Ionicons name={filtre === 'LIVRE' ? 'checkmark-done-circle-outline' : 'cube-outline'} size={56} color={COLORS.textFaint} />
+              <Text style={styles.emptyTxt}>
+                {filtre === 'LIVRE' ? 'Aucun voyage livré' : 'Aucun voyage en cours'}
+              </Text>
               <Text style={styles.emptySubTxt}>Tirez pour actualiser</Text>
             </View>
           ) : null
@@ -234,45 +309,61 @@ export default function LivraisonsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container:      { flex: 1, backgroundColor: '#F0F4F8' },
+  container:      { flex: 1, backgroundColor: COLORS.bg },
 
   header:         {
-    backgroundColor: '#1e1b34',
-    paddingTop: 52, paddingBottom: 20, paddingHorizontal: 20,
-    flexDirection: 'row', alignItems: 'center', gap: 14,
+    backgroundColor: COLORS.brown,
+    paddingTop: 50, paddingBottom: 18, paddingHorizontal: 20,
+    borderBottomLeftRadius: 22, borderBottomRightRadius: 22,
   },
-  headerAvatar:   {
-    width: 46, height: 46, borderRadius: 23,
-    backgroundColor: '#8b7bff',
+  brandBar:       {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end',
+  },
+  logoutBtn:      {
+    width: 38, height: 38, borderRadius: 19,
+    backgroundColor: 'rgba(255,255,255,.14)',
     alignItems: 'center', justifyContent: 'center',
   },
-  headerAvatarTxt:{ color: '#fff', fontWeight: '800', fontSize: 16 },
+
+  userRow:        { flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 18 },
+  headerAvatar:   {
+    width: 46, height: 46, borderRadius: 23,
+    backgroundColor: COLORS.gold,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  headerAvatarTxt:{ color: COLORS.brown, fontWeight: '800', fontSize: 16 },
   headerGreet:    { color: 'rgba(255,255,255,.6)', fontSize: 12 },
   headerName:     { color: '#fff', fontWeight: '700', fontSize: 16 },
   headerSub:      { color: 'rgba(255,255,255,.45)', fontSize: 11, marginTop: 1 },
-  logoutBtn:      {
-    width: 38, height: 38, borderRadius: 19,
-    backgroundColor: 'rgba(255,255,255,.12)',
-    alignItems: 'center', justifyContent: 'center',
-  },
 
-  statsBar:       {
-    backgroundColor: '#1e1b34', paddingBottom: 20,
-    paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center',
+  filterRow:      {
+    flexDirection: 'row', gap: 8,
+    paddingHorizontal: 16, paddingTop: 14, paddingBottom: 2,
   },
-  stat:           { flex: 1, alignItems: 'center' },
-  statNum:        { color: '#fff', fontSize: 22, fontWeight: '800' },
-  statLbl:        { color: 'rgba(255,255,255,.5)', fontSize: 11, marginTop: 2 },
-  statDiv:        { width: 1, height: 32, backgroundColor: 'rgba(255,255,255,.1)' },
+  filterChip:     {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5,
+    backgroundColor: COLORS.card, borderRadius: 22, paddingVertical: 9, paddingHorizontal: 8,
+    borderWidth: 1, borderColor: COLORS.border,
+  },
+  filterChipActive: { backgroundColor: COLORS.gold, borderColor: COLORS.gold },
+  filterTxt:      { fontSize: 12.5, fontWeight: '700', color: COLORS.textSub },
+  filterTxtActive:{ color: COLORS.brown },
+  filterCount:    {
+    minWidth: 18, height: 18, borderRadius: 9, paddingHorizontal: 5,
+    backgroundColor: COLORS.goldTint, alignItems: 'center', justifyContent: 'center',
+  },
+  filterCountActive: { backgroundColor: 'rgba(43,33,24,.18)' },
+  filterCountTxt: { fontSize: 11, fontWeight: '800', color: COLORS.goldDark },
+  filterCountTxtActive: { color: COLORS.brown },
 
   sectionHeader:  {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingHorizontal: 16, paddingTop: 16, paddingBottom: 4,
   },
-  sectionTitle:   { fontSize: 15, fontWeight: '700', color: '#1E293B' },
+  sectionTitle:   { fontSize: 15, fontWeight: '800', color: COLORS.text },
 
   card:           {
-    backgroundColor: '#fff', borderRadius: 14, padding: 14,
+    backgroundColor: COLORS.card, borderRadius: 14, padding: 14,
     flexDirection: 'row', alignItems: 'center', gap: 12,
     shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,
   },
@@ -283,14 +374,14 @@ const styles = StyleSheet.create({
   },
   indexBadgeTxt:  { color: '#fff', fontWeight: '800', fontSize: 13 },
   cardBody:       { flex: 1, gap: 4 },
-  priorityTag:    { color: '#EF4444', fontSize: 10, fontWeight: '700', letterSpacing: 0.5 },
-  cardTitle:      { fontSize: 15, fontWeight: '700', color: '#1E293B' },
+  priorityTag:    { color: COLORS.danger, fontSize: 10, fontWeight: '700', letterSpacing: 0.5 },
+  cardTitle:      { fontSize: 15, fontWeight: '700', color: COLORS.text },
   cardMeta:       { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  cardMetaTxt:    { fontSize: 12, color: '#64748B' },
+  cardMetaTxt:    { fontSize: 12, color: COLORS.textSub },
   statusPill:     { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 20, marginTop: 2 },
   statusTxt:      { fontSize: 11, fontWeight: '700' },
 
   empty:          { alignItems: 'center', paddingTop: 60, gap: 10 },
-  emptyTxt:       { fontSize: 16, fontWeight: '600', color: '#94A3B8' },
-  emptySubTxt:    { fontSize: 13, color: '#CBD5E1' },
+  emptyTxt:       { fontSize: 16, fontWeight: '600', color: COLORS.textSub },
+  emptySubTxt:    { fontSize: 13, color: COLORS.textFaint },
 });

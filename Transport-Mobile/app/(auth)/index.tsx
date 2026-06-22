@@ -1,25 +1,27 @@
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, StatusBar } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { COLORS, LOGO } from '@/constants/theme';
 
 export default function WelcomeScreen() {
   const router = useRouter();
 
   return (
     <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.brownDeep} />
+
       {/* Logo / Header */}
       <View style={styles.header}>
-        <View style={styles.logoCircle}>
-          <Ionicons name="car" size={56} color="#fff" />
+        <View style={styles.logoCard}>
+          <Image source={LOGO} style={styles.logo} resizeMode="contain" />
         </View>
-        <Text style={styles.appName}>Transport Livraison</Text>
-        <Text style={styles.tagline}>Gestion des tournées & livraisons</Text>
+        <Text style={styles.tagline}>Transport & Livraison</Text>
       </View>
 
       {/* Cards info */}
       <View style={styles.infoWrap}>
         <View style={styles.infoCard}>
-          <Ionicons name="qr-code-outline" size={28} color="#6d4aff" />
+          <View style={styles.infoIcon}><Ionicons name="qr-code-outline" size={24} color={COLORS.goldDark} /></View>
           <View style={{ flex: 1, marginLeft: 12 }}>
             <Text style={styles.infoTitle}>Connexion par QR Code</Text>
             <Text style={styles.infoSub}>
@@ -28,7 +30,7 @@ export default function WelcomeScreen() {
           </View>
         </View>
         <View style={styles.infoCard}>
-          <Ionicons name="location-outline" size={28} color="#6d4aff" />
+          <View style={styles.infoIcon}><Ionicons name="location-outline" size={24} color={COLORS.goldDark} /></View>
           <View style={{ flex: 1, marginLeft: 12 }}>
             <Text style={styles.infoTitle}>Suivi GPS temps réel</Text>
             <Text style={styles.infoSub}>
@@ -37,7 +39,7 @@ export default function WelcomeScreen() {
           </View>
         </View>
         <View style={styles.infoCard}>
-          <Ionicons name="cube-outline" size={28} color="#6d4aff" />
+          <View style={styles.infoIcon}><Ionicons name="cube-outline" size={24} color={COLORS.goldDark} /></View>
           <View style={{ flex: 1, marginLeft: 12 }}>
             <Text style={styles.infoTitle}>Scan des articles</Text>
             <Text style={styles.infoSub}>
@@ -53,13 +55,20 @@ export default function WelcomeScreen() {
         onPress={() => router.push('/(auth)/scan')}
         activeOpacity={0.85}
       >
-        <Ionicons name="qr-code" size={22} color="#fff" />
+        <Ionicons name="qr-code" size={22} color={COLORS.brown} />
         <Text style={styles.connectTxt}>Scanner mon QR Code</Text>
       </TouchableOpacity>
 
-      <Text style={styles.footer}>
-        Contactez votre superviseur pour obtenir votre QR code chauffeur
-      </Text>
+      <TouchableOpacity
+        style={styles.adminBtn}
+        onPress={() => router.push('/(auth)/admin-login' as any)}
+        activeOpacity={0.85}
+      >
+        <Ionicons name="shield-checkmark-outline" size={20} color={COLORS.gold} />
+        <Text style={styles.adminTxt}>Connexion administrateur </Text>
+      </TouchableOpacity>
+
+
     </View>
   );
 }
@@ -67,25 +76,23 @@ export default function WelcomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F7FAFC',
+    backgroundColor: COLORS.bg,
     padding: 24,
     justifyContent: 'space-between',
   },
-  header: { alignItems: 'center', paddingTop: 60, gap: 12 },
-  logoCircle: {
-    width: 110,
-    height: 110,
-    borderRadius: 55,
-    backgroundColor: '#6d4aff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#6d4aff',
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    elevation: 8,
+  header: { alignItems: 'center', paddingTop: 64, gap: 14 },
+  logoCard: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    paddingHorizontal: 26,
+    paddingVertical: 22,
+    shadowColor: COLORS.brown,
+    shadowOpacity: 0.18,
+    shadowRadius: 18,
+    elevation: 6,
   },
-  appName: { fontSize: 26, fontWeight: '800', color: '#6d4aff', marginTop: 8 },
-  tagline: { fontSize: 14, color: '#718096', textAlign: 'center' },
+  logo: { width: 230, height: 66 },
+  tagline: { fontSize: 15, color: COLORS.textSub, textAlign: 'center', fontWeight: '600' },
   infoWrap: { gap: 12 },
   infoCard: {
     flexDirection: 'row',
@@ -98,26 +105,44 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 2,
   },
-  infoTitle: { fontSize: 14, fontWeight: '700', color: '#1A202C' },
-  infoSub: { fontSize: 12, color: '#718096', marginTop: 2, lineHeight: 17 },
+  infoIcon: {
+    width: 46, height: 46, borderRadius: 14,
+    backgroundColor: COLORS.goldSoft,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  infoTitle: { fontSize: 14, fontWeight: '700', color: COLORS.text },
+  infoSub: { fontSize: 12, color: COLORS.textSub, marginTop: 2, lineHeight: 17 },
   connectBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#6d4aff',
+    backgroundColor: COLORS.gold,
     borderRadius: 16,
     padding: 18,
     gap: 10,
-    shadowColor: '#6d4aff',
-    shadowOpacity: 0.35,
+    shadowColor: COLORS.gold,
+    shadowOpacity: 0.4,
     shadowRadius: 10,
     elevation: 6,
   },
-  connectTxt: { color: '#fff', fontSize: 17, fontWeight: '700' },
+  connectTxt: { color: COLORS.brown, fontSize: 17, fontWeight: '800' },
+  adminBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+    borderWidth: 1.5,
+    borderColor: COLORS.gold,
+    borderRadius: 16,
+    padding: 14,
+    gap: 10,
+    marginTop: 12,
+  },
+  adminTxt: { color: COLORS.gold, fontSize: 14, fontWeight: '700' },
   footer: {
     textAlign: 'center',
     fontSize: 12,
-    color: '#A0AEC0',
+    color: COLORS.textFaint,
     paddingBottom: 16,
     lineHeight: 18,
   },

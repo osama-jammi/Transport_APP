@@ -4,6 +4,7 @@ import api from '@/services/api';
 import { ENDPOINTS } from '@/constants/api';
 import type { PositionGpsResponseDTO } from '@/types/gps';
 import { Ionicons } from '@expo/vector-icons';
+import { COLORS } from '@/constants/theme';
 
 export default function SuperviseurScreen() {
   const [positions, setPositions] = useState<PositionGpsResponseDTO[]>([]);
@@ -36,14 +37,14 @@ export default function SuperviseurScreen() {
           style={[styles.toggle, view === 'map' && styles.toggleActive]}
           onPress={() => setView('map')}
         >
-          <Ionicons name="map-outline" size={18} color={view === 'map' ? '#6d4aff' : '#888'} />
+          <Ionicons name="map-outline" size={18} color={view === 'map' ? COLORS.goldDark : '#888'} />
           <Text style={[styles.toggleTxt, view === 'map' && styles.toggleTxtActive]}>Carte</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.toggle, view === 'list' && styles.toggleActive]}
           onPress={() => setView('list')}
         >
-          <Ionicons name="list-outline" size={18} color={view === 'list' ? '#6d4aff' : '#888'} />
+          <Ionicons name="list-outline" size={18} color={view === 'list' ? COLORS.goldDark : '#888'} />
           <Text style={[styles.toggleTxt, view === 'list' && styles.toggleTxtActive]}>Liste</Text>
         </TouchableOpacity>
       </View>
@@ -129,12 +130,12 @@ export default function SuperviseurScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F7FA' },
+  container: { flex: 1, backgroundColor: COLORS.bg },
   toggleRow: { flexDirection: 'row', backgroundColor: '#fff', borderBottomWidth: 1, borderColor: '#E2E8F0' },
   toggle: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 12, gap: 6 },
-  toggleActive: { borderBottomWidth: 2, borderBottomColor: '#6d4aff' },
+  toggleActive: { borderBottomWidth: 2, borderBottomColor: COLORS.goldDark },
   toggleTxt: { color: '#888', fontWeight: '600' },
-  toggleTxtActive: { color: '#6d4aff' },
+  toggleTxtActive: { color: COLORS.goldDark },
   // Map placeholder
   mapPlaceholderWrap: { padding: 24, alignItems: 'center', gap: 12, flexGrow: 1 },
   mapTitle: { fontSize: 20, fontWeight: '700', color: '#4A5568', marginTop: 8 },
@@ -142,12 +143,12 @@ const styles = StyleSheet.create({
   gridWrap: { width: '100%', marginTop: 16, gap: 8 },
   gridTitle: { fontSize: 13, fontWeight: '700', color: '#2D3748', marginBottom: 4 },
   gridCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 10, padding: 12, gap: 4, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 3, elevation: 1 },
-  gridImmat: { fontSize: 14, fontWeight: '700', color: '#6d4aff' },
+  gridImmat: { fontSize: 14, fontWeight: '700', color: COLORS.goldDark },
   gridGps: { fontSize: 11, color: '#A0AEC0', marginTop: 2 },
   // List
   card: { backgroundColor: '#fff', borderRadius: 10, padding: 14, shadowColor: '#000', shadowOpacity: 0.07, shadowRadius: 4, elevation: 2, gap: 4 },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
-  cardTitle: { fontSize: 15, fontWeight: '700', color: '#6d4aff', flex: 1 },
+  cardTitle: { fontSize: 15, fontWeight: '700', color: COLORS.goldDark, flex: 1 },
   cardInfo: { fontSize: 13, color: '#555' },
   gpsRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
   gpsText: { fontSize: 12, color: '#3182CE', fontFamily: 'monospace' },

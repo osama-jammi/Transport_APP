@@ -65,6 +65,8 @@ export interface Chauffeur {
   qrCode?: string;
   derniereConnexion?: string;
   actif?: boolean;
+  /** Compte administrateur/superviseur (tableau de bord mobile). */
+  admin?: boolean;
 }
 
 export interface ChauffeurRequest {
@@ -72,6 +74,7 @@ export interface ChauffeurRequest {
   prenom: string;
   telephone?: string;
   matricule: string;
+  admin?: boolean;
 }
 
 export interface Chantier {
@@ -141,6 +144,7 @@ export interface GapChauffeur {
   prenom?: string;
   matricule?: number;
   derniereConnexion?: string;
+  actif?: boolean;
 }
 
 /** Chantier (projet) lu directement depuis la base GAP (ERP) — lecture seule. */
@@ -152,6 +156,7 @@ export interface GapChantier {
   latitude?: number;
   longitude?: number;
   rayonMetres?: number;
+  actif?: boolean;
 }
 
 /** Ligne d'article d'un voyage (detail_livraison) lue depuis GAP. */
@@ -223,6 +228,7 @@ export interface VoyageConteneurRequest {
   matieres?: {
     projet?: string; cdno?: number; ref?: string; designation?: string;
     of?: string; quantite?: number; unite?: string;
+    pieceFournisseur?: string; qteCommande?: number;
     dateLivraison?: string; dateChargement?: string; dateDechargement?: string;
   }[];
   livraisonDates?: { id: number; chargement?: string; dechargement?: string }[];
@@ -247,6 +253,21 @@ export interface TrajetVoyage {
   dureeMinutes?: number;
   nbPoints?: number;
   points?: TrajetPoint[];
+}
+
+/** Fonctionnalité activable/désactivable (espace administrateur). */
+export interface FeatureFlag {
+  cle: string;
+  libelle?: string;
+  actif: boolean;
+}
+
+/** Trajet GPS d'un chauffeur sur une période (suivi multi-chauffeurs). */
+export interface TrajetChauffeur {
+  chauffeurId?: number;
+  chauffeur?: string;
+  nbPoints: number;
+  points: TrajetPoint[];
 }
 
 /** Dépôt (local de départ) géolocalisé. */
@@ -283,6 +304,9 @@ export interface MatierePremiere {
   devise?: string;
   of?: string;
   cdno?: number;
+  pieceFournisseur?: string;
+  qteCommande?: number;
+  statut?: string;
   dateChargement?: string;
   dateDechargement?: string;
 }

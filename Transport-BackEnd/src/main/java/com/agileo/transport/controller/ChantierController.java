@@ -51,10 +51,4 @@ public class ChantierController {
         gapReadService.updateChantierGeo(id, dto.getLatitude(), dto.getLongitude(), dto.getRayonMetres());
         return ResponseEntity.ok(gapReadService.getChantierById(id));
     }
-
-    @PatchMapping("/{id}/archiver")
-    public ResponseEntity<Void> archiver(@PathVariable Long id) {
-        chantierService.archiver(id);
-        return ResponseEntity.noContent().build();
-    }
 }

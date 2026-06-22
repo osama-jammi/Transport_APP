@@ -15,4 +15,6 @@ public class GapChantierDTO {
     private Double latitude;
     private Double longitude;
     private Integer rayonMetres;
+    /** Chantier actif (false = archivé). */
+    private Boolean actif;
 }

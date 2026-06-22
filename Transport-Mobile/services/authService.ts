@@ -12,6 +12,8 @@ export interface ChauffeurInfo {
   /** Camion affecté (pour la remontée GPS) */
   camionId?: number | null;
   camionImmatriculation?: string | null;
+  /** Compte administrateur/superviseur → tableau de bord mobile. */
+  admin?: boolean;
 }
 
 const CHAUFFEUR_KEY = 'chauffeur_info';
@@ -23,6 +25,11 @@ export async function connectByQrCode(qrCode: string): Promise<ChauffeurInfo> {
   });
   await SecureStore.setItemAsync(CHAUFFEUR_KEY, JSON.stringify(data));
   return data;
+}
+
+/** Persiste une session (utilisé aussi par la connexion Keycloak administrateur). */
+export async function storeChauffeur(info: ChauffeurInfo): Promise<void> {
+  await SecureStore.setItemAsync(CHAUFFEUR_KEY, JSON.stringify(info));
 }
 
 /** Restaure la session chauffeur depuis le stockage sécurisé */

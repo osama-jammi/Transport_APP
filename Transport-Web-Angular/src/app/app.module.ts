@@ -19,8 +19,11 @@ import { ChantiersComponent } from './features/chantiers.component';
 import { ArticlesComponent } from './features/articles.component';
 import { MatieresPremieresComponent } from './features/matieres-premieres.component';
 import { DepotsComponent } from './features/depots.component';
-import { GpsComponent } from './features/gps.component';
+import { SuiviTrajetsComponent } from './features/suivi-trajets.component';
+import { AdministrationComponent } from './features/administration.component';
 import { RapportsComponent } from './features/rapports.component';
+import { PaginatePipe } from './shared/paginate.pipe';
+import { PaginatorComponent } from './shared/paginator.component';
 
 @NgModule({
   declarations: [
@@ -33,8 +36,11 @@ import { RapportsComponent } from './features/rapports.component';
     ArticlesComponent,
     MatieresPremieresComponent,
     DepotsComponent,
-    GpsComponent,
-    RapportsComponent
+    SuiviTrajetsComponent,
+    AdministrationComponent,
+    RapportsComponent,
+    PaginatePipe,
+    PaginatorComponent
   ],
   imports: [
     BrowserModule,

@@ -20,7 +20,7 @@ import * as L from 'leaflet';
     <div class="toolbar">
       <div class="search">
         <i class="fa-solid fa-magnifying-glass"></i>
-        <input [(ngModel)]="q" placeholder="Rechercher (client, camion, chauffeur, transporteur)…">
+        <input [(ngModel)]="q" (ngModelChange)="page=1" placeholder="Rechercher (client, camion, chauffeur, transporteur)…">
       </div>
     </div>
 
@@ -34,7 +34,7 @@ import * as L from 'leaflet';
           <thead><tr><th>ID</th><th>Client / Chantier</th><th>Chauffeur</th>
             <th>Chargement</th><th>Déchargement</th><th>Articles</th><th>Statut</th><th></th></tr></thead>
           <tbody>
-            <tr *ngFor="let v of filtres()" class="row-link" (click)="voirDetails(v)">
+            <tr *ngFor="let v of filtres() | paginate:page:pageSize" class="row-link" (click)="voirDetails(v)">
               <td><code>#{{ v.id }}</code></td>
               <td><strong>{{ v.client || '—' }}</strong></td>
               <td>{{ v.chauffeur || '—' }}</td>
@@ -45,17 +45,15 @@ import * as L from 'leaflet';
               <td class="flex" (click)="$event.stopPropagation()">
                 <button class="btn btn-outline btn-sm" (click)="voirDetails(v)" title="Détails">
                   <i class="fa-solid fa-eye"></i></button>
-                <button class="btn btn-outline btn-sm" (click)="ouvrir(v)" title="Modifier">
-                  <i class="fa-solid fa-pen"></i></button>
                 <button *ngIf="v.statut==='EN_COURS'" class="btn btn-outline btn-sm" (click)="archiver(v)" title="Archiver">
                   <i class="fa-solid fa-box-archive"></i></button>
-                <button class="btn btn-danger btn-sm" (click)="supprimer(v)" title="Supprimer">
-                  <i class="fa-solid fa-trash"></i></button>
               </td>
             </tr>
           </tbody>
         </table>
       </div>
+      <app-paginator [total]="filtres().length" [page]="page" [pageSize]="pageSize"
+                     (pageChange)="page = $event"></app-paginator>
     </div></div>
 
     <!-- ════════ Modal NOUVEAU VOYAGE ════════ -->
@@ -183,6 +181,7 @@ import * as L from 'leaflet';
 export class VoyagesComponent implements OnInit {
   voyages: Voyage[] = [];
   loading = true; saving = false; modal = false;
+  page = 1; pageSize = 10;
   q = ''; vue: 'en-cours' | 'archives' = 'en-cours';
   dateDebut = ''; dateFin = '';
 

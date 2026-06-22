@@ -9,6 +9,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import type { RootState } from '@/store';
 import { confirmerArrivee } from '@/services/livraisonService';
+import { COLORS } from '@/constants/theme';
 
 function distanceMeters(a: { latitude: number; longitude: number }, b: { latitude: number; longitude: number }) {
   const R = 6371000;
@@ -83,10 +84,10 @@ export default function NavigationScreen() {
       });
       if (res.confirmed) {
         setForceOpen(false);
-        Alert.alert('Arrivee confirmee', res.message + '\n\nPassez a la saisie du bon de livraison.', [
+        Alert.alert('Arrivee confirmee', res.message + '\n\nScannez maintenant les articles livres.', [
           {
-            text: 'Bon de livraison',
-            onPress: () => router.replace({ pathname: '/(chauffeur)/bl', params: { voyageId: String(voyage.id) } }),
+            text: 'Scanner la livraison',
+            onPress: () => router.replace({ pathname: '/(chauffeur)/livraison/[id]', params: { id: String(voyage.id) } }),
           },
         ]);
       } else if (res.forcageRequis) {
@@ -110,7 +111,7 @@ export default function NavigationScreen() {
 
   return (
     <View style={styles.root}>
-      <StatusBar barStyle="light-content" backgroundColor="#1e1b34" />
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.brownDeep} />
       <View style={styles.header}>
         <TouchableOpacity style={styles.hBtn} onPress={() => (router.canGoBack() ? router.back() : router.replace('/(chauffeur)'))}>
           <Ionicons name="arrow-back" size={22} color="#fff" />
@@ -177,7 +178,7 @@ export default function NavigationScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.forceLink} onPress={() => setForceOpen(true)}>
-              <Ionicons name="key-outline" size={15} color="#8b7bff" />
+              <Ionicons name="key-outline" size={15} color={COLORS.goldDark} />
               <Text style={styles.forceLinkTxt}>Forcer avec un code administration</Text>
             </TouchableOpacity>
           </>
@@ -215,52 +216,52 @@ export default function NavigationScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#F0F4F8' },
+  root: { flex: 1, backgroundColor: COLORS.bg },
   header: {
-    backgroundColor: '#1e1b34', paddingTop: 52, paddingBottom: 16, paddingHorizontal: 16,
+    backgroundColor: COLORS.brown, paddingTop: 50, paddingBottom: 16, paddingHorizontal: 16,
     flexDirection: 'row', alignItems: 'center',
   },
-  hBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,.12)', alignItems: 'center', justifyContent: 'center' },
+  hBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,.14)', alignItems: 'center', justifyContent: 'center' },
   hTitle: { flex: 1, textAlign: 'center', color: '#fff', fontSize: 16, fontWeight: '700' },
   container: { padding: 16, gap: 14 },
 
-  card: { backgroundColor: '#fff', borderRadius: 14, padding: 16, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 6, elevation: 2 },
-  cardDark: { backgroundColor: '#3b3550' },
-  cardGreen: { backgroundColor: '#16b364' },
+  card: { backgroundColor: COLORS.card, borderRadius: 14, padding: 16, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 6, elevation: 2 },
+  cardDark: { backgroundColor: COLORS.brownSoft },
+  cardGreen: { backgroundColor: COLORS.success },
   row: { flexDirection: 'row', alignItems: 'center' },
-  label: { fontSize: 11, color: '#94A3B8', fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
-  destName: { fontSize: 18, fontWeight: '800', color: '#1A202C', marginTop: 2 },
-  coords: { fontSize: 12, color: '#A0AEC0', marginTop: 2 },
-  warn: { fontSize: 12, color: '#f0932b', marginTop: 2, fontWeight: '600' },
+  label: { fontSize: 11, color: COLORS.textSub, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  destName: { fontSize: 18, fontWeight: '800', color: COLORS.text, marginTop: 2 },
+  coords: { fontSize: 12, color: COLORS.textFaint, marginTop: 2 },
+  warn: { fontSize: 12, color: COLORS.warn, marginTop: 2, fontWeight: '600' },
 
   dirBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    backgroundColor: '#6d4aff', borderRadius: 10, paddingVertical: 12, marginTop: 14,
+    backgroundColor: COLORS.brown, borderRadius: 10, paddingVertical: 12, marginTop: 14,
   },
   dirTxt: { color: '#fff', fontWeight: '700', fontSize: 15 },
 
   distVal: { fontSize: 34, fontWeight: '800', color: '#fff', marginTop: 4 },
-  distSub: { fontSize: 13, color: 'rgba(255,255,255,.8)', marginTop: 2, fontWeight: '600' },
+  distSub: { fontSize: 13, color: 'rgba(255,255,255,.85)', marginTop: 2, fontWeight: '600' },
 
   bigBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
     borderRadius: 14, paddingVertical: 16, marginTop: 4,
   },
-  btnGreen: { backgroundColor: '#16b364' },
-  btnViolet: { backgroundColor: '#6d4aff' },
+  btnGreen: { backgroundColor: COLORS.success },
+  btnViolet: { backgroundColor: COLORS.brown },
   bigBtnTxt: { color: '#fff', fontWeight: '800', fontSize: 16 },
 
   forceLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8 },
-  forceLinkTxt: { color: '#8b7bff', fontWeight: '600', fontSize: 13 },
+  forceLinkTxt: { color: COLORS.goldDark, fontWeight: '600', fontSize: 13 },
 
-  backdrop: { flex: 1, backgroundColor: 'rgba(20,16,34,.5)', justifyContent: 'center', padding: 26 },
-  modal: { backgroundColor: '#fff', borderRadius: 16, padding: 20 },
-  modalTitle: { fontSize: 17, fontWeight: '800', color: '#1A202C' },
-  modalSub: { fontSize: 13, color: '#64748B', marginTop: 6, lineHeight: 19 },
-  input: { borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, padding: 12, fontSize: 16, marginTop: 14, letterSpacing: 1 },
+  backdrop: { flex: 1, backgroundColor: 'rgba(42,24,14,.55)', justifyContent: 'center', padding: 26 },
+  modal: { backgroundColor: COLORS.card, borderRadius: 16, padding: 20 },
+  modalTitle: { fontSize: 17, fontWeight: '800', color: COLORS.text },
+  modalSub: { fontSize: 13, color: COLORS.textSub, marginTop: 6, lineHeight: 19 },
+  input: { borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, padding: 12, fontSize: 16, marginTop: 14, letterSpacing: 1 },
   modalRow: { flexDirection: 'row', gap: 10, marginTop: 16 },
   mBtn: { flex: 1, borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
-  mGray: { backgroundColor: '#E2E8F0' },
-  mViolet: { backgroundColor: '#6d4aff' },
-  mBtnTxt: { fontWeight: '700', fontSize: 15, color: '#1A202C' },
+  mGray: { backgroundColor: COLORS.border },
+  mViolet: { backgroundColor: COLORS.brown },
+  mBtnTxt: { fontWeight: '700', fontSize: 15, color: COLORS.text },
 });

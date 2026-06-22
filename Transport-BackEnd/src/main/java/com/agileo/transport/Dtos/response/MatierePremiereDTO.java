@@ -19,6 +19,9 @@ public class MatierePremiereDTO {
     private String devise;      // DEV
     private String of;          // OFNO (ordre de fabrication)
     private Long cdno;          // commande (pour les MP rattachées à un voyage)
+    private String pieceFournisseur; // n° pièce fournisseur (entête commande Divalto)
+    private Double qteCommande;      // quantité commandée (ligne Divalto d'origine)
+    private String statut;           // statut local de clôture : EN_ATTENTE / LIVRE (sans impact ERP)
     private java.time.LocalDateTime dateChargement;
     private java.time.LocalDateTime dateDechargement;
 }

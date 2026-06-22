@@ -17,8 +17,10 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -113,6 +115,10 @@ public class VoyageController {
     @Operation(summary = "Modifier un voyage (livraison) dans GAP")
     public ResponseEntity<GapVoyageDTO> update(@PathVariable Long id,
                                                @Valid @RequestBody VoyageRequestDTO dto) {
+        if (gapReadService.isLivraisonScannee(id)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Livraison déjà scannée : modification impossible.");
+        }
         LocalDateTime chargement = combiner(dto.getChargementJour(), dto.getChargementHeure());
         LocalDateTime dechargement = combiner(dto.getDechargementJour(), dto.getDechargementHeure());
         gapReadService.updateLivraison(id, chargement, dechargement,
@@ -257,6 +263,10 @@ public class VoyageController {
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> supprimer(@PathVariable Long id) {
+        if (gapReadService.isLivraisonScannee(id)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Livraison déjà scannée : suppression impossible.");
+        }
         voyageService.supprimer(id);
         return ResponseEntity.noContent().build();
     }
@@ -264,6 +274,16 @@ public class VoyageController {
     @Operation(summary = "Articles d'un voyage, lus depuis GAP (detail_livraison)")
     public ResponseEntity<List<GapVoyageArticleDTO>> getArticles(@PathVariable Long id) {
         return ResponseEntity.ok(gapReadService.getVoyageArticles(id));
+    }
+
+    @GetMapping("/stats")
+    @Operation(summary = "Indicateurs du tableau de bord administrateur (filtrables chantier / chauffeur / dates)")
+    public ResponseEntity<com.agileo.transport.Dtos.response.DashboardStatsDTO> stats(
+            @RequestParam(required = false) Long chantierId,
+            @RequestParam(required = false) Long chauffeurId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate debut,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fin) {
+        return ResponseEntity.ok(gapReadService.getDashboardStats(chantierId, chauffeurId, debut, fin));
     }
 
 }

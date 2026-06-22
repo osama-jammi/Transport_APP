@@ -43,4 +43,9 @@ public class Chauffeur {
     @Builder.Default
     @Column(nullable = false)
     private Boolean actif = true;
+
+    /** Compte administrateur/superviseur : accès au tableau de bord dans l'app mobile. */
+    @Builder.Default
+    @Column(nullable = false)
+    private Boolean admin = false;
 }

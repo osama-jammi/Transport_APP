@@ -1,7 +1,8 @@
 import { Component, OnInit } from '@angular/core';
 import { KeycloakService } from 'keycloak-angular';
+import { AdminService } from './services/admin.service';
 
-interface NavItem { path: string; label: string; icon: string; }
+interface NavItem { path: string; label: string; icon: string; feature?: string; }
 
 @Component({
   selector: 'app-root',
@@ -14,12 +15,12 @@ interface NavItem { path: string; label: string; icon: string; }
         </div>
         <nav class="nav">
           <div class="group-label">Pilotage</div>
-          <a *ngFor="let it of navMain" [routerLink]="it.path" routerLinkActive="active"
+          <a *ngFor="let it of visibles(navMain)" [routerLink]="it.path" routerLinkActive="active"
              (click)="menuOpen=false">
             <i class="fa-solid {{it.icon}}"></i>{{ it.label }}
           </a>
           <div class="group-label">Référentiels</div>
-          <a *ngFor="let it of navRef" [routerLink]="it.path" routerLinkActive="active"
+          <a *ngFor="let it of visibles(navRef)" [routerLink]="it.path" routerLinkActive="active"
              (click)="menuOpen=false">
             <i class="fa-solid {{it.icon}}"></i>{{ it.label }}
           </a>
@@ -63,7 +64,7 @@ export class AppComponent implements OnInit {
     { path: '/dashboard', label: 'Tableau de bord', icon: 'fa-gauge-high' },
     { path: '/voyages',   label: 'Livraison',       icon: 'fa-route' },
     { path: '/voyages-conteneurs', label: 'Voyage', icon: 'fa-truck-fast' },
-    { path: '/gps',       label: 'Suivi GPS',       icon: 'fa-map-location-dot' },
+    { path: '/suivi-trajets', label: 'Suivi trajets', icon: 'fa-route', feature: 'suivi-trajets' },
     { path: '/rapports',  label: 'Rapports',        icon: 'fa-file-excel' }
   ];
   navRef: NavItem[] = [
@@ -71,10 +72,14 @@ export class AppComponent implements OnInit {
     { path: '/chantiers',  label: 'Chantiers',  icon: 'fa-helmet-safety' },
     { path: '/articles',   label: 'Articles',   icon: 'fa-boxes-stacked' },
     { path: '/matieres-premieres', label: 'Matières premières', icon: 'fa-cubes' },
-    { path: '/depots',     label: 'Dépôt',      icon: 'fa-warehouse' }
+    { path: '/depots',     label: 'Dépôt',      icon: 'fa-warehouse' },
+    { path: '/administration', label: 'Administration', icon: 'fa-sliders' }
   ];
 
-  constructor(private keycloak: KeycloakService) {}
+  /** Clés des fonctionnalités désactivées (masquent les entrées de menu correspondantes). */
+  private featuresOff = new Set<string>();
+
+  constructor(private keycloak: KeycloakService, private adminSvc: AdminService) {}
 
   async ngOnInit(): Promise<void> {
     try {
@@ -86,6 +91,16 @@ export class AppComponent implements OnInit {
         !['offline_access', 'uma_authorization'].includes(r));
       if (roles.length) { this.roleLabel = roles.join(', '); }
     } catch { /* profil indisponible */ }
+    // Charge les fonctionnalités désactivées pour masquer les entrées de menu
+    this.adminSvc.getFeatures().subscribe({
+      next: features => this.featuresOff = new Set(features.filter(f => !f.actif).map(f => f.cle)),
+      error: () => { /* défaut : tout visible */ }
+    });
+  }
+
+  /** Entrées de menu visibles (filtre celles dont la fonctionnalité est désactivée). */
+  visibles(items: NavItem[]): NavItem[] {
+    return items.filter(it => !it.feature || !this.featuresOff.has(it.feature));
   }
 
   logout(): void {

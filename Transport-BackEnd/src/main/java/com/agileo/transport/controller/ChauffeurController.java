@@ -75,6 +75,19 @@ public class ChauffeurController {
         return ResponseEntity.ok(chauffeurService.connectByQrCode(qrCode));
     }
 
+    @PatchMapping("/{id}/actif")
+    @Operation(summary = "Activer / désactiver un chauffeur local (accès app mobile)")
+    public ResponseEntity<ChauffeurResponseDTO> setActif(@PathVariable Long id, @RequestParam boolean actif) {
+        return ResponseEntity.ok(chauffeurService.setActif(id, actif));
+    }
+
+    @PatchMapping("/gap/{id}/actif")
+    @Operation(summary = "Activer / désactiver un chauffeur GAP (accès app mobile)")
+    public ResponseEntity<Void> setActifGap(@PathVariable Long id, @RequestParam boolean actif) {
+        chauffeurService.setActifGap(id, actif);
+        return ResponseEntity.noContent().build();
+    }
+
     @PatchMapping("/{id}/push-token")
     @Operation(summary = "Enregistrer le jeton de notification push (Expo) du chauffeur")
     public ResponseEntity<ChauffeurResponseDTO> registerPushToken(@PathVariable Long id,

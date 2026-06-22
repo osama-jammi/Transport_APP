@@ -16,4 +16,6 @@ public class GapChauffeurDTO {
     private Integer matricule;
     /** Dernière connexion de l'app mobile (renseignée lors du scan QR chauffeur). */
     private LocalDateTime derniereConnexion;
+    /** Compte actif : si false, le chauffeur ne peut pas se connecter à l'app mobile. */
+    private Boolean actif;
 }

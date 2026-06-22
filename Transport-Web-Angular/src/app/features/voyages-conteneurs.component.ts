@@ -33,6 +33,8 @@ interface VoyageLigne {
   loadingMp: boolean;
   selectedMp: Record<string, boolean>;
   qteMp: Record<string, number>;
+  filtreContenu: string;   // recherche articles + commandes dans la ligne
+  filtreLignesMp: string;  // recherche dans les lignes de la commande choisie
 }
 
 @Component({
@@ -42,6 +44,7 @@ interface VoyageLigne {
       <select [(ngModel)]="vue" (change)="charger()" class="btn btn-outline">
         <option value="en-cours">Voyages en cours</option>
         <option value="archives">Voyages archivés</option>
+        <option value="historique">Historique (tous)</option>
       </select>
       <button class="btn btn-primary right" (click)="ouvrir()">
         <i class="fa-solid fa-plus"></i> Nouveau voyage
@@ -57,7 +60,7 @@ interface VoyageLigne {
         <table>
           <thead><tr><th>ID</th><th>Date</th><th>Chauffeur</th><th>Livraisons</th><th>Mat. premières</th><th>Statut</th><th></th></tr></thead>
           <tbody>
-            <tr *ngFor="let v of voyages">
+            <tr *ngFor="let v of voyages | paginate:page:pageSize">
               <td><code>#{{ v.id }}</code></td>
               <td>{{ v.dateVoyage ? (v.dateVoyage | date:'dd/MM/yy HH:mm') : '—' }}</td>
               <td>{{ v.chauffeur || '—' }}</td>
@@ -67,17 +70,23 @@ interface VoyageLigne {
               <td class="flex">
                 <button class="btn btn-outline btn-sm" (click)="consulter(v)" title="Consulter le détail">
                   <i class="fa-solid fa-eye"></i> Détails</button>
-                <button class="btn btn-outline btn-sm" (click)="ouvrir(v)" title="Gérer les livraisons">
+                <button class="btn btn-outline btn-sm" (click)="ouvrir(v)" [disabled]="estScanne(v)"
+                        [title]="estScanne(v) ? 'Voyage scanné : modification impossible' : 'Gérer les livraisons'">
                   <i class="fa-solid fa-pen"></i> Gérer</button>
-                <button *ngIf="vue==='en-cours'" class="btn btn-outline btn-sm" (click)="archiver(v)" title="Archiver">
+                <button *ngIf="vue==='en-cours'" class="btn btn-outline btn-sm" (click)="archiver(v)"
+                        [disabled]="!estLivre(v)"
+                        [title]="estLivre(v) ? 'Archiver' : 'Archivage possible une fois livré'">
                   <i class="fa-solid fa-box-archive"></i></button>
-                <button class="btn btn-danger btn-sm" (click)="supprimer(v)" title="Supprimer">
+                <button class="btn btn-danger btn-sm" (click)="supprimer(v)" [disabled]="estScanne(v)"
+                        [title]="estScanne(v) ? 'Voyage scanné : suppression impossible' : 'Supprimer'">
                   <i class="fa-solid fa-trash"></i></button>
               </td>
             </tr>
           </tbody>
         </table>
       </div>
+      <app-paginator [total]="voyages.length" [page]="page" [pageSize]="pageSize"
+                     (pageChange)="page = $event"></app-paginator>
     </div></div>
 
     <!-- Modal créer / gérer un voyage -->
@@ -99,12 +108,12 @@ interface VoyageLigne {
           </div>
 
           <div class="field" style="margin-top:10px">
-            <label>Local de départ (optionnel)</label>
+            <label>Local de départ *</label>
             <select [(ngModel)]="depotId" (change)="choisirDepot()">
-              <option [ngValue]="undefined">— Aucun —</option>
+              <option [ngValue]="undefined" disabled>— Choisir un local —</option>
               <option *ngFor="let dp of depots" [ngValue]="dp.id">{{ dp.nom }}</option>
             </select>
-            <small class="muted" *ngIf="depotId == null">Les dépôts se gèrent dans le menu « Dépôt ».</small>
+            <small class="muted">Obligatoire. Les dépôts se gèrent dans le menu « Dépôt ».</small>
           </div>
 
           <h4 class="art-title">Lignes du voyage</h4>
@@ -134,17 +143,19 @@ interface VoyageLigne {
                 <div class="field"><label>Heure</label><input type="time" [(ngModel)]="lg.dechargementHeure"></div>
               </div>
 
-              <div class="type-toggle">
-                <button type="button" [class.active]="lg.type==='ARTICLE'" (click)="lg.type='ARTICLE'">
-                  <i class="fa-solid fa-boxes-stacked"></i> Articles</button>
-                <button type="button" [class.active]="lg.type==='MATIERE_PREMIERE'" (click)="setTypeMp(lg)">
-                  <i class="fa-solid fa-cubes"></i> Matières premières</button>
-              </div>
+              <!-- Recherche dans le contenu de la ligne (articles / MP) -->
+              <input *ngIf="lg.chantierId" class="filtre-input" [(ngModel)]="lg.filtreContenu"
+                     placeholder="🔍 Rechercher dans cette ligne (désignation, réf, #livraison)…"
+                     style="margin:8px 0">
 
-              <!-- Articles : livraisons de ce chantier -->
-              <div *ngIf="lg.type==='ARTICLE'">
-                <div *ngIf="!lg.chantierId" class="muted" style="font-size:12px;padding:8px">Choisissez d'abord un chantier.</div>
-                <div class="art-list" *ngIf="lg.chantierId">
+              <div *ngIf="!lg.chantierId" class="muted" style="font-size:12px;padding:8px">Choisissez d'abord un chantier.</div>
+
+              <!-- Une ligne peut contenir des articles ET des matières premières -->
+              <div *ngIf="lg.chantierId">
+                <!-- Articles : livraisons de ce chantier -->
+                <h5 class="ligne-section"><i class="fa-solid fa-boxes-stacked"></i> Articles
+                  <span class="muted">({{ selectedLivCount(lg) }} sélectionné(s))</span></h5>
+                <div class="art-list full">
                   <div *ngIf="livraisonsDuChantier(lg).length===0" class="muted" style="font-size:12px;padding:8px">Aucune livraison pour ce chantier.</div>
                   <label class="art-item" *ngFor="let l of livraisonsDuChantier(lg)" [class.checked]="lg.selectedLiv[l.id]">
                     <input type="checkbox" [(ngModel)]="lg.selectedLiv[l.id]">
@@ -152,29 +163,28 @@ interface VoyageLigne {
                       <span class="muted">{{ l.nbArticles }} article(s) · {{ l.statutReception || '—' }}</span></div>
                   </label>
                 </div>
-              </div>
 
-              <!-- Matières premières : commande de ce chantier -> lignes -->
-              <div *ngIf="lg.type==='MATIERE_PREMIERE'">
-                <div *ngIf="!lg.chantierId" class="muted" style="font-size:12px;padding:8px">Choisissez d'abord un chantier.</div>
-                <div *ngIf="lg.chantierId">
-                  <div class="field" style="margin-bottom:8px"><label>Commande</label>
-                    <select [(ngModel)]="lg.commandeId" (change)="chargerLignesMp(lg)">
-                      <option [ngValue]="undefined" disabled>— Choisir une commande —</option>
-                      <option *ngFor="let c of lg.commandes" [ngValue]="c.cdno">
-                        #{{ c.cdno }}<span *ngIf="c.tiers"> · {{ c.tiers }}</span></option>
-                    </select>
-                  </div>
-                  <div *ngIf="lg.loadingMp" class="spinner" style="margin:12px auto"></div>
-                  <div class="art-list" *ngIf="lg.commandeId && !lg.loadingMp">
-                    <div *ngIf="lg.lignesMp.length===0" class="muted" style="font-size:12px;padding:8px">Aucune ligne.</div>
-                    <div class="art-item" *ngFor="let m of lg.lignesMp" [class.checked]="lg.selectedMp[m.reference||'']">
-                      <input type="checkbox" [(ngModel)]="lg.selectedMp[m.reference||'']" (change)="onToggleMp(lg, m)">
-                      <div class="art-info"><strong>{{ m.designation || m.reference }}</strong>
-                        <span class="muted">{{ m.reference }} · OF {{ m.of || '—' }} · dispo {{ m.quantite ?? '—' }}</span></div>
-                      <input *ngIf="lg.selectedMp[m.reference||'']" type="number" min="1" step="any" class="qte-input"
-                             [(ngModel)]="lg.qteMp[m.reference||'']" placeholder="Qté">
-                    </div>
+                <!-- Matières premières : commande de ce chantier -> lignes -->
+                <h5 class="ligne-section"><i class="fa-solid fa-cubes"></i> Matières premières
+                  <span class="muted">({{ selectedMpCount(lg) }} sélectionnée(s))</span></h5>
+                <div class="field" style="margin-bottom:8px"><label>Commande</label>
+                  <select [(ngModel)]="lg.commandeId" (change)="chargerLignesMp(lg)">
+                    <option [ngValue]="undefined" disabled>— Choisir une commande —</option>
+                    <option *ngFor="let c of commandesFiltrees(lg)" [ngValue]="c.cdno">
+                      #{{ c.cdno }}<span *ngIf="c.tiers"> · {{ c.tiers }}</span><span *ngIf="c.pieceFournisseur"> · {{ c.pieceFournisseur }}</span></option>
+                  </select>
+                  <small class="muted" *ngIf="lg.filtreContenu && commandesFiltrees(lg).length < lg.commandes.length">
+                    {{ commandesFiltrees(lg).length }} commande(s) correspondant à « {{ lg.filtreContenu }} »</small>
+                </div>
+                <div *ngIf="lg.loadingMp" class="spinner" style="margin:12px auto"></div>
+                <div class="art-list full" *ngIf="lg.commandeId && !lg.loadingMp">
+                  <div *ngIf="lignesMpFiltrees(lg).length===0" class="muted" style="font-size:12px;padding:8px">Aucune ligne.</div>
+                  <div class="art-item" *ngFor="let m of lignesMpFiltrees(lg)" [class.checked]="lg.selectedMp[m.reference||'']">
+                    <input type="checkbox" [(ngModel)]="lg.selectedMp[m.reference||'']" (change)="onToggleMp(lg, m)">
+                    <div class="art-info"><strong>{{ m.designation || m.reference }}</strong>
+                      <span class="muted">{{ m.reference }} · dispo {{ m.quantite ?? '—' }}</span></div>
+                    <input *ngIf="lg.selectedMp[m.reference||'']" type="number" min="1" step="any" class="qte-input"
+                           [(ngModel)]="lg.qteMp[m.reference||'']" placeholder="Qté">
                   </div>
                 </div>
               </div>
@@ -231,9 +241,20 @@ interface VoyageLigne {
                 <i class="fa-solid" [ngClass]="openLivId===l.id ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
                 <strong>#{{ l.id }} — {{ l.projetDesignation || l.projetCode || 'Sans chantier' }}</strong>
                 <span class="badge badge-gray">{{ l.statutReception || '—' }}</span>
-                <button *ngIf="l.hasBl" class="btn btn-outline btn-sm" style="margin-left:auto"
-                        (click)="telechargerBL(l); $event.stopPropagation()" title="Télécharger le BL">
-                  <i class="fa-solid fa-file-arrow-down"></i> BL</button>
+                <span style="margin-left:auto;display:flex;gap:6px" (click)="$event.stopPropagation()">
+                  <img [src]="qrLivraisonUrl(l.id)" alt="QR" style="width:40px;height:40px;vertical-align:middle"
+                       title="QR de la livraison">
+                  <a class="btn btn-outline btn-sm" [href]="qrLivraisonUrl(l.id)"
+                     [download]="'qr-livraison-' + l.id + '.png'" target="_blank" title="Télécharger le QR de la livraison">
+                    <i class="fa-solid fa-qrcode"></i></a>
+                  <button *ngIf="l.hasBl" class="btn btn-outline btn-sm"
+                          (click)="telechargerBL(l)" title="Télécharger le BL">
+                    <i class="fa-solid fa-file-arrow-down"></i> BL</button>
+                  <button class="btn btn-danger btn-sm" (click)="detacher(l)"
+                          [disabled]="estScanne(detail) || livraisonScannee(l)"
+                          [title]="(estScanne(detail) || livraisonScannee(l)) ? 'Livraison scannée : modification impossible' : 'Retirer du voyage'">
+                    <i class="fa-solid fa-link-slash"></i> Retirer</button>
+                </span>
               </div>
 
               <div *ngIf="openLivId===l.id">
@@ -300,19 +321,31 @@ interface VoyageLigne {
             <i class="fa-solid fa-cubes"></i> Aucune matière première</div>
           <div class="table-wrap" *ngIf="detailMatieres.length">
             <table>
-              <thead><tr><th>Désignation</th><th>Réf</th><th>OF</th><th>Affaire</th><th>Qté</th><th>QR</th></tr></thead>
+              <thead><tr><th>Désignation</th><th>Pièce fournisseur</th><th>Affaire</th>
+                <th>Qté cmd.</th><th>Qté livrée</th><th>Reste</th><th>Statut</th><th>QR</th><th></th></tr></thead>
               <tbody>
-                <tr *ngFor="let m of detailMatieres">
-                  <td><strong>{{ m.designation || '—' }}</strong></td>
-                  <td><code>{{ m.reference || '—' }}</code></td>
-                  <td><code>{{ m.of || '—' }}</code></td>
+                <tr *ngFor="let m of detailMatieres" [class.row-done]="estCloturee(m)">
+                  <td><strong>{{ m.designation || '—' }}</strong>
+                    <div class="muted" style="font-size:11px">Réf {{ m.reference || '—' }}</div></td>
+                  <td><code>{{ m.pieceFournisseur || '—' }}</code></td>
                   <td>{{ m.projet || '—' }}</td>
-                  <td>{{ m.quantite ?? '—' }}</td>
+                  <td>{{ m.qteCommande ?? '—' }}</td>
+                  <td>{{ qteLivree(m) }}</td>
+                  <td><strong>{{ resteALivrer(m) }}</strong></td>
+                  <td><span class="badge" [ngClass]="estCloturee(m) ? 'badge-green' : 'badge-orange'">
+                    {{ estCloturee(m) ? 'Livrée' : 'En attente' }}</span></td>
                   <td style="white-space:nowrap">
                     <img [src]="qrMatiereUrl(m.id)" alt="QR" style="width:48px;height:48px;vertical-align:middle">
                     <a class="btn btn-outline btn-sm" style="margin-left:6px"
                        [href]="qrMatiereUrl(m.id)" [download]="'qr-mp-' + m.id + '.png'" target="_blank" title="Télécharger le QR">
                       <i class="fa-solid fa-download"></i></a>
+                  </td>
+                  <td style="white-space:nowrap">
+                    <button class="btn btn-sm" [ngClass]="estCloturee(m) ? 'btn-outline' : 'btn-primary'"
+                            (click)="basculerMatiere(m)" [disabled]="majMatiere"
+                            [title]="estCloturee(m) ? 'Rouvrir' : 'Clôturer (marquer livrée)'">
+                      <i class="fa-solid" [ngClass]="estCloturee(m) ? 'fa-rotate-left' : 'fa-check'"></i>
+                      {{ estCloturee(m) ? 'Rouvrir' : 'Clôturer' }}</button>
                   </td>
                 </tr>
               </tbody>
@@ -337,12 +370,22 @@ interface VoyageLigne {
         </div>
       </div>
     </div>
-  `
+  `,
+  styles: [`
+    tr.row-done td { opacity: .65; }
+    tr.row-done strong { text-decoration: line-through; }
+    h5.ligne-section { margin: 14px 0 6px; font-size: 13px; font-weight: 700; color: var(--primary); }
+    h5.ligne-section i { margin-right: 6px; color: var(--accent-dark); }
+    /* Lignes de commande (MP) : une par rangée, pleine largeur, désignation sur plusieurs lignes */
+    .art-list.full { grid-template-columns: 1fr; max-height: 320px; }
+    .art-list.full .art-info strong { white-space: normal; }
+  `]
 })
 export class VoyagesConteneursComponent implements OnInit {
   voyages: VoyageConteneur[] = [];
   loading = true;
-  vue: 'en-cours' | 'archives' = 'en-cours';
+  page = 1; pageSize = 10;
+  vue: 'en-cours' | 'archives' | 'historique' = 'en-cours';
   modal = false; saving = false;
   editId: number | null = null;
 
@@ -369,6 +412,7 @@ export class VoyagesConteneursComponent implements OnInit {
   artDetailId: number | null = null;
   openLivId: number | null = null;
   regenForce = false;
+  majMatiere = false;
   private trajetMap?: L.Map;
 
   constructor(
@@ -385,13 +429,25 @@ export class VoyagesConteneursComponent implements OnInit {
 
   charger(): void {
     this.loading = true;
-    this.svc.getAll(this.vue === 'archives').subscribe({
+    this.page = 1;
+    this.svc.getAll(this.vue).subscribe({
       next: d => { this.voyages = d; this.loading = false; },
       error: () => { this.voyages = []; this.loading = false; this.toastr.error('Impossible de charger les voyages.'); }
     });
   }
 
+  /** Voyage scanné = chargement réel enregistré → plus de modification/suppression. */
+  estScanne(v: VoyageConteneur | null): boolean { return !!v && v.realChargement != null; }
+  /** Livraison scannée (en-tête CHARGE/LIVRE ou ligne scannée) → ni modification ni suppression. */
+  livraisonScannee(l: GapVoyage | null): boolean {
+    const s = (l?.statutReception || '').toUpperCase();
+    return ['CHARGE', 'LIVRE', 'SCANNE_CHARGEMENT', 'SCANNE_LIVRAISON'].includes(s);
+  }
+  /** Voyage livré = déchargement réel enregistré. */
+  estLivre(v: VoyageConteneur | null): boolean { return !!v && v.realDechargement != null; }
+
   archiver(v: VoyageConteneur): void {
+    if (!this.estLivre(v)) { this.toastr.warning('Archivage possible uniquement une fois le voyage livré.'); return; }
     this.svc.archiver(v.id).subscribe({
       next: () => { this.toastr.success('Voyage archivé.'); this.charger(); },
       error: () => this.toastr.error('Échec de l’archivage.')
@@ -399,6 +455,7 @@ export class VoyagesConteneursComponent implements OnInit {
   }
 
   ouvrir(v?: VoyageConteneur): void {
+    if (v && this.estScanne(v)) { this.toastr.warning('Voyage scanné : modification impossible.'); return; }
     this.editId = v ? v.id : null;
     this.chauffeurId = v ? v.chauffeurId : undefined;
     this.filtreChauffeur = v && v.chauffeur ? v.chauffeur : '';
@@ -435,6 +492,8 @@ export class VoyagesConteneursComponent implements OnInit {
           const ch = chantiers.find(c => c.id === projetId);
           lg.chantierCode = ch?.code; lg.filtreChantier = ch ? ch.nom : (livs[0].projetDesignation || '');
           livs.forEach(l => lg.selectedLiv[l.id] = true);
+          // La ligne peut aussi recevoir des MP : on charge ses commandes.
+          if (lg.chantierCode) this.chargerCommandes(lg);
           this.lignes.push(lg);
         });
         // Reconstruit les lignes « matières premières » (groupées par chantier + commande)
@@ -471,6 +530,7 @@ export class VoyagesConteneursComponent implements OnInit {
   }
 
   supprimer(v: VoyageConteneur): void {
+    if (this.estScanne(v)) { this.toastr.warning('Voyage scanné : suppression impossible.'); return; }
     if (!confirm(`Supprimer le voyage #${v.id} ? Les livraisons seront détachées (non supprimées).`)) return;
     this.svc.delete(v.id).subscribe({
       next: () => { this.toastr.success('Voyage supprimé.'); this.charger(); },
@@ -482,7 +542,7 @@ export class VoyagesConteneursComponent implements OnInit {
     return {
       filtreChantier: '', comboOpen: false, type: 'ARTICLE',
       selectedLiv: {}, commandes: [], lignesMp: [], loadingMp: false,
-      selectedMp: {}, qteMp: {}
+      selectedMp: {}, qteMp: {}, filtreContenu: '', filtreLignesMp: ''
     };
   }
   ajouterLigne(): void { this.lignes.push(this.nouvelleLigne()); }
@@ -527,15 +587,44 @@ export class VoyagesConteneursComponent implements OnInit {
     lg.filtreChantier = ch.nom + (ch.ville ? ` — ${ch.ville}` : '');
     lg.comboOpen = false;
     lg.selectedLiv = {}; lg.commandes = []; lg.commandeId = undefined; lg.lignesMp = []; lg.selectedMp = {}; lg.qteMp = {};
-    if (lg.type === 'MATIERE_PREMIERE') this.chargerCommandes(lg);
+    // Une ligne porte articles ET MP : on charge les commandes dès le choix du chantier.
+    this.chargerCommandes(lg);
+  }
+
+  /** Nb de livraisons (articles) sélectionnées dans une ligne. */
+  selectedLivCount(lg: VoyageLigne): number {
+    return Object.keys(lg.selectedLiv).filter(k => lg.selectedLiv[+k]).length;
+  }
+  /** Nb de matières premières sélectionnées dans une ligne. */
+  selectedMpCount(lg: VoyageLigne): number {
+    return lg.lignesMp.filter(m => lg.selectedMp[m.reference || '']).length;
   }
   fermerComboLigne(lg: VoyageLigne): void { setTimeout(() => lg.comboOpen = false, 150); }
 
   livraisonsDuChantier(lg: VoyageLigne): GapVoyage[] {
+    const t = (lg.filtreContenu || '').toLowerCase().trim();
     return this.allLivraisons.filter(l =>
       l.projetId === lg.chantierId &&
       // uniquement les livraisons en cours (pas livrées / archivées)
-      !['LIVRE', 'ARCHIVE'].includes((l.statutReception || '').toUpperCase()));
+      !['LIVRE', 'ARCHIVE'].includes((l.statutReception || '').toUpperCase()) &&
+      (!t || `#${l.id} ${l.projetDesignation || ''} ${l.statutReception || ''}`.toLowerCase().includes(t)));
+  }
+
+  /** Lignes de la commande filtrées par la recherche dédiée aux lignes. */
+  lignesMpFiltrees(lg: VoyageLigne): MatierePremiere[] {
+    const t = (lg.filtreLignesMp || '').toLowerCase().trim();
+    if (!t) return lg.lignesMp;
+    return lg.lignesMp.filter(m =>
+      `${m.designation || ''} ${m.reference || ''}`.toLowerCase().includes(t));
+  }
+
+  /** Commandes filtrées par la recherche de la ligne (n°, fournisseur, pièce fournisseur, réf). */
+  commandesFiltrees(lg: VoyageLigne): CommandeMp[] {
+    const t = (lg.filtreContenu || '').toLowerCase().trim();
+    if (!t) return lg.commandes;
+    return lg.commandes.filter(c =>
+      `${c.cdno} ${c.tiers || ''} ${c.pieceFournisseur || ''} ${c.reference || ''} ${c.marche || ''}`
+        .toLowerCase().includes(t));
   }
 
   /* ─────────── Lignes : matières premières ─────────── */
@@ -564,28 +653,30 @@ export class VoyagesConteneursComponent implements OnInit {
 
   enregistrer(): void {
     if (!this.chauffeurId) { this.toastr.warning('Veuillez choisir un chauffeur.'); return; }
+    if (!this.form.localNom) { this.toastr.warning('Veuillez choisir un local de départ (obligatoire).'); return; }
     const livraisonIds: number[] = [];
     const livraisonDates: NonNullable<VoyageConteneurRequest['livraisonDates']> = [];
     const matieres: NonNullable<VoyageConteneurRequest['matieres']> = [];
     for (const lg of this.lignes) {
       const ch = this.combine(lg.chargementJour, lg.chargementHeure);
       const de = this.combine(lg.dechargementJour, lg.dechargementHeure);
-      if (lg.type === 'ARTICLE') {
-        Object.keys(lg.selectedLiv).filter(k => lg.selectedLiv[+k]).forEach(k => {
-          livraisonIds.push(+k);
-          livraisonDates.push({ id: +k, chargement: ch, dechargement: de });
+      // Une ligne peut porter À LA FOIS des articles et des matières premières.
+      Object.keys(lg.selectedLiv).filter(k => lg.selectedLiv[+k]).forEach(k => {
+        livraisonIds.push(+k);
+        livraisonDates.push({ id: +k, chargement: ch, dechargement: de });
+      });
+      const cmd = lg.commandes.find(c => c.cdno === lg.commandeId);
+      lg.lignesMp.filter(m => lg.selectedMp[m.reference || '']).forEach(m => {
+        const ref = m.reference || '';
+        matieres.push({
+          projet: lg.chantierCode, cdno: lg.commandeId, ref,
+          designation: m.designation, of: m.of, unite: m.unite,
+          pieceFournisseur: cmd?.pieceFournisseur ?? m.pieceFournisseur,
+          qteCommande: m.qteCommande ?? m.quantite,
+          quantite: lg.qteMp[ref] && lg.qteMp[ref] > 0 ? lg.qteMp[ref] : 1,
+          dateChargement: ch, dateDechargement: de
         });
-      } else {
-        lg.lignesMp.filter(m => lg.selectedMp[m.reference || '']).forEach(m => {
-          const ref = m.reference || '';
-          matieres.push({
-            projet: lg.chantierCode, cdno: lg.commandeId, ref,
-            designation: m.designation, of: m.of, unite: m.unite,
-            quantite: lg.qteMp[ref] && lg.qteMp[ref] > 0 ? lg.qteMp[ref] : 1,
-            dateChargement: ch, dateDechargement: de
-          });
-        });
-      }
+      });
     }
     const req: VoyageConteneurRequest = {
       chauffeurId: this.chauffeurId, livraisonIds, livraisonDates, matieres,
@@ -663,6 +754,40 @@ export class VoyagesConteneursComponent implements OnInit {
   qrArticleUrl(detailId: number): string { return `${environment.apiUrl}/articles/detail/${detailId}/qrcode`; }
   qrMatiereUrl(detailMpId: number): string { return `${environment.apiUrl}/articles/matiere/${detailMpId}/qrcode`; }
   qrVoyageUrl(voyageId: number): string { return `${environment.apiUrl}/voyages-conteneurs/${voyageId}/qrcode`; }
+  qrLivraisonUrl(livId: number): string { return `${environment.apiUrl}/voyages-conteneurs/livraisons/${livId}/qrcode`; }
+
+  /** Détache une livraison du voyage affiché (sans la supprimer de GAP). */
+  detacher(l: GapVoyage): void {
+    if (this.livraisonScannee(l)) { this.toastr.warning('Livraison scannée : modification impossible.'); return; }
+    if (!confirm(`Retirer la livraison #${l.id} de ce voyage ? (la livraison n'est pas supprimée)`)) return;
+    this.svc.detacherLivraison(l.id).subscribe({
+      next: () => {
+        this.toastr.success('Livraison retirée du voyage.');
+        this.detailLivraisons = this.detailLivraisons.filter(x => x.id !== l.id);
+        this.charger();
+      },
+      error: (e) => this.toastr.error(e?.error?.message || 'Échec du retrait.')
+    });
+  }
+
+  /* ─────────── Matières premières : clôture (statut local, sans impact ERP) ─────────── */
+  estCloturee(m: MatierePremiere): boolean { return (m.statut || '').toUpperCase() === 'LIVRE'; }
+  /** Qté livrée = qté de la ligne une fois clôturée, sinon 0. */
+  qteLivree(m: MatierePremiere): number { return this.estCloturee(m) ? (m.quantite ?? 0) : 0; }
+  /** Reste à livrer = qté commandée − qté livrée. */
+  resteALivrer(m: MatierePremiere): number {
+    const cmd = m.qteCommande ?? m.quantite ?? 0;
+    return Math.max(0, cmd - this.qteLivree(m));
+  }
+  basculerMatiere(m: MatierePremiere): void {
+    const nouveau = this.estCloturee(m) ? 'EN_ATTENTE' : 'LIVRE';
+    this.majMatiere = true;
+    this.svc.statutMatiere(m.id, nouveau).subscribe({
+      next: () => { m.statut = nouveau; this.majMatiere = false;
+        this.toastr.success(nouveau === 'LIVRE' ? 'Matière clôturée.' : 'Matière rouverte.'); },
+      error: () => { this.majMatiere = false; this.toastr.error('Échec de la mise à jour du statut.'); }
+    });
+  }
 
   dureeLabel(min?: number | null): string {
     if (min == null) return '—';

@@ -20,6 +20,14 @@ IF EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
            WHERE TABLE_NAME = 'article' AND COLUMN_NAME = 'statut_scan' AND CHARACTER_MAXIMUM_LENGTH < 20)
   ALTER TABLE article ALTER COLUMN statut_scan VARCHAR(30) NOT NULL;
 
+-- ── Migration : ajouter chauffeur.admin ─────────────────────
+--  L'entité Chauffeur a une colonne `admin` (NOT NULL) marquant les
+--  comptes administrateur/superviseur. ddl-auto ne la crée pas en
+--  prod (none) ; on l'ajoute explicitement avec un défaut à 0.
+IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+               WHERE TABLE_NAME = 'chauffeur' AND COLUMN_NAME = 'admin')
+  ALTER TABLE chauffeur ADD admin BIT NOT NULL CONSTRAINT DF_chauffeur_admin DEFAULT 0;
+
 -- ── Backfill du rayon de zone par défaut (100 m) ────────────
 UPDATE chantier SET rayon_metres = 100 WHERE rayon_metres IS NULL;
 

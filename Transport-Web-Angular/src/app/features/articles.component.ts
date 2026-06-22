@@ -9,7 +9,7 @@ import { GapArticle } from '../core/models';
     <div class="toolbar">
       <span class="badge badge-blue"><i class="fa-solid fa-database"></i> Articles lus depuis la base GAP</span>
       <div class="search"><i class="fa-solid fa-magnifying-glass"></i>
-        <input [(ngModel)]="q" placeholder="Rechercher (désignation, n° prix, origine)…"></div>
+        <input [(ngModel)]="q" (ngModelChange)="page=1" placeholder="Rechercher (désignation, n° prix, origine)…"></div>
       <button class="btn btn-outline right" (click)="charger()" [disabled]="loading">
         <i class="fa-solid fa-rotate"></i> Actualiser depuis GAP</button>
     </div>
@@ -26,7 +26,7 @@ import { GapArticle } from '../core/models';
             <th>N° prix</th><th>Origine</th>
           </tr></thead>
           <tbody>
-            <tr *ngFor="let a of filtres()">
+            <tr *ngFor="let a of filtres() | paginate:page:pageSize">
               <td><code>{{ a.id }}</code></td>
               <td><strong>{{ a.designation || '—' }}</strong></td>
               <td>{{ a.unite || '—' }}</td>
@@ -39,12 +39,15 @@ import { GapArticle } from '../core/models';
           </tbody>
         </table>
       </div>
+      <app-paginator [total]="filtres().length" [page]="page" [pageSize]="pageSize"
+                     (pageChange)="page = $event"></app-paginator>
     </div></div>
   `
 })
 export class ArticlesComponent implements OnInit {
   articles: GapArticle[] = [];
   loading = false;
+  page = 1; pageSize = 10;
   q = '';
 
   constructor(private svc: ArticleService, private toastr: ToastrService) {}

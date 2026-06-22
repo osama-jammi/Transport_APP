@@ -15,7 +15,8 @@ function RootNavigator() {
         const chauffeur = await getStoredChauffeur();
         if (chauffeur) {
           store.dispatch(setChauffeur(chauffeur));
-          router.replace('/(chauffeur)');
+          // cast : la route (admin) est générée par expo-router au lancement de Metro
+          router.replace((chauffeur.admin ? '/(admin)' : '/(chauffeur)') as any);
         } else {
           router.replace('/(auth)');
         }
@@ -29,6 +30,7 @@ function RootNavigator() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="(chauffeur)" />
+      <Stack.Screen name="(admin)" />
       <Stack.Screen name="(superviseur)" />
     </Stack>
   );

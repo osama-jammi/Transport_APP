@@ -12,6 +12,9 @@ public class PositionGpsRequestDTO {
     /** Voyage (livraison GAP) en cours — pour rattacher le point au trajet. */
     private Long voyageId;
 
+    /** Chauffeur (id GAP) — permet de suivre un chauffeur même sans voyage en cours. */
+    private Long chauffeurId;
+
     @NotNull
     private Double latitude;
 

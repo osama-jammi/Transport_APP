@@ -17,4 +17,8 @@ public interface PositionGpsRepository extends JpaRepository<PositionGps, Long> 
 
     /** Points GPS de plusieurs livraisons (pour agréger un voyage conteneur). */
     List<PositionGps> findByVoyageIdInOrderByHorodatageAsc(List<Long> voyageIds);
+
+    /** Toutes les positions d'une période (suivi des trajets par chauffeur). */
+    List<PositionGps> findByHorodatageBetweenOrderByHorodatageAsc(
+            java.time.LocalDateTime debut, java.time.LocalDateTime fin);
 }

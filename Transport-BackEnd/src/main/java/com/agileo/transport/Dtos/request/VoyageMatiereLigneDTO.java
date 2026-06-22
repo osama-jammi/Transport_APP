@@ -13,8 +13,10 @@ public class VoyageMatiereLigneDTO {
     private String ref;
     private String designation;
     private String of;            // ordre de fabrication
-    private Double quantite;
+    private Double quantite;          // quantité à livrer dans ce voyage
     private String unite;
+    private String pieceFournisseur;  // n° pièce fournisseur (entête commande)
+    private Double qteCommande;       // quantité commandée d'origine (ligne Divalto)
     private LocalDate dateLivraison;
     private LocalDateTime dateChargement;
     private LocalDateTime dateDechargement;

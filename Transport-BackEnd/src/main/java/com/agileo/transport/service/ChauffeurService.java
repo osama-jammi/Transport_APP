@@ -19,4 +19,8 @@ public interface ChauffeurService {
     ChauffeurResponseDTO connectByQrCode(String qrCode);
     /** Enregistre le jeton de notification push (Expo) du téléphone du chauffeur */
     ChauffeurResponseDTO registerPushToken(Long id, String token);
+    /** Active / désactive un chauffeur GAP (accès à l'app mobile). */
+    void setActifGap(Long gapChauffeurId, boolean actif);
+    /** Active / désactive un chauffeur local (compte app mobile). */
+    ChauffeurResponseDTO setActif(Long id, boolean actif);
 }
