@@ -3,13 +3,15 @@ import { ToastrService } from 'ngx-toastr';
 import { ArticleService } from '../services/article.service';
 import { GapArticle } from '../core/models';
 import { SortState } from '../shared/sort.pipe';
-import { ColumnFilters, matchesFilters } from '../shared/column-filter';
+import { matchesSearch } from '../shared/column-filter';
 
 @Component({
   selector: 'app-articles',
   template: `
     <div class="toolbar">
       <span class="badge badge-blue"><i class="fa-solid fa-database"></i> Ordres de fabrication lus depuis la base GAP</span>
+      <div class="search"><i class="fa-solid fa-magnifying-glass"></i>
+        <input [(ngModel)]="q" (ngModelChange)="page=1" placeholder="Rechercher (désignation, n° prix, origine)…"></div>
       <button class="btn btn-outline right" (click)="charger()" [disabled]="loading">
         <i class="fa-solid fa-rotate"></i> Actualiser depuis GAP</button>
     </div>
@@ -29,16 +31,6 @@ import { ColumnFilters, matchesFilters } from '../shared/column-filter';
             <th appSortable="quantiteReste" [(state)]="sortState">Reste</th>
             <th appSortable="numPrix" [(state)]="sortState">N° prix</th>
             <th appSortable="origineArticle" [(state)]="sortState">Origine</th>
-          </tr>
-          <tr class="filtre-row">
-            <th><input [(ngModel)]="filters['id']" (ngModelChange)="page=1" placeholder="Filtrer"></th>
-            <th><input [(ngModel)]="filters['designation']" (ngModelChange)="page=1" placeholder="Filtrer"></th>
-            <th><input [(ngModel)]="filters['unite']" (ngModelChange)="page=1" placeholder="Filtrer"></th>
-            <th><input [(ngModel)]="filters['quantiteTot']" (ngModelChange)="page=1" placeholder="Filtrer"></th>
-            <th><input [(ngModel)]="filters['quantiteLivre']" (ngModelChange)="page=1" placeholder="Filtrer"></th>
-            <th><input [(ngModel)]="filters['quantiteReste']" (ngModelChange)="page=1" placeholder="Filtrer"></th>
-            <th><input [(ngModel)]="filters['numPrix']" (ngModelChange)="page=1" placeholder="Filtrer"></th>
-            <th><input [(ngModel)]="filters['origineArticle']" (ngModelChange)="page=1" placeholder="Filtrer"></th>
           </tr></thead>
           <tbody>
             <tr *ngFor="let a of filtres() | sortBy:sortState | paginate:page:pageSize">
@@ -63,7 +55,7 @@ export class ArticlesComponent implements OnInit {
   articles: GapArticle[] = [];
   loading = false;
   page = 1; pageSize = 10;
-  filters: ColumnFilters = {};
+  q = '';
   sortState: SortState = { key: '', dir: 'asc' };
 
   constructor(private svc: ArticleService, private toastr: ToastrService) {}
@@ -80,6 +72,6 @@ export class ArticlesComponent implements OnInit {
   }
 
   filtres(): GapArticle[] {
-    return this.articles.filter(a => matchesFilters(a, this.filters));
+    return this.articles.filter(a => matchesSearch(a, this.q));
   }
 }

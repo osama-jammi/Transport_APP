@@ -3,7 +3,7 @@ import { ToastrService } from 'ngx-toastr';
 import { DepotService } from '../services/depot.service';
 import { Depot } from '../core/models';
 import { SortState } from '../shared/sort.pipe';
-import { ColumnFilters, matchesFilters } from '../shared/column-filter';
+import { matchesSearch } from '../shared/column-filter';
 import * as L from 'leaflet';
 
 @Component({
@@ -11,6 +11,8 @@ import * as L from 'leaflet';
   template: `
     <div class="toolbar">
       <span class="badge badge-blue"><i class="fa-solid fa-warehouse"></i> Dépôts (locaux de départ)</span>
+      <div class="search"><i class="fa-solid fa-magnifying-glass"></i>
+        <input [(ngModel)]="q" (ngModelChange)="page=1" placeholder="Rechercher un dépôt…"></div>
       <button class="btn btn-primary right" (click)="ouvrir()"><i class="fa-solid fa-plus"></i> Nouveau dépôt</button>
     </div>
 
@@ -25,13 +27,6 @@ import * as L from 'leaflet';
             <th appSortable="latitude" [(state)]="sortState">Latitude</th>
             <th appSortable="longitude" [(state)]="sortState">Longitude</th>
             <th appSortable="rayon" [(state)]="sortState">Rayon (m)</th>
-            <th></th></tr>
-          <tr class="filtre-row">
-            <th><input [(ngModel)]="filters['id']" (ngModelChange)="page=1" placeholder="Filtrer"></th>
-            <th><input [(ngModel)]="filters['nom']" (ngModelChange)="page=1" placeholder="Filtrer"></th>
-            <th><input [(ngModel)]="filters['latitude']" (ngModelChange)="page=1" placeholder="Filtrer"></th>
-            <th><input [(ngModel)]="filters['longitude']" (ngModelChange)="page=1" placeholder="Filtrer"></th>
-            <th><input [(ngModel)]="filters['rayon']" (ngModelChange)="page=1" placeholder="Filtrer"></th>
             <th></th></tr></thead>
           <tbody>
             <tr *ngFor="let d of depotsFiltres() | sortBy:sortState | paginate:page:pageSize">
@@ -85,7 +80,7 @@ export class DepotsComponent implements OnInit {
   loading = true; saving = false; modal = false;
   editId: number | null = null;
   form: Depot = {};
-  filters: ColumnFilters = {}; page = 1; pageSize = 10;
+  q = ''; page = 1; pageSize = 10;
   sortState: SortState = { key: '', dir: 'asc' };
   private map?: L.Map;
   private marker?: L.Marker;
@@ -96,7 +91,7 @@ export class DepotsComponent implements OnInit {
 
   /** Dépôts filtrés par la recherche (nom). */
   depotsFiltres(): Depot[] {
-    return this.depots.filter(d => matchesFilters(d, this.filters));
+    return this.depots.filter(d => matchesSearch(d, this.q));
   }
 
   charger(): void {

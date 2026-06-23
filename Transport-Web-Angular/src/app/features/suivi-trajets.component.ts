@@ -8,7 +8,7 @@ import { TrajetChauffeur, GapChauffeur } from '../core/models';
 
 /** Palette de couleurs distinctes — une par chauffeur. */
 const COULEURS = [
-  '#C9A063', '#2563eb', '#1F9D55', '#dc2626', '#7c3aed', '#D9901F',
+  '#17A2B8', '#2563eb', '#21BA45', '#dc2626', '#7c3aed', '#E8910C',
   '#0891b2', '#db2777', '#65a30d', '#9333ea', '#0d9488', '#b45309'
 ];
 
@@ -37,10 +37,13 @@ const COULEURS = [
       <div *ngIf="loading" class="spinner" style="margin:8px auto"></div>
       <div class="map-legend" *ngIf="!loading">
         <span *ngIf="trajets.length===0" class="muted">Aucun trajet sur cette période.</span>
-        <span *ngFor="let t of trajets; let i = index">
+        <span *ngFor="let t of trajets; let i = index" class="leg" [class.active]="selectedIdx===i"
+              (click)="selectionner(i)" title="Afficher seulement ce chauffeur">
           <i class="dot" [style.background]="couleur(i)"></i>
           {{ t.chauffeur || 'Non affecté' }} <span class="muted">({{ t.nbPoints }} pts)</span>
         </span>
+        <span *ngIf="selectedIdx!==null" class="leg" (click)="selectionner(selectedIdx)"
+              style="color:var(--primary);font-weight:700">✕ Tout afficher</span>
       </div>
       <div id="suivi-map" class="map"></div>
     </div></div>
@@ -53,14 +56,15 @@ const COULEURS = [
           <table>
             <thead><tr><th></th><th>Chauffeur</th><th>Points</th><th>Début</th><th>Fin</th><th></th></tr></thead>
             <tbody>
-              <tr *ngFor="let t of trajets; let i = index">
+              <tr *ngFor="let t of trajets; let i = index" class="row-link" [class.row-active]="selectedIdx===i"
+                  (click)="selectionner(i)" title="Afficher seulement ce chauffeur sur la carte">
                 <td><i class="dot" [style.background]="couleur(i)"
                        style="display:inline-block;width:12px;height:12px;border-radius:50%"></i></td>
                 <td><strong>{{ t.chauffeur || 'Non affecté' }}</strong></td>
                 <td>{{ t.nbPoints }}</td>
                 <td>{{ debutDe(t) | date:'dd/MM HH:mm' }}</td>
                 <td>{{ finDe(t) | date:'dd/MM HH:mm' }}</td>
-                <td><button class="btn btn-outline btn-sm" (click)="zoomer(i)"
+                <td (click)="$event.stopPropagation()"><button class="btn btn-outline btn-sm" (click)="zoomer(i)"
                             [disabled]="t.nbPoints===0"><i class="fa-solid fa-magnifying-glass-location"></i></button></td>
               </tr>
             </tbody>
@@ -72,7 +76,12 @@ const COULEURS = [
   styles: [`
     .map-legend { display:flex; gap:18px; flex-wrap:wrap; margin-bottom:12px; font-size:12.5px; color:var(--text-soft); }
     .map-legend .dot { display:inline-block; width:11px; height:11px; border-radius:50%; margin-right:6px; vertical-align:middle; }
+    .map-legend .leg { cursor:pointer; padding:2px 6px; border-radius:6px; }
+    .map-legend .leg.active { background:var(--primary-light); font-weight:700; color:var(--text); }
     .filters label input[type="date"] { margin-left:4px; }
+    /* Carte plein écran */
+    #suivi-map { height: calc(100dvh - 250px); min-height: 480px; }
+    tbody tr.row-active { background:var(--primary-light) !important; }
   `]
 })
 export class SuiviTrajetsComponent implements AfterViewInit, OnDestroy {
@@ -89,6 +98,8 @@ export class SuiviTrajetsComponent implements AfterViewInit, OnDestroy {
   chauffeurs: GapChauffeur[] = [];
   trajets: TrajetChauffeur[] = [];
   loading = false;
+  /** Index du chauffeur sélectionné (clic) : seul son trajet est affiché ; null = tous. */
+  selectedIdx: number | null = null;
 
   private map!: L.Map;
   private layer?: L.LayerGroup;
@@ -122,6 +133,7 @@ export class SuiviTrajetsComponent implements AfterViewInit, OnDestroy {
 
   charger(): void {
     this.loading = true;
+    this.selectedIdx = null;   // évite un index périmé après rechargement
     this.svc.trajetsParChauffeur(this.debut || undefined, this.fin || undefined, this.chauffeurId)
       .pipe(catchError(() => of([] as TrajetChauffeur[])))
       .subscribe(d => { this.trajets = d; this.loading = false; setTimeout(() => this.dessiner(), 80); });
@@ -139,6 +151,9 @@ export class SuiviTrajetsComponent implements AfterViewInit, OnDestroy {
         .filter(p => p.latitude != null && p.longitude != null)
         .map(p => [p.latitude as number, p.longitude as number] as L.LatLngTuple);
       if (pts.length === 0) { this.bounds.push(L.latLngBounds([])); return; }
+      this.bounds.push(L.latLngBounds(pts));
+      // Si un chauffeur est sélectionné, on n'affiche que son trajet.
+      if (this.selectedIdx !== null && this.selectedIdx !== i) return;
       const col = this.couleur(i);
       L.polyline(pts, { color: col, weight: 4, opacity: 0.85 }).addTo(this.layer!);
       const dot = (fill: string) => L.divIcon({ className: '',
@@ -146,7 +161,6 @@ export class SuiviTrajetsComponent implements AfterViewInit, OnDestroy {
         iconSize: [13, 13], iconAnchor: [7, 7] });
       L.marker(pts[0], { icon: dot('#16a34a') }).addTo(this.layer!).bindPopup(`${t.chauffeur || 'Non affecté'} — départ`);
       L.marker(pts[pts.length - 1], { icon: dot(col) }).addTo(this.layer!).bindPopup(`${t.chauffeur || 'Non affecté'} — dernière position`);
-      this.bounds.push(L.latLngBounds(pts));
       pts.forEach(p => tous.push(p));
     });
 
@@ -157,6 +171,12 @@ export class SuiviTrajetsComponent implements AfterViewInit, OnDestroy {
   zoomer(i: number): void {
     const b = this.bounds[i];
     if (b && b.isValid()) this.map.fitBounds(b.pad(0.25));
+  }
+
+  /** Clic sur un chauffeur : n'affiche que son trajet sur la carte (re-clic = tous). */
+  selectionner(i: number): void {
+    this.selectedIdx = this.selectedIdx === i ? null : i;
+    this.dessiner();
   }
 
   debutDe(t: TrajetChauffeur): string | undefined { return t.points?.[0]?.horodatage; }

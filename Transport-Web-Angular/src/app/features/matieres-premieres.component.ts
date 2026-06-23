@@ -3,13 +3,15 @@ import { ToastrService } from 'ngx-toastr';
 import { MatierePremiereService } from '../services/matiere-premiere.service';
 import { CommandeMp, MatierePremiere } from '../core/models';
 import { SortState } from '../shared/sort.pipe';
-import { ColumnFilters, matchesFilters } from '../shared/column-filter';
+import { matchesSearch } from '../shared/column-filter';
 
 @Component({
   selector: 'app-matieres-premieres',
   template: `
     <div class="toolbar">
       <span class="badge badge-blue"><i class="fa-solid fa-database"></i> Commandes matières premières (Divalto, lecture seule)</span>
+      <div class="search"><i class="fa-solid fa-magnifying-glass"></i>
+        <input [(ngModel)]="q" (ngModelChange)="page=1" placeholder="Rechercher (n°, affaire, fournisseur, réf)…"></div>
       <button class="btn btn-outline right" (click)="chargerCommandes()" [disabled]="loadingCmd">
         <i class="fa-solid fa-rotate"></i> Actualiser</button>
     </div>
@@ -26,13 +28,6 @@ import { ColumnFilters, matchesFilters } from '../shared/column-filter';
             <th appSortable="projet" [(state)]="sortState">Affaire</th>
             <th appSortable="tiers" [(state)]="sortState">Fournisseur</th>
             <th appSortable="reference" [(state)]="sortState">Pièce fournisseur</th>
-            <th></th></tr>
-          <tr class="filtre-row">
-            <th><input [(ngModel)]="filters['cdno']" (ngModelChange)="page=1" placeholder="Filtrer"></th>
-            <th><input [(ngModel)]="filters['date']" (ngModelChange)="page=1" placeholder="Filtrer"></th>
-            <th><input [(ngModel)]="filters['projet']" (ngModelChange)="page=1" placeholder="Filtrer"></th>
-            <th><input [(ngModel)]="filters['tiers']" (ngModelChange)="page=1" placeholder="Filtrer"></th>
-            <th><input [(ngModel)]="filters['reference']" (ngModelChange)="page=1" placeholder="Filtrer"></th>
             <th></th></tr></thead>
           <tbody>
             <tr *ngFor="let c of commandesFiltrees() | sortBy:sortState | paginate:page:pageSize" class="row-link" (click)="choisir(c)">
@@ -88,7 +83,7 @@ export class MatieresPremieresComponent implements OnInit {
   commandes: CommandeMp[] = [];
   loadingCmd = false;
   page = 1; pageSize = 10;
-  filters: ColumnFilters = {};
+  q = '';
   sortState: SortState = { key: '', dir: 'asc' };
   selected: CommandeMp | null = null;
   lignes: MatierePremiere[] = [];
@@ -107,7 +102,7 @@ export class MatieresPremieresComponent implements OnInit {
   }
 
   commandesFiltrees(): CommandeMp[] {
-    return this.commandes.filter(c => matchesFilters(c, this.filters));
+    return this.commandes.filter(c => matchesSearch(c, this.q));
   }
 
   choisir(c: CommandeMp): void {

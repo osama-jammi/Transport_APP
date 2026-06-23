@@ -4,12 +4,14 @@ import * as L from 'leaflet';
 import { ChantierService } from '../services/chantier.service';
 import { Chantier, ChantierRequest } from '../core/models';
 import { SortState } from '../shared/sort.pipe';
-import { ColumnFilters, matchesFilters } from '../shared/column-filter';
+import { matchesSearch } from '../shared/column-filter';
 
 @Component({
   selector: 'app-chantiers',
   template: `
     <div class="toolbar">
+      <div class="search"><i class="fa-solid fa-magnifying-glass"></i>
+        <input [(ngModel)]="q" (ngModelChange)="page=1" placeholder="Rechercher un chantier…"></div>
       <button class="btn btn-primary right" (click)="ouvrir()">
         <i class="fa-solid fa-plus"></i> Nouveau chantier</button>
     </div>
@@ -27,16 +29,7 @@ import { ColumnFilters, matchesFilters } from '../shared/column-filter';
             <th>Coordonnées</th>
             <th appSortable="rayonMetres" [(state)]="sortState">Zone</th>
             <th appSortable="actif" [(state)]="sortState">Statut</th>
-            <th>Actions</th></tr>
-          <tr class="filtre-row">
-            <th><input [(ngModel)]="filters['id']" (ngModelChange)="page=1" placeholder="Filtrer"></th>
-            <th><input [(ngModel)]="filters['nom']" (ngModelChange)="page=1" placeholder="Filtrer"></th>
-            <th><input [(ngModel)]="filters['ville']" (ngModelChange)="page=1" placeholder="Filtrer"></th>
-            <th><input [(ngModel)]="filters['lieu']" (ngModelChange)="page=1" placeholder="Filtrer"></th>
-            <th></th>
-            <th><input [(ngModel)]="filters['rayonMetres']" (ngModelChange)="page=1" placeholder="Filtrer"></th>
-            <th></th>
-            <th></th></tr></thead>
+            <th>Actions</th></tr></thead>
           <tbody>
             <tr *ngFor="let c of filtres() | sortBy:sortState | paginate:page:pageSize">
               <td><code>{{ c.id }}</code></td>
@@ -116,7 +109,7 @@ export class ChantiersComponent implements OnInit {
   chantiers: Chantier[] = [];
   loading = true; saving = false; modal = false;
   page = 1; pageSize = 10;
-  filters: ColumnFilters = {}; editId: number | null = null;
+  q = ''; editId: number | null = null;
   sortState: SortState = { key: '', dir: 'asc' };
   form: ChantierRequest = { nom: '', rayonMetres: 100 };
   presets = [100, 250, 500, 1000];
@@ -146,7 +139,7 @@ export class ChantiersComponent implements OnInit {
   }
 
   filtres(): Chantier[] {
-    return this.chantiers.filter(c => matchesFilters(c, this.filters));
+    return this.chantiers.filter(c => matchesSearch(c, this.q));
   }
 
   ouvrir(c?: Chantier): void {

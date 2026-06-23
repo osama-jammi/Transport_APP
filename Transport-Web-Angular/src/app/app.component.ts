@@ -1,6 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { KeycloakService } from 'keycloak-angular';
 import { AdminService } from './services/admin.service';
+import { appliquerTheme, themeActuel } from './core/theme';
 
 interface NavItem { path: string; label: string; icon: string; feature?: string; }
 
@@ -51,6 +52,10 @@ interface NavItem { path: string; label: string; icon: string; feature?: string;
         <main class="content">
           <router-outlet></router-outlet>
         </main>
+        <footer class="app-foot">
+          <span>© {{ annee }} RICHE BOIS — Transport &amp; Livraison</span>
+          <span class="muted">Propulsé par DivNet · v2.0 · Sécurisé par Keycloak</span>
+        </footer>
       </div>
     </div>
   `
@@ -60,6 +65,7 @@ export class AppComponent implements OnInit {
   username = '';
   initials = '?';
   roleLabel = 'Superviseur';
+  annee = new Date().getFullYear();
 
   navMain: NavItem[] = [
     { path: '/dashboard', label: 'Tableau de bord', icon: 'fa-gauge-high' },
@@ -83,20 +89,31 @@ export class AppComponent implements OnInit {
   constructor(private keycloak: KeycloakService, private adminSvc: AdminService) {}
 
   async ngOnInit(): Promise<void> {
+    appliquerTheme(themeActuel());   // applique le thème de couleur choisi
     try {
       const profile = await this.keycloak.loadUserProfile();
       this.username = [profile.firstName, profile.lastName].filter(Boolean).join(' ')
         || profile.username || 'Utilisateur';
       this.initials = (this.username.match(/\b\w/g) || ['?']).slice(0, 2).join('');
-      const roles = this.keycloak.getUserRoles().filter(r => !r.startsWith('default-roles') &&
-        !['offline_access', 'uma_authorization'].includes(r));
-      if (roles.length) { this.roleLabel = roles.join(', '); }
+      this.roleLabel = this.roleLePlusImportant(this.keycloak.getUserRoles());
     } catch { /* profil indisponible */ }
     // Charge les fonctionnalités désactivées pour masquer les entrées de menu
     this.adminSvc.getFeatures().subscribe({
       next: features => this.featuresOff = new Set(features.filter(f => !f.actif).map(f => f.cle)),
       error: () => { /* défaut : tout visible */ }
     });
+  }
+
+  /** Renvoie le SEUL rôle le plus important (ignore les rôles techniques Keycloak). */
+  private roleLePlusImportant(roles: string[]): string {
+    const bruit = new Set(['offline_access', 'uma_authorization',
+      'manage-account', 'manage-account-links', 'view-profile']);
+    const pertinents = roles.filter(r => !r.startsWith('default-roles') && !bruit.has(r));
+    if (!pertinents.length) return 'Utilisateur';
+    const priorite = ['ADMIN', 'ADMINISTRATEUR', 'CHEF DE PROJET', 'SUPERVISEUR', 'RESPONSABLE', 'MAGASINIER', 'CHAUFFEUR'];
+    const upper = pertinents.map(r => r.toUpperCase());
+    const best = priorite.find(p => upper.includes(p));
+    return best || pertinents[0];
   }
 
   /** Entrées de menu visibles (filtre celles dont la fonctionnalité est désactivée). */

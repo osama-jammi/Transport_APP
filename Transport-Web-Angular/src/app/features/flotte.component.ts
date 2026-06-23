@@ -8,7 +8,6 @@ import { CamionService } from '../services/camion.service';
 import { Chauffeur, ChauffeurRequest, Camion } from '../core/models';
 import { imprimerQrChauffeur } from '../core/qr-print';
 import { SortState } from '../shared/sort.pipe';
-import { ColumnFilters, matchesFilters } from '../shared/column-filter';
 
 /**
  * Flotte = vue combinée Chauffeurs + Camions.
@@ -84,13 +83,6 @@ interface FleetUnit { chauffeur: Chauffeur; camion?: Camion; }
           <th appSortable="type" [(state)]="sortCam">Type</th>
           <th appSortable="marque" [(state)]="sortCam">Marque</th>
           <th appSortable="etat" [(state)]="sortCam">État</th>
-          <th></th></tr>
-        <tr class="filtre-row">
-          <th><input [(ngModel)]="filtersCam['id']" (ngModelChange)="pageCam=1" placeholder="Filtrer"></th>
-          <th><input [(ngModel)]="filtersCam['immatriculation']" (ngModelChange)="pageCam=1" placeholder="Filtrer"></th>
-          <th><input [(ngModel)]="filtersCam['type']" (ngModelChange)="pageCam=1" placeholder="Filtrer"></th>
-          <th><input [(ngModel)]="filtersCam['marque']" (ngModelChange)="pageCam=1" placeholder="Filtrer"></th>
-          <th><input [(ngModel)]="filtersCam['etat']" (ngModelChange)="pageCam=1" placeholder="Filtrer"></th>
           <th></th></tr></thead>
         <tbody>
           <tr *ngFor="let c of camionsLibres() | sortBy:sortCam | paginate:pageCam:pageSize">
@@ -120,13 +112,6 @@ interface FleetUnit { chauffeur: Chauffeur; camion?: Camion; }
           <th appSortable="admin" [(state)]="sortUtil">Rôle</th>
           <th appSortable="actif" [(state)]="sortUtil">Statut</th>
           <th appSortable="derniereConnexion" [(state)]="sortUtil">Dernière connexion</th>
-          <th></th></tr>
-        <tr class="filtre-row">
-          <th><input [(ngModel)]="filtersUtil['nom']" (ngModelChange)="pageUtil=1" placeholder="Filtrer"></th>
-          <th><input [(ngModel)]="filtersUtil['matricule']" (ngModelChange)="pageUtil=1" placeholder="Filtrer"></th>
-          <th></th>
-          <th></th>
-          <th><input [(ngModel)]="filtersUtil['derniereConnexion']" (ngModelChange)="pageUtil=1" placeholder="Filtrer"></th>
           <th></th></tr></thead>
         <tbody>
           <tr *ngFor="let a of utilisateursFiltres() | sortBy:sortUtil | paginate:pageUtil:pageSize">
@@ -250,8 +235,6 @@ export class FlotteComponent implements OnInit {
   q = '';
   sortCam: SortState = { key: '', dir: 'asc' };
   sortUtil: SortState = { key: '', dir: 'asc' };
-  filtersCam: ColumnFilters = {};
-  filtersUtil: ColumnFilters = {};
 
   modalChauffeur = false; editChauffeurId: number | null = null;
   formChauffeur: ChauffeurRequest = { nom: '', prenom: '', matricule: '', telephone: '', admin: false };
@@ -317,16 +300,14 @@ export class FlotteComponent implements OnInit {
     const t = this.q.toLowerCase().trim();
     return this.camions
       .filter(c => !c.chauffeurId)
-      .filter(c => !t || `${c.immatriculation} ${c.device}`.toLowerCase().includes(t))
-      .filter(c => matchesFilters(c, this.filtersCam));
+      .filter(c => !t || `${c.immatriculation} ${c.device}`.toLowerCase().includes(t));
   }
 
   /** Utilisateurs (comptes app mobile) filtrés par la recherche globale + colonnes. */
   utilisateursFiltres(): Chauffeur[] {
     const t = this.q.toLowerCase().trim();
     return this.utilisateurs
-      .filter(u => !t || `${u.nom} ${u.prenom} ${u.matricule}`.toLowerCase().includes(t))
-      .filter(u => matchesFilters(u, this.filtersUtil));
+      .filter(u => !t || `${u.nom} ${u.prenom} ${u.matricule}`.toLowerCase().includes(t));
   }
 
   closeBackdrop(e: Event, which: 'chauffeur' | 'camion'): void {

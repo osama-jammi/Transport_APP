@@ -13,12 +13,17 @@ import {
 } from '../core/models';
 import { environment } from '../../environments/environment';
 import { SortState } from '../shared/sort.pipe';
-import { ColumnFilters, matchesFilters } from '../shared/column-filter';
+import { matchesSearch } from '../shared/column-filter';
 import * as L from 'leaflet';
 
 @Component({
   selector: 'app-voyages',
   template: `
+    <div class="toolbar">
+      <div class="search"><i class="fa-solid fa-magnifying-glass"></i>
+        <input [(ngModel)]="q" (ngModelChange)="page=1" placeholder="Rechercher (client, camion, chauffeur, transporteur)…"></div>
+    </div>
+
     <div class="card"><div class="card-body" style="padding:0">
       <div *ngIf="loading" class="spinner"></div>
       <div *ngIf="!loading && filtres().length===0" class="empty">
@@ -34,15 +39,6 @@ import * as L from 'leaflet';
             <th appSortable="dechargementJour" [(state)]="sortState">Déchargement</th>
             <th appSortable="nbArticles" [(state)]="sortState">Articles</th>
             <th appSortable="statut" [(state)]="sortState">Statut</th>
-            <th></th></tr>
-          <tr class="filtre-row">
-            <th><input [(ngModel)]="filters['id']" (ngModelChange)="page=1" placeholder="Filtrer"></th>
-            <th><input [(ngModel)]="filters['client']" (ngModelChange)="page=1" placeholder="Filtrer"></th>
-            <th><input [(ngModel)]="filters['chauffeur']" (ngModelChange)="page=1" placeholder="Filtrer"></th>
-            <th><input [(ngModel)]="filters['chargementJour']" (ngModelChange)="page=1" placeholder="Filtrer"></th>
-            <th><input [(ngModel)]="filters['dechargementJour']" (ngModelChange)="page=1" placeholder="Filtrer"></th>
-            <th><input [(ngModel)]="filters['nbArticles']" (ngModelChange)="page=1" placeholder="Filtrer"></th>
-            <th><input [(ngModel)]="filters['statut']" (ngModelChange)="page=1" placeholder="Filtrer"></th>
             <th></th></tr></thead>
           <tbody>
             <tr *ngFor="let v of filtres() | sortBy:sortState | paginate:page:pageSize" class="row-link" (click)="voirDetails(v)">
@@ -197,7 +193,7 @@ export class VoyagesComponent implements OnInit {
   voyages: Voyage[] = [];
   loading = true; saving = false; modal = false;
   page = 1; pageSize = 10;
-  filters: ColumnFilters = {}; vue: 'en-cours' | 'archives' = 'en-cours';
+  q = ''; vue: 'en-cours' | 'archives' = 'en-cours';
   sortState: SortState = { key: '', dir: 'asc' };
   dateDebut = ''; dateFin = '';
 
@@ -266,7 +262,7 @@ export class VoyagesComponent implements OnInit {
   }
 
   filtres(): Voyage[] {
-    return this.voyages.filter(v => matchesFilters(v, this.filters));
+    return this.voyages.filter(v => matchesSearch(v, this.q));
   }
 
   /* ─────────── Création / Édition ─────────── */

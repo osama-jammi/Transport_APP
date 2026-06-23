@@ -15,7 +15,7 @@ import {
   CommandeMp, GapVoyageArticle, MatierePremiere, TrajetVoyage, Depot
 } from '../core/models';
 import { SortState } from '../shared/sort.pipe';
-import { ColumnFilters, matchesFilters } from '../shared/column-filter';
+import { matchesSearch } from '../shared/column-filter';
 import * as L from 'leaflet';
 
 /** Une ligne du voyage : un chantier, une date, et soit des livraisons (articles) soit des MP. */
@@ -51,6 +51,8 @@ interface VoyageLigne {
         <option value="archives">Voyages archivés</option>
         <option value="historique">Historique (tous)</option>
       </select>
+      <div class="search"><i class="fa-solid fa-magnifying-glass"></i>
+        <input [(ngModel)]="q" (ngModelChange)="page=1" placeholder="Rechercher (chauffeur, statut)…"></div>
       <button class="btn btn-primary right" (click)="ouvrir()">
         <i class="fa-solid fa-plus"></i> Nouveau voyage
       </button>
@@ -70,14 +72,6 @@ interface VoyageLigne {
             <th appSortable="nbLivraisons" [(state)]="sortState">Livraisons</th>
             <th appSortable="nbMatieres" [(state)]="sortState">Mat. premières</th>
             <th appSortable="statut" [(state)]="sortState">Statut</th>
-            <th></th></tr>
-          <tr class="filtre-row">
-            <th><input [(ngModel)]="filters['id']" (ngModelChange)="page=1" placeholder="Filtrer"></th>
-            <th><input [(ngModel)]="filters['dateVoyage']" (ngModelChange)="page=1" placeholder="Filtrer"></th>
-            <th><input [(ngModel)]="filters['chauffeur']" (ngModelChange)="page=1" placeholder="Filtrer"></th>
-            <th><input [(ngModel)]="filters['nbLivraisons']" (ngModelChange)="page=1" placeholder="Filtrer"></th>
-            <th><input [(ngModel)]="filters['nbMatieres']" (ngModelChange)="page=1" placeholder="Filtrer"></th>
-            <th><input [(ngModel)]="filters['statut']" (ngModelChange)="page=1" placeholder="Filtrer"></th>
             <th></th></tr></thead>
           <tbody>
             <tr *ngFor="let v of voyagesFiltres() | sortBy:sortState | paginate:page:pageSize">
@@ -139,6 +133,22 @@ interface VoyageLigne {
           <h4 class="art-title">Lignes du voyage</h4>
           <div *ngFor="let lg of lignes; let i = index" class="card" style="margin:10px 0">
             <div class="card-body">
+
+              <!-- Nouvelle saisie : résumé de la ligne (l'édition se fait dans la modale) -->
+              <div *ngIf="nouvelleSaisie" style="display:flex;align-items:center;gap:12px">
+                <div style="flex:1">
+                  <strong>{{ lg.filtreChantier || ('Ligne ' + (i + 1)) }}</strong>
+                  <div class="muted" style="font-size:12px">
+                    {{ selectedLivCount(lg) }} ordre(s) de fab. · {{ selectedMpCount(lg) }} matière(s)
+                    <span *ngIf="lg.chargementJour"> · chargement {{ lg.chargementJour }} {{ lg.chargementHeure || '' }}</span>
+                  </div>
+                </div>
+                <button class="btn btn-outline btn-sm" (click)="modifierLigne(i)"><i class="fa-solid fa-pen"></i> Modifier</button>
+                <button class="btn btn-danger btn-sm" (click)="retirerLigne(i)" title="Retirer"><i class="fa-solid fa-trash"></i></button>
+              </div>
+
+              <!-- Ancienne saisie : éditeur en ligne -->
+              <ng-container *ngIf="!nouvelleSaisie">
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
                 <strong>Ligne {{ i + 1 }}</strong>
                 <button class="btn btn-danger btn-sm" (click)="retirerLigne(i)" title="Retirer"><i class="fa-solid fa-trash"></i></button>
@@ -223,6 +233,7 @@ interface VoyageLigne {
                   </div>
                 </div>
               </div>
+              </ng-container>
             </div>
           </div>
 
@@ -239,8 +250,9 @@ interface VoyageLigne {
 
     <!-- Modal AJOUT d'une ligne (nouvelle saisie) -->
     <div class="modal-backdrop" *ngIf="ligneModal && ligneDraft" (click)="fermerLigneModal($event)" style="z-index:1100">
-      <div class="modal" style="max-width:560px" (click)="$event.stopPropagation()">
-        <div class="m-head"><h3>Ajouter une ligne</h3><button class="x" (click)="ligneModal=false">&times;</button></div>
+      <div class="modal" style="max-width:860px" (click)="$event.stopPropagation()">
+        <div class="m-head"><h3>{{ ligneEditIndex===null ? 'Ajouter une ligne' : 'Modifier la ligne' }}</h3>
+          <button class="x" (click)="ligneModal=false">&times;</button></div>
         <div class="m-body">
           <div class="field"><label>Chantier *</label>
             <ng-select [items]="chantiers" bindValue="id" [(ngModel)]="ligneDraft.chantierId"
@@ -256,11 +268,53 @@ interface VoyageLigne {
             <div class="field"><label>Déchargement prévu (jour)</label><input type="date" [(ngModel)]="ligneDraft.dechargementJour"></div>
             <div class="field"><label>Heure</label><input type="time" [(ngModel)]="ligneDraft.dechargementHeure"></div>
           </div>
+
+          <div *ngIf="!ligneDraft.chantierId" class="muted" style="font-size:12px;padding:8px">Choisissez d'abord un chantier.</div>
+
+          <div *ngIf="ligneDraft.chantierId">
+            <input class="filtre-input" [(ngModel)]="ligneDraft.filtreContenu"
+                   placeholder="🔍 Rechercher (désignation, réf, #livraison)…" style="margin:8px 0">
+
+            <h5 class="ligne-section"><i class="fa-solid fa-boxes-stacked"></i> Ordre de fabrication
+              <span class="muted">({{ selectedLivCount(ligneDraft) }} sélectionné(s))</span></h5>
+            <div class="art-list full">
+              <div *ngIf="livraisonsDuChantier(ligneDraft).length===0" class="muted" style="font-size:12px;padding:8px">Aucune livraison pour ce chantier.</div>
+              <label class="art-item" *ngFor="let l of livraisonsDuChantier(ligneDraft)" [class.checked]="ligneDraft.selectedLiv[l.id]">
+                <input type="checkbox" [(ngModel)]="ligneDraft.selectedLiv[l.id]">
+                <div class="art-info"><strong>#{{ l.id }}</strong>
+                  <span class="muted">{{ l.nbArticles }} article(s) · {{ l.statutReception || '—' }}</span></div>
+              </label>
+            </div>
+
+            <h5 class="ligne-section"><i class="fa-solid fa-cubes"></i> Matières premières
+              <span class="muted">({{ selectedMpCount(ligneDraft) }} sélectionnée(s))</span></h5>
+            <div class="field" style="margin-bottom:8px"><label>Commande</label>
+              <ng-select [items]="ligneDraft.commandes" bindValue="cdno" [(ngModel)]="ligneDraft.commandeId"
+                         (change)="chargerLignesMp(ligneDraft)" [searchable]="true" [clearable]="true" [searchFn]="rechercheCommande"
+                         placeholder="Choisir une commande" notFoundText="Aucune commande" clearAllText="Effacer">
+                <ng-template ng-label-tmp let-item="item">
+                  #{{ item.cdno }}<span *ngIf="item.tiers"> · {{ item.tiers }}</span></ng-template>
+                <ng-template ng-option-tmp let-item="item">
+                  #{{ item.cdno }}<span *ngIf="item.tiers"> · {{ item.tiers }}</span><span *ngIf="item.pieceFournisseur" class="muted"> · {{ item.pieceFournisseur }}</span></ng-template>
+              </ng-select>
+            </div>
+            <div *ngIf="ligneDraft.loadingMp" class="spinner" style="margin:12px auto"></div>
+            <div class="art-list full" *ngIf="ligneDraft.commandeId && !ligneDraft.loadingMp">
+              <div *ngIf="lignesMpFiltrees(ligneDraft).length===0" class="muted" style="font-size:12px;padding:8px">Aucune ligne.</div>
+              <div class="art-item" *ngFor="let m of lignesMpFiltrees(ligneDraft)" [class.checked]="ligneDraft.selectedMp[m.reference||'']">
+                <input type="checkbox" [(ngModel)]="ligneDraft.selectedMp[m.reference||'']" (change)="onToggleMp(ligneDraft, m)">
+                <div class="art-info"><strong>{{ m.designation || m.reference }}</strong>
+                  <span class="muted">{{ m.reference }} · dispo {{ m.quantite ?? '—' }}</span></div>
+                <input *ngIf="ligneDraft.selectedMp[m.reference||'']" type="number" min="1" step="any" class="qte-input"
+                       [(ngModel)]="ligneDraft.qteMp[m.reference||'']" placeholder="Qté">
+              </div>
+            </div>
+          </div>
         </div>
         <div class="m-foot">
           <button class="btn btn-outline" (click)="ligneModal=false">Annuler</button>
           <button class="btn btn-primary" (click)="validerLigne()" [disabled]="!ligneDraft.chantierId">
-            <i class="fa-solid fa-plus"></i> Ajouter la ligne</button>
+            <i class="fa-solid fa-check"></i> {{ ligneEditIndex===null ? 'Ajouter la ligne' : 'Enregistrer la ligne' }}</button>
         </div>
       </div>
     </div>
@@ -451,7 +505,7 @@ export class VoyagesConteneursComponent implements OnInit {
   voyages: VoyageConteneur[] = [];
   loading = true;
   page = 1; pageSize = 10;
-  filters: ColumnFilters = {};
+  q = '';
   sortState: SortState = { key: '', dir: 'asc' };
   vue: 'en-cours' | 'archives' | 'historique' = 'en-cours';
   modal = false; saving = false;
@@ -470,6 +524,7 @@ export class VoyagesConteneursComponent implements OnInit {
   nouvelleSaisie = true;
   ligneModal = false;
   ligneDraft: VoyageLigne | null = null;
+  ligneEditIndex: number | null = null;   // null = ajout ; sinon index de la ligne éditée
   /** Recherche ng-select pour le choix de commande (nouvelle saisie). */
   rechercheCommande = (term: string, item: CommandeMp): boolean => {
     const t = (term || '').toLowerCase();
@@ -516,7 +571,7 @@ export class VoyagesConteneursComponent implements OnInit {
 
   /** Voyages filtrés par la recherche (chauffeur, statut, id). */
   voyagesFiltres(): VoyageConteneur[] {
-    return this.voyages.filter(v => matchesFilters(v, this.filters));
+    return this.voyages.filter(v => matchesSearch(v, this.q));
   }
 
   charger(): void {
@@ -641,8 +696,14 @@ export class VoyagesConteneursComponent implements OnInit {
   ajouterLigne(): void { this.lignes.push(this.nouvelleLigne()); }
   retirerLigne(i: number): void { this.lignes.splice(i, 1); }
 
-  /* ─────────── Nouvelle saisie : ajout d'une ligne via une modale ─────────── */
-  ouvrirLigneModal(): void { this.ligneDraft = this.nouvelleLigne(); this.ligneModal = true; }
+  /* ─────────── Nouvelle saisie : ajout/édition d'une ligne via une modale ─────────── */
+  ouvrirLigneModal(): void { this.ligneDraft = this.nouvelleLigne(); this.ligneEditIndex = null; this.ligneModal = true; }
+  /** Édite une ligne existante : travaille sur une copie (annulable). */
+  modifierLigne(i: number): void {
+    this.ligneDraft = JSON.parse(JSON.stringify(this.lignes[i])) as VoyageLigne;
+    this.ligneEditIndex = i;
+    this.ligneModal = true;
+  }
   fermerLigneModal(e: Event): void { if (e.target === e.currentTarget) this.ligneModal = false; }
   /** Choix du chantier dans la modale d'ajout de ligne (ng-select) → charge les commandes. */
   onDraftChantier(): void {
@@ -653,12 +714,16 @@ export class VoyagesConteneursComponent implements OnInit {
     lg.selectedLiv = {}; lg.commandes = []; lg.commandeId = undefined; lg.lignesMp = []; lg.selectedMp = {}; lg.qteMp = {};
     if (lg.chantierId) this.chargerCommandes(lg);
   }
-  /** Valide la modale : ajoute la ligne configurée (section OF dépliée par défaut). */
+  /** Valide la modale : ajoute la nouvelle ligne ou remplace celle en cours d'édition. */
   validerLigne(): void {
     if (!this.ligneDraft || !this.ligneDraft.chantierId) return;
-    this.ligneDraft.ofOuvert = true;
-    this.lignes.push(this.ligneDraft);
+    if (this.ligneEditIndex !== null) {
+      this.lignes[this.ligneEditIndex] = this.ligneDraft;
+    } else {
+      this.lignes.push(this.ligneDraft);
+    }
     this.ligneDraft = null;
+    this.ligneEditIndex = null;
     this.ligneModal = false;
   }
 
