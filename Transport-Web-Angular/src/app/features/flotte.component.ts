@@ -7,6 +7,8 @@ import { ChauffeurService } from '../services/chauffeur.service';
 import { CamionService } from '../services/camion.service';
 import { Chauffeur, ChauffeurRequest, Camion } from '../core/models';
 import { imprimerQrChauffeur } from '../core/qr-print';
+import { SortState } from '../shared/sort.pipe';
+import { ColumnFilters, matchesFilters } from '../shared/column-filter';
 
 /**
  * Flotte = vue combinée Chauffeurs + Camions.
@@ -19,7 +21,7 @@ interface FleetUnit { chauffeur: Chauffeur; camion?: Camion; }
   template: `
     <div class="toolbar">
       <div class="search"><i class="fa-solid fa-magnifying-glass"></i>
-        <input [(ngModel)]="q" placeholder="Rechercher (chauffeur, matricule, camion)…"></div>
+        <input [(ngModel)]="q" (ngModelChange)="pageCam=1; pageUtil=1" placeholder="Rechercher (chauffeur, matricule, camion)…"></div>
       <button class="btn btn-outline right" (click)="ouvrirChauffeur()">
         <i class="fa-solid fa-user-plus"></i> Nouvel utilisateur</button>
       <button class="btn btn-primary" (click)="ouvrirCamion()">
@@ -76,9 +78,22 @@ interface FleetUnit { chauffeur: Chauffeur; camion?: Camion; }
     <div class="card" *ngIf="!loading && camionsLibres().length">
       <div class="card-head"><h2>Camions sans chauffeur ({{ camionsLibres().length }})</h2></div>
       <div class="table-wrap"><table>
-        <thead><tr><th>ID</th><th>Immatriculation</th><th>Type</th><th>Marque</th><th>État</th><th></th></tr></thead>
+        <thead><tr>
+          <th appSortable="id" [(state)]="sortCam">ID</th>
+          <th appSortable="immatriculation" [(state)]="sortCam">Immatriculation</th>
+          <th appSortable="type" [(state)]="sortCam">Type</th>
+          <th appSortable="marque" [(state)]="sortCam">Marque</th>
+          <th appSortable="etat" [(state)]="sortCam">État</th>
+          <th></th></tr>
+        <tr class="filtre-row">
+          <th><input [(ngModel)]="filtersCam['id']" (ngModelChange)="pageCam=1" placeholder="Filtrer"></th>
+          <th><input [(ngModel)]="filtersCam['immatriculation']" (ngModelChange)="pageCam=1" placeholder="Filtrer"></th>
+          <th><input [(ngModel)]="filtersCam['type']" (ngModelChange)="pageCam=1" placeholder="Filtrer"></th>
+          <th><input [(ngModel)]="filtersCam['marque']" (ngModelChange)="pageCam=1" placeholder="Filtrer"></th>
+          <th><input [(ngModel)]="filtersCam['etat']" (ngModelChange)="pageCam=1" placeholder="Filtrer"></th>
+          <th></th></tr></thead>
         <tbody>
-          <tr *ngFor="let c of camionsLibres() | paginate:pageCam:pageSize">
+          <tr *ngFor="let c of camionsLibres() | sortBy:sortCam | paginate:pageCam:pageSize">
             <td><code>{{ c.id }}</code></td>
             <td><strong>{{ c.immatriculation }}</strong></td>
             <td>{{ c.type || '—' }}</td>
@@ -92,16 +107,29 @@ interface FleetUnit { chauffeur: Chauffeur; camion?: Camion; }
         </tbody>
       </table></div>
       <app-paginator [total]="camionsLibres().length" [page]="pageCam" [pageSize]="pageSize"
-                     (pageChange)="pageCam = $event"></app-paginator>
+                     (pageChange)="pageCam = $event" (pageSizeChange)="pageSize = $event; pageCam = 1; pageUtil = 1"></app-paginator>
     </div>
 
     <!-- Utilisateurs (comptes app mobile) -->
-    <div class="card" *ngIf="!loading && utilisateurs.length">
-      <div class="card-head"><h2><i class="fa-solid fa-users"></i> Utilisateurs — app mobile ({{ utilisateurs.length }})</h2></div>
+    <div class="card" *ngIf="!loading && utilisateursFiltres().length">
+      <div class="card-head"><h2><i class="fa-solid fa-users"></i> Utilisateurs — app mobile ({{ utilisateursFiltres().length }})</h2></div>
       <div class="table-wrap"><table>
-        <thead><tr><th>Nom</th><th>Matricule</th><th>Rôle</th><th>Statut</th><th>Dernière connexion</th><th></th></tr></thead>
+        <thead><tr>
+          <th appSortable="nom" [(state)]="sortUtil">Nom</th>
+          <th appSortable="matricule" [(state)]="sortUtil">Matricule</th>
+          <th appSortable="admin" [(state)]="sortUtil">Rôle</th>
+          <th appSortable="actif" [(state)]="sortUtil">Statut</th>
+          <th appSortable="derniereConnexion" [(state)]="sortUtil">Dernière connexion</th>
+          <th></th></tr>
+        <tr class="filtre-row">
+          <th><input [(ngModel)]="filtersUtil['nom']" (ngModelChange)="pageUtil=1" placeholder="Filtrer"></th>
+          <th><input [(ngModel)]="filtersUtil['matricule']" (ngModelChange)="pageUtil=1" placeholder="Filtrer"></th>
+          <th></th>
+          <th></th>
+          <th><input [(ngModel)]="filtersUtil['derniereConnexion']" (ngModelChange)="pageUtil=1" placeholder="Filtrer"></th>
+          <th></th></tr></thead>
         <tbody>
-          <tr *ngFor="let a of utilisateurs | paginate:pageUtil:pageSize">
+          <tr *ngFor="let a of utilisateursFiltres() | sortBy:sortUtil | paginate:pageUtil:pageSize">
             <td><strong>{{ a.prenom }} {{ a.nom }}</strong></td>
             <td><code>{{ a.matricule }}</code></td>
             <td><span class="badge" [ngClass]="a.admin ? 'badge-orange' : 'badge-gray'">
@@ -121,8 +149,8 @@ interface FleetUnit { chauffeur: Chauffeur; camion?: Camion; }
           </tr>
         </tbody>
       </table></div>
-      <app-paginator [total]="utilisateurs.length" [page]="pageUtil" [pageSize]="pageSize"
-                     (pageChange)="pageUtil = $event"></app-paginator>
+      <app-paginator [total]="utilisateursFiltres().length" [page]="pageUtil" [pageSize]="pageSize"
+                     (pageChange)="pageUtil = $event" (pageSizeChange)="pageSize = $event; pageCam = 1; pageUtil = 1"></app-paginator>
     </div>
 
     <!-- Modal chauffeur -->
@@ -220,6 +248,10 @@ export class FlotteComponent implements OnInit {
   loading = true; saving = false;
   pageUtil = 1; pageCam = 1; pageSize = 10;
   q = '';
+  sortCam: SortState = { key: '', dir: 'asc' };
+  sortUtil: SortState = { key: '', dir: 'asc' };
+  filtersCam: ColumnFilters = {};
+  filtersUtil: ColumnFilters = {};
 
   modalChauffeur = false; editChauffeurId: number | null = null;
   formChauffeur: ChauffeurRequest = { nom: '', prenom: '', matricule: '', telephone: '', admin: false };
@@ -285,7 +317,16 @@ export class FlotteComponent implements OnInit {
     const t = this.q.toLowerCase().trim();
     return this.camions
       .filter(c => !c.chauffeurId)
-      .filter(c => !t || `${c.immatriculation} ${c.device}`.toLowerCase().includes(t));
+      .filter(c => !t || `${c.immatriculation} ${c.device}`.toLowerCase().includes(t))
+      .filter(c => matchesFilters(c, this.filtersCam));
+  }
+
+  /** Utilisateurs (comptes app mobile) filtrés par la recherche globale + colonnes. */
+  utilisateursFiltres(): Chauffeur[] {
+    const t = this.q.toLowerCase().trim();
+    return this.utilisateurs
+      .filter(u => !t || `${u.nom} ${u.prenom} ${u.matricule}`.toLowerCase().includes(t))
+      .filter(u => matchesFilters(u, this.filtersUtil));
   }
 
   closeBackdrop(e: Event, which: 'chauffeur' | 'camion'): void {

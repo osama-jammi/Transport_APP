@@ -2,6 +2,8 @@ import { Component, OnInit } from '@angular/core';
 import { ToastrService } from 'ngx-toastr';
 import { DepotService } from '../services/depot.service';
 import { Depot } from '../core/models';
+import { SortState } from '../shared/sort.pipe';
+import { ColumnFilters, matchesFilters } from '../shared/column-filter';
 import * as L from 'leaflet';
 
 @Component({
@@ -14,12 +16,25 @@ import * as L from 'leaflet';
 
     <div class="card"><div class="card-body" style="padding:0">
       <div *ngIf="loading" class="spinner"></div>
-      <div *ngIf="!loading && depots.length===0" class="empty"><i class="fa-solid fa-warehouse"></i> Aucun dépôt</div>
-      <div class="table-wrap" *ngIf="!loading && depots.length">
+      <div *ngIf="!loading && depotsFiltres().length===0" class="empty"><i class="fa-solid fa-warehouse"></i> Aucun dépôt</div>
+      <div class="table-wrap" *ngIf="!loading && depotsFiltres().length">
         <table>
-          <thead><tr><th>ID</th><th>Nom</th><th>Latitude</th><th>Longitude</th><th>Rayon (m)</th><th></th></tr></thead>
+          <thead><tr>
+            <th appSortable="id" [(state)]="sortState">ID</th>
+            <th appSortable="nom" [(state)]="sortState">Nom</th>
+            <th appSortable="latitude" [(state)]="sortState">Latitude</th>
+            <th appSortable="longitude" [(state)]="sortState">Longitude</th>
+            <th appSortable="rayon" [(state)]="sortState">Rayon (m)</th>
+            <th></th></tr>
+          <tr class="filtre-row">
+            <th><input [(ngModel)]="filters['id']" (ngModelChange)="page=1" placeholder="Filtrer"></th>
+            <th><input [(ngModel)]="filters['nom']" (ngModelChange)="page=1" placeholder="Filtrer"></th>
+            <th><input [(ngModel)]="filters['latitude']" (ngModelChange)="page=1" placeholder="Filtrer"></th>
+            <th><input [(ngModel)]="filters['longitude']" (ngModelChange)="page=1" placeholder="Filtrer"></th>
+            <th><input [(ngModel)]="filters['rayon']" (ngModelChange)="page=1" placeholder="Filtrer"></th>
+            <th></th></tr></thead>
           <tbody>
-            <tr *ngFor="let d of depots">
+            <tr *ngFor="let d of depotsFiltres() | sortBy:sortState | paginate:page:pageSize">
               <td><code>{{ d.id }}</code></td>
               <td><strong>{{ d.nom || '—' }}</strong></td>
               <td>{{ d.latitude ?? '—' }}</td>
@@ -33,6 +48,8 @@ import * as L from 'leaflet';
           </tbody>
         </table>
       </div>
+      <app-paginator [total]="depotsFiltres().length" [page]="page" [pageSize]="pageSize"
+                     (pageChange)="page = $event" (pageSizeChange)="pageSize = $event; page = 1"></app-paginator>
     </div></div>
 
     <div class="modal-backdrop" *ngIf="modal" (click)="fermer($event)">
@@ -68,12 +85,19 @@ export class DepotsComponent implements OnInit {
   loading = true; saving = false; modal = false;
   editId: number | null = null;
   form: Depot = {};
+  filters: ColumnFilters = {}; page = 1; pageSize = 10;
+  sortState: SortState = { key: '', dir: 'asc' };
   private map?: L.Map;
   private marker?: L.Marker;
 
   constructor(private svc: DepotService, private toastr: ToastrService) {}
 
   ngOnInit(): void { this.charger(); }
+
+  /** Dépôts filtrés par la recherche (nom). */
+  depotsFiltres(): Depot[] {
+    return this.depots.filter(d => matchesFilters(d, this.filters));
+  }
 
   charger(): void {
     this.loading = true;

@@ -3,13 +3,13 @@ import { ToastrService } from 'ngx-toastr';
 import * as L from 'leaflet';
 import { ChantierService } from '../services/chantier.service';
 import { Chantier, ChantierRequest } from '../core/models';
+import { SortState } from '../shared/sort.pipe';
+import { ColumnFilters, matchesFilters } from '../shared/column-filter';
 
 @Component({
   selector: 'app-chantiers',
   template: `
     <div class="toolbar">
-      <div class="search"><i class="fa-solid fa-magnifying-glass"></i>
-        <input [(ngModel)]="q" (ngModelChange)="page=1" placeholder="Rechercher un chantier…"></div>
       <button class="btn btn-primary right" (click)="ouvrir()">
         <i class="fa-solid fa-plus"></i> Nouveau chantier</button>
     </div>
@@ -19,9 +19,26 @@ import { Chantier, ChantierRequest } from '../core/models';
       <div *ngIf="!loading && filtres().length===0" class="empty"><i class="fa-solid fa-helmet-safety"></i> Aucun chantier</div>
       <div class="table-wrap" *ngIf="!loading && filtres().length">
         <table>
-          <thead><tr><th>ID</th><th>Nom</th><th>Ville</th><th>Lieu</th><th>Coordonnées</th><th>Zone</th><th>Statut</th><th>Actions</th></tr></thead>
+          <thead><tr>
+            <th appSortable="id" [(state)]="sortState">ID</th>
+            <th appSortable="nom" [(state)]="sortState">Nom</th>
+            <th appSortable="ville" [(state)]="sortState">Ville</th>
+            <th appSortable="lieu" [(state)]="sortState">Lieu</th>
+            <th>Coordonnées</th>
+            <th appSortable="rayonMetres" [(state)]="sortState">Zone</th>
+            <th appSortable="actif" [(state)]="sortState">Statut</th>
+            <th>Actions</th></tr>
+          <tr class="filtre-row">
+            <th><input [(ngModel)]="filters['id']" (ngModelChange)="page=1" placeholder="Filtrer"></th>
+            <th><input [(ngModel)]="filters['nom']" (ngModelChange)="page=1" placeholder="Filtrer"></th>
+            <th><input [(ngModel)]="filters['ville']" (ngModelChange)="page=1" placeholder="Filtrer"></th>
+            <th><input [(ngModel)]="filters['lieu']" (ngModelChange)="page=1" placeholder="Filtrer"></th>
+            <th></th>
+            <th><input [(ngModel)]="filters['rayonMetres']" (ngModelChange)="page=1" placeholder="Filtrer"></th>
+            <th></th>
+            <th></th></tr></thead>
           <tbody>
-            <tr *ngFor="let c of filtres() | paginate:page:pageSize">
+            <tr *ngFor="let c of filtres() | sortBy:sortState | paginate:page:pageSize">
               <td><code>{{ c.id }}</code></td>
               <td><strong>{{ c.nom }}</strong></td>
               <td>{{ c.ville || '—' }}</td>
@@ -37,7 +54,7 @@ import { Chantier, ChantierRequest } from '../core/models';
         </table>
       </div>
       <app-paginator [total]="filtres().length" [page]="page" [pageSize]="pageSize"
-                     (pageChange)="page = $event"></app-paginator>
+                     (pageChange)="page = $event" (pageSizeChange)="pageSize = $event; page = 1"></app-paginator>
     </div></div>
 
     <div class="modal-backdrop" *ngIf="modal" (click)="fermer($event)">
@@ -99,7 +116,8 @@ export class ChantiersComponent implements OnInit {
   chantiers: Chantier[] = [];
   loading = true; saving = false; modal = false;
   page = 1; pageSize = 10;
-  q = ''; editId: number | null = null;
+  filters: ColumnFilters = {}; editId: number | null = null;
+  sortState: SortState = { key: '', dir: 'asc' };
   form: ChantierRequest = { nom: '', rayonMetres: 100 };
   presets = [100, 250, 500, 1000];
 
@@ -128,9 +146,7 @@ export class ChantiersComponent implements OnInit {
   }
 
   filtres(): Chantier[] {
-    const t = this.q.toLowerCase().trim();
-    if (!t) return this.chantiers;
-    return this.chantiers.filter(c => `${c.nom} ${c.ville} ${c.lieu}`.toLowerCase().includes(t));
+    return this.chantiers.filter(c => matchesFilters(c, this.filters));
   }
 
   ouvrir(c?: Chantier): void {
@@ -191,7 +207,7 @@ export class ChantiersComponent implements OnInit {
       this.circle.setRadius(rayon);
     } else {
       this.circle = L.circle([lat, lng], {
-        radius: rayon, color: '#3B2417', fillColor: '#3B2417', fillOpacity: 0.15, weight: 2
+        radius: rayon, color: '#17A2B8', fillColor: '#17A2B8', fillOpacity: 0.15, weight: 2
       }).addTo(this.map);
     }
   }

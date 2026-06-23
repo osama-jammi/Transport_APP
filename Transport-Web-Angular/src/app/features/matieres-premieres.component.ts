@@ -2,14 +2,14 @@ import { Component, OnInit } from '@angular/core';
 import { ToastrService } from 'ngx-toastr';
 import { MatierePremiereService } from '../services/matiere-premiere.service';
 import { CommandeMp, MatierePremiere } from '../core/models';
+import { SortState } from '../shared/sort.pipe';
+import { ColumnFilters, matchesFilters } from '../shared/column-filter';
 
 @Component({
   selector: 'app-matieres-premieres',
   template: `
     <div class="toolbar">
       <span class="badge badge-blue"><i class="fa-solid fa-database"></i> Commandes matières premières (Divalto, lecture seule)</span>
-      <div class="search"><i class="fa-solid fa-magnifying-glass"></i>
-        <input [(ngModel)]="q" (ngModelChange)="page=1" placeholder="Rechercher (n°, affaire, fournisseur, réf)…"></div>
       <button class="btn btn-outline right" (click)="chargerCommandes()" [disabled]="loadingCmd">
         <i class="fa-solid fa-rotate"></i> Actualiser</button>
     </div>
@@ -20,15 +20,26 @@ import { CommandeMp, MatierePremiere } from '../core/models';
         <i class="fa-solid fa-file-invoice"></i> Aucune commande</div>
       <div class="table-wrap" *ngIf="!loadingCmd && commandesFiltrees().length">
         <table>
-          <thead><tr><th>N°</th><th>Date</th><th>Affaire</th><th>Fournisseur</th>
-            <th>Pièce fournisseur</th><th>Votre réf</th><th></th></tr></thead>
+          <thead><tr>
+            <th appSortable="cdno" [(state)]="sortState">N° pièce</th>
+            <th appSortable="date" [(state)]="sortState">Date</th>
+            <th appSortable="projet" [(state)]="sortState">Affaire</th>
+            <th appSortable="tiers" [(state)]="sortState">Fournisseur</th>
+            <th appSortable="reference" [(state)]="sortState">Pièce fournisseur</th>
+            <th></th></tr>
+          <tr class="filtre-row">
+            <th><input [(ngModel)]="filters['cdno']" (ngModelChange)="page=1" placeholder="Filtrer"></th>
+            <th><input [(ngModel)]="filters['date']" (ngModelChange)="page=1" placeholder="Filtrer"></th>
+            <th><input [(ngModel)]="filters['projet']" (ngModelChange)="page=1" placeholder="Filtrer"></th>
+            <th><input [(ngModel)]="filters['tiers']" (ngModelChange)="page=1" placeholder="Filtrer"></th>
+            <th><input [(ngModel)]="filters['reference']" (ngModelChange)="page=1" placeholder="Filtrer"></th>
+            <th></th></tr></thead>
           <tbody>
-            <tr *ngFor="let c of commandesFiltrees() | paginate:page:pageSize" class="row-link" (click)="choisir(c)">
+            <tr *ngFor="let c of commandesFiltrees() | sortBy:sortState | paginate:page:pageSize" class="row-link" (click)="choisir(c)">
               <td><code>{{ c.cdno }}</code></td>
               <td>{{ c.date ? (c.date | date:'dd/MM/yy') : '—' }}</td>
               <td>{{ c.projet || c.marche || '—' }}</td>
               <td>{{ c.tiers || '—' }}</td>
-              <td>{{ c.pieceFournisseur || '—' }}</td>
               <td>{{ c.reference || '—' }}</td>
               <td><button class="btn btn-outline btn-sm" (click)="choisir(c); $event.stopPropagation()">
                 <i class="fa-solid fa-eye"></i> Lignes</button></td>
@@ -37,7 +48,7 @@ import { CommandeMp, MatierePremiere } from '../core/models';
         </table>
       </div>
       <app-paginator [total]="commandesFiltrees().length" [page]="page" [pageSize]="pageSize"
-                     (pageChange)="page = $event"></app-paginator>
+                     (pageChange)="page = $event" (pageSizeChange)="pageSize = $event; page = 1"></app-paginator>
     </div></div>
 
     <!-- Modal des lignes de la commande -->
@@ -48,8 +59,7 @@ import { CommandeMp, MatierePremiere } from '../core/models';
         <div class="m-body">
           <div class="detail-grid">
             <div><span class="dk">Fournisseur</span><span class="dv">{{ selected.tiers || '—' }}</span></div>
-            <div><span class="dk">Pièce fournisseur</span><span class="dv">{{ selected.pieceFournisseur || '—' }}</span></div>
-            <div><span class="dk">Votre réf</span><span class="dv">{{ selected.reference || '—' }}</span></div>
+            <div><span class="dk">Pièce fournisseur</span><span class="dv">{{ selected.reference || '—' }}</span></div>
             <div><span class="dk">Date</span><span class="dv">{{ selected.date ? (selected.date | date:'dd/MM/yy') : '—' }}</span></div>
           </div>
           <div *ngIf="loadingLignes" class="spinner" style="margin:20px auto"></div>
@@ -78,7 +88,8 @@ export class MatieresPremieresComponent implements OnInit {
   commandes: CommandeMp[] = [];
   loadingCmd = false;
   page = 1; pageSize = 10;
-  q = '';
+  filters: ColumnFilters = {};
+  sortState: SortState = { key: '', dir: 'asc' };
   selected: CommandeMp | null = null;
   lignes: MatierePremiere[] = [];
   loadingLignes = false;
@@ -96,11 +107,7 @@ export class MatieresPremieresComponent implements OnInit {
   }
 
   commandesFiltrees(): CommandeMp[] {
-    const t = this.q.toLowerCase().trim();
-    if (!t) return this.commandes;
-    return this.commandes.filter(c =>
-      `${c.cdno} ${c.projet || ''} ${c.marche || ''} ${c.tiers || ''} ${c.pieceFournisseur || ''} ${c.reference || ''}`
-        .toLowerCase().includes(t));
+    return this.commandes.filter(c => matchesFilters(c, this.filters));
   }
 
   choisir(c: CommandeMp): void {

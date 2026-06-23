@@ -100,6 +100,7 @@ public class GapReadService {
         dto.setArticleId(rs.wasNull() ? null : artId);
         dto.setDesignation(rs.getString("designation"));
         dto.setNumPrix(rs.getString("num_prix"));
+        dto.setOrigineArticle(rs.getString("origine_article"));
         dto.setQuantite(rs.getDouble("quantite"));
         dto.setStatutReception(rs.getString("statut_reception"));
         dto.setProjet(rs.getString("projet"));
@@ -300,7 +301,7 @@ public class GapReadService {
 
     /** Articles (lignes detail_livraison) d'un voyage GAP. */
     public List<GapVoyageArticleDTO> getVoyageArticles(Long livraisonId) {
-        String sql = "SELECT dl.id, dl.id_article, a.designation, a.num_prix, dl.quantite, " +
+        String sql = "SELECT dl.id, dl.id_article, a.designation, a.num_prix, a.origine_article, dl.quantite, " +
                 "dl.statut_reception, dl.modifier_le, p.designation AS projet " +
                 "FROM detail_livraison dl " +
                 "LEFT JOIN article    a ON dl.id_article   = a.id " +

@@ -80,6 +80,10 @@ export class VoyageService {
   telechargerBL(id: number): Observable<Blob> {
     return this.http.get(`${this.base}/${id}/bl`, { responseType: 'blob' });
   }
+  /** Génère le bon de livraison PDF (JasperReports) d'un voyage */
+  imprimerBL(id: number): Observable<Blob> {
+    return this.http.get(`${this.base}/${id}/bl/imprimer`, { responseType: 'blob' });
+  }
   archiver(id: number): Observable<void> {
     return this.http.patch<void>(`${this.base}/${id}/archiver`, {});
   }

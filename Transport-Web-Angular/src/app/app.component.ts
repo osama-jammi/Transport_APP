@@ -8,6 +8,7 @@ interface NavItem { path: string; label: string; icon: string; feature?: string;
   selector: 'app-root',
   template: `
     <div class="app-shell">
+      <div class="sidebar-scrim" [class.show]="menuOpen" (click)="menuOpen=false"></div>
       <aside class="sidebar" [class.open]="menuOpen">
         <div class="brand">
           <i class="fa-solid fa-truck-fast"></i>
@@ -31,7 +32,7 @@ interface NavItem { path: string; label: string; icon: string; feature?: string;
       <div class="main">
         <header class="topbar">
           <div class="flex">
-            <button class="btn btn-ghost" style="display:none" (click)="menuOpen=!menuOpen">
+            <button class="burger" (click)="menuOpen=!menuOpen" aria-label="Menu">
               <i class="fa-solid fa-bars"></i>
             </button>
             <span class="page-title">Administration Transport-Livraison</span>
@@ -70,7 +71,7 @@ export class AppComponent implements OnInit {
   navRef: NavItem[] = [
     { path: '/flotte',     label: 'Flotte',     icon: 'fa-truck' },
     { path: '/chantiers',  label: 'Chantiers',  icon: 'fa-helmet-safety' },
-    { path: '/articles',   label: 'Articles',   icon: 'fa-boxes-stacked' },
+    { path: '/articles',   label: 'Ordre de fabrication', icon: 'fa-boxes-stacked' },
     { path: '/matieres-premieres', label: 'Matières premières', icon: 'fa-cubes' },
     { path: '/depots',     label: 'Dépôt',      icon: 'fa-warehouse' },
     { path: '/administration', label: 'Administration', icon: 'fa-sliders' }

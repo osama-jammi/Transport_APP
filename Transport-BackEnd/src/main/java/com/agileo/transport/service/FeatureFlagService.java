@@ -28,6 +28,7 @@ public class FeatureFlagService {
         put("suivi-trajets", "Suivi des trajets (carte + GPS chauffeurs)");
         put("cloture-mp", "Clôture des matières premières");
         put("historique-voyages", "Historique des voyages");
+        put("voyage-nouvelle-saisie", "Nouvelle saisie des voyages (Ordre de fabrication repliable, ng-select)");
     }};
 
     /** Fonctionnalités obsolètes à supprimer au démarrage (fusionnées ailleurs). */
