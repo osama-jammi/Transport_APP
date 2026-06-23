@@ -32,8 +32,8 @@ function rgba(hex: string, a: number): string {
 }
 
 export const THEMES: ThemePalette[] = [
-  { cle: 'bleu',   nom: 'Bleu',   apercu: '#2563EB',
-    vars: palette('#2563EB', '#1D4ED8', '#E5EDFD', '#3B82F6', '#2563EB', '#2563EB', '#1E40AF') },
+  { cle: 'bleu',   nom: 'Indigo', apercu: '#525CE5',
+    vars: palette('#525CE5', '#3F48C4', '#ECEDFB', '#6D75EA', '#525CE5', '#525CE5', '#3A43B5') },
   { cle: 'teal',   nom: 'Teal',   apercu: '#17A2B8',
     vars: palette('#17A2B8', '#0F7A8B', '#E3F4F6', '#00B5AD', '#0A8F88', '#17A2B8', '#0E7C8B') },
   { cle: 'vert',   nom: 'Vert',   apercu: '#059669',
