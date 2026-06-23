@@ -38,6 +38,12 @@ export const THEMES: ThemePalette[] = [
     vars: palette('#17A2B8', '#0F7A8B', '#E3F4F6', '#00B5AD', '#0A8F88', '#17A2B8', '#0E7C8B') },
   { cle: 'vert',   nom: 'Vert',   apercu: '#059669',
     vars: palette('#059669', '#047857', '#D1FAE5', '#10B981', '#059669', '#059669', '#065F46') },
+  { cle: 'azur',   nom: 'Bleu',   apercu: '#2563EB',
+    vars: palette('#2563EB', '#1D4ED8', '#E5EDFD', '#3B82F6', '#2563EB', '#2563EB', '#1E40AF') },
+  { cle: 'violet', nom: 'Violet', apercu: '#7C3AED',
+    vars: palette('#7C3AED', '#6D28D9', '#EDE7FB', '#8B5CF6', '#7C3AED', '#7C3AED', '#5B21B6') },
+  { cle: 'ambre',  nom: 'Ambre',  apercu: '#D97706',
+    vars: palette('#D97706', '#B45309', '#FCEFD6', '#F59E0B', '#D97706', '#D97706', '#92400E') },
 ];
 
 const STORAGE_KEY = 'transport-theme';
