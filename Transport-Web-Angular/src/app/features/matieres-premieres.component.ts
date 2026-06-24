@@ -3,7 +3,7 @@ import { ToastrService } from 'ngx-toastr';
 import { MatierePremiereService } from '../services/matiere-premiere.service';
 import { CommandeMp, MatierePremiere } from '../core/models';
 import { SortState } from '../shared/sort.pipe';
-import { matchesSearch } from '../shared/column-filter';
+import { matchesSearch, matchesFilters, ColumnFilters } from '../shared/column-filter';
 
 @Component({
   selector: 'app-matieres-premieres',
@@ -12,6 +12,9 @@ import { matchesSearch } from '../shared/column-filter';
       <span class="badge badge-blue"><i class="fa-solid fa-database"></i> Commandes matières premières (Divalto, lecture seule)</span>
       <div class="search"><i class="fa-solid fa-magnifying-glass"></i>
         <input [(ngModel)]="q" (ngModelChange)="page=1" placeholder="Rechercher (n°, affaire, fournisseur, réf)…"></div>
+      <button class="btn" [ngClass]="filtresUI ? 'btn-primary' : 'btn-outline'" (click)="basculerFiltres()"
+              title="Filtrer par colonne">
+        <i class="fa-solid fa-filter"></i> Filtres</button>
       <button class="btn btn-outline right" (click)="chargerCommandes()" [disabled]="loadingCmd">
         <i class="fa-solid fa-rotate"></i> Actualiser</button>
     </div>
@@ -22,13 +25,23 @@ import { matchesSearch } from '../shared/column-filter';
         <i class="fa-solid fa-file-invoice"></i> Aucune commande</div>
       <div class="table-wrap" *ngIf="!loadingCmd && commandesFiltrees().length">
         <table>
-          <thead><tr>
+          <thead>
+            <tr>
             <th appSortable="cdno" [(state)]="sortState">N° pièce</th>
             <th appSortable="date" [(state)]="sortState">Date</th>
             <th appSortable="projet" [(state)]="sortState">Affaire</th>
             <th appSortable="tiers" [(state)]="sortState">Fournisseur</th>
             <th appSortable="reference" [(state)]="sortState">Pièce fournisseur</th>
-            <th></th></tr></thead>
+            <th></th></tr>
+            <tr class="col-filter-row" *ngIf="filtresUI">
+              <th appColFilter="cdno" [filters]="colF" (filterChange)="page=1" placeholder="N°"></th>
+              <th appColFilter="date" [filters]="colF" (filterChange)="page=1" placeholder="AAAA-MM-JJ"></th>
+              <th appColFilter="projet" [filters]="colF" (filterChange)="page=1" placeholder="Affaire"></th>
+              <th appColFilter="tiers" [filters]="colF" (filterChange)="page=1" placeholder="Fournisseur"></th>
+              <th appColFilter="reference" [filters]="colF" (filterChange)="page=1" placeholder="Pièce"></th>
+              <th></th>
+            </tr>
+          </thead>
           <tbody>
             <tr *ngFor="let c of commandesFiltrees() | sortBy:sortState | paginate:page:pageSize" class="row-link" (click)="choisir(c)">
               <td><code>{{ c.cdno }}</code></td>
@@ -84,6 +97,8 @@ export class MatieresPremieresComponent implements OnInit {
   loadingCmd = false;
   page = 1; pageSize = 10;
   q = '';
+  filtresUI = false;
+  colF: ColumnFilters = {};
   sortState: SortState = { key: '', dir: 'asc' };
   selected: CommandeMp | null = null;
   lignes: MatierePremiere[] = [];
@@ -102,7 +117,13 @@ export class MatieresPremieresComponent implements OnInit {
   }
 
   commandesFiltrees(): CommandeMp[] {
-    return this.commandes.filter(c => matchesSearch(c, this.q));
+    return this.commandes.filter(c => matchesSearch(c, this.q) && matchesFilters(c, this.colF));
+  }
+
+  /** Affiche/masque la ligne de filtres par colonne (et réinitialise à la fermeture). */
+  basculerFiltres(): void {
+    this.filtresUI = !this.filtresUI;
+    if (!this.filtresUI) { this.colF = {}; this.page = 1; }
   }
 
   choisir(c: CommandeMp): void {

@@ -4,7 +4,7 @@ import * as L from 'leaflet';
 import { ChantierService } from '../services/chantier.service';
 import { Chantier, ChantierRequest } from '../core/models';
 import { SortState } from '../shared/sort.pipe';
-import { matchesSearch } from '../shared/column-filter';
+import { matchesSearch, matchesFilters, ColumnFilters } from '../shared/column-filter';
 
 @Component({
   selector: 'app-chantiers',
@@ -12,6 +12,9 @@ import { matchesSearch } from '../shared/column-filter';
     <div class="toolbar">
       <div class="search"><i class="fa-solid fa-magnifying-glass"></i>
         <input [(ngModel)]="q" (ngModelChange)="page=1" placeholder="Rechercher un chantier…"></div>
+      <button class="btn" [ngClass]="filtresUI ? 'btn-primary' : 'btn-outline'" (click)="basculerFiltres()"
+              title="Filtrer par colonne">
+        <i class="fa-solid fa-filter"></i> Filtres</button>
       <button class="btn btn-primary right" (click)="ouvrir()">
         <i class="fa-solid fa-plus"></i> Nouveau chantier</button>
     </div>
@@ -21,7 +24,8 @@ import { matchesSearch } from '../shared/column-filter';
       <div *ngIf="!loading && filtres().length===0" class="empty"><i class="fa-solid fa-helmet-safety"></i> Aucun chantier</div>
       <div class="table-wrap" *ngIf="!loading && filtres().length">
         <table>
-          <thead><tr>
+          <thead>
+            <tr>
             <th appSortable="id" [(state)]="sortState">ID</th>
             <th appSortable="nom" [(state)]="sortState">Nom</th>
             <th appSortable="ville" [(state)]="sortState">Ville</th>
@@ -29,7 +33,18 @@ import { matchesSearch } from '../shared/column-filter';
             <th>Coordonnées</th>
             <th appSortable="rayonMetres" [(state)]="sortState">Zone</th>
             <th appSortable="actif" [(state)]="sortState">Statut</th>
-            <th>Actions</th></tr></thead>
+            <th>Actions</th></tr>
+            <tr class="col-filter-row" *ngIf="filtresUI">
+              <th appColFilter="id" [filters]="colF" (filterChange)="page=1" placeholder="ID"></th>
+              <th appColFilter="nom" [filters]="colF" (filterChange)="page=1" placeholder="Nom"></th>
+              <th appColFilter="ville" [filters]="colF" (filterChange)="page=1" placeholder="Ville"></th>
+              <th appColFilter="lieu" [filters]="colF" (filterChange)="page=1" placeholder="Lieu"></th>
+              <th></th>
+              <th appColFilter="rayonMetres" [filters]="colF" (filterChange)="page=1" placeholder="m"></th>
+              <th></th>
+              <th></th>
+            </tr>
+          </thead>
           <tbody>
             <tr *ngFor="let c of filtres() | sortBy:sortState | paginate:page:pageSize">
               <td><code>{{ c.id }}</code></td>
@@ -110,6 +125,8 @@ export class ChantiersComponent implements OnInit {
   loading = true; saving = false; modal = false;
   page = 1; pageSize = 10;
   q = ''; editId: number | null = null;
+  filtresUI = false;
+  colF: ColumnFilters = {};
   sortState: SortState = { key: '', dir: 'asc' };
   form: ChantierRequest = { nom: '', rayonMetres: 100 };
   presets = [100, 250, 500, 1000];
@@ -139,7 +156,13 @@ export class ChantiersComponent implements OnInit {
   }
 
   filtres(): Chantier[] {
-    return this.chantiers.filter(c => matchesSearch(c, this.q));
+    return this.chantiers.filter(c => matchesSearch(c, this.q) && matchesFilters(c, this.colF));
+  }
+
+  /** Affiche/masque la ligne de filtres par colonne (et réinitialise à la fermeture). */
+  basculerFiltres(): void {
+    this.filtresUI = !this.filtresUI;
+    if (!this.filtresUI) { this.colF = {}; this.page = 1; }
   }
 
   ouvrir(c?: Chantier): void {

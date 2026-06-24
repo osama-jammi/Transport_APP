@@ -79,7 +79,8 @@ h4 { margin: 0; }
 .app-shell { display: flex; min-height: 100vh; }
 .sidebar {
   width: 244px;
-  background: linear-gradient(170deg, #17A2B8 0%, #128699 48%, #0C6A78 100%);
+  /* Couleur pilotée par le thème choisi dans Administration (var --sidebar-bg / --sidebar-bg2) */
+  background: linear-gradient(170deg, var(--sidebar-bg) 0%, var(--sidebar-bg2) 100%);
   color: #EAF8FA;
   display: flex; flex-direction: column; position: fixed; inset: 0 auto 0 0;
   height: 100vh; z-index: 50; overflow: hidden;

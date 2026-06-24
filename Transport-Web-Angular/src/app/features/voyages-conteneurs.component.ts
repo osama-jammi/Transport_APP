@@ -15,7 +15,7 @@ import {
   CommandeMp, GapVoyageArticle, MatierePremiere, TrajetVoyage, Depot
 } from '../core/models';
 import { SortState } from '../shared/sort.pipe';
-import { matchesSearch } from '../shared/column-filter';
+import { matchesSearch, matchesFilters, ColumnFilters } from '../shared/column-filter';
 import * as L from 'leaflet';
 
 /** Une ligne du voyage : un chantier, une date, et soit des livraisons (articles) soit des MP. */
@@ -30,6 +30,10 @@ interface VoyageLigne {
   dechargementHeure?: string;
   type: 'ARTICLE' | 'MATIERE_PREMIERE';
   selectedLiv: Record<number, boolean>;
+  /** OF disponibles du chantier (référence stable pour le ng-select / la table). */
+  livrDispo?: GapVoyage[];
+  /** Ids des OF sélectionnés (modèle stable du ng-select multiple). */
+  selLivIds?: number[];
   commandes: CommandeMp[];
   commandeId?: number;
   lignesMp: MatierePremiere[];
@@ -53,6 +57,9 @@ interface VoyageLigne {
       </select>
       <div class="search"><i class="fa-solid fa-magnifying-glass"></i>
         <input [(ngModel)]="q" (ngModelChange)="page=1" placeholder="Rechercher (chauffeur, statut)…"></div>
+      <button class="btn" [ngClass]="filtresUI ? 'btn-primary' : 'btn-outline'" (click)="basculerFiltres()"
+              title="Filtrer par colonne">
+        <i class="fa-solid fa-filter"></i> Filtres</button>
       <button class="btn btn-primary right" (click)="ouvrir()">
         <i class="fa-solid fa-plus"></i> Nouveau voyage
       </button>
@@ -65,14 +72,25 @@ interface VoyageLigne {
       </div>
       <div class="table-wrap" *ngIf="!loading && voyagesFiltres().length">
         <table>
-          <thead><tr>
+          <thead>
+            <tr>
             <th appSortable="id" [(state)]="sortState">ID</th>
             <th appSortable="dateVoyage" [(state)]="sortState">Date</th>
             <th appSortable="chauffeur" [(state)]="sortState">Chauffeur</th>
             <th appSortable="nbLivraisons" [(state)]="sortState">Livraisons</th>
             <th appSortable="nbMatieres" [(state)]="sortState">Mat. premières</th>
             <th appSortable="statut" [(state)]="sortState">Statut</th>
-            <th></th></tr></thead>
+            <th></th></tr>
+            <tr class="col-filter-row" *ngIf="filtresUI">
+              <th appColFilter="id" [filters]="colF" (filterChange)="page=1" placeholder="ID"></th>
+              <th appColFilter="dateVoyage" [filters]="colF" (filterChange)="page=1" placeholder="AAAA-MM-JJ"></th>
+              <th appColFilter="chauffeur" [filters]="colF" (filterChange)="page=1" placeholder="Chauffeur"></th>
+              <th appColFilter="nbLivraisons" [filters]="colF" (filterChange)="page=1" placeholder="Nb"></th>
+              <th appColFilter="nbMatieres" [filters]="colF" (filterChange)="page=1" placeholder="Nb"></th>
+              <th appColFilter="statut" [filters]="colF" (filterChange)="page=1" placeholder="Statut"></th>
+              <th></th>
+            </tr>
+          </thead>
           <tbody>
             <tr *ngFor="let v of voyagesFiltres() | sortBy:sortState | paginate:page:pageSize">
               <td><code>#{{ v.id }}</code></td>
@@ -105,7 +123,7 @@ interface VoyageLigne {
 
     <!-- Modal créer / gérer un voyage -->
     <div class="modal-backdrop" *ngIf="modal" (click)="fermer($event)">
-      <div class="modal" style="max-width:1040px" (click)="$event.stopPropagation()">
+      <div class="modal" style="max-width:min(1280px,96vw)" (click)="$event.stopPropagation()">
         <div class="m-head"><h3>{{ editId ? 'Voyage #' + editId : 'Nouveau voyage' }}</h3>
           <button class="x" (click)="modal=false">&times;</button></div>
         <div class="m-body">
@@ -250,16 +268,16 @@ interface VoyageLigne {
 
     <!-- Modal AJOUT d'une ligne (nouvelle saisie) -->
     <div class="modal-backdrop" *ngIf="ligneModal && ligneDraft" (click)="fermerLigneModal($event)" style="z-index:1100">
-      <div class="modal" style="max-width:860px" (click)="$event.stopPropagation()">
+      <div class="modal" style="max-width:min(1100px,96vw)" (click)="$event.stopPropagation()">
         <div class="m-head"><h3>{{ ligneEditIndex===null ? 'Ajouter une ligne' : 'Modifier la ligne' }}</h3>
           <button class="x" (click)="ligneModal=false">&times;</button></div>
         <div class="m-body">
           <div class="field"><label>Chantier *</label>
-            <ng-select [items]="chantiers" bindValue="id" [(ngModel)]="ligneDraft.chantierId"
-                       (change)="onDraftChantier()" [searchable]="true" placeholder="Rechercher un chantier"
-                       notFoundText="Aucun chantier">
+            <ng-select [items]="chantiers" bindValue="id" bindLabel="nom" [(ngModel)]="ligneDraft.chantierId"
+                       (change)="onDraftChantier()" [searchable]="true" [searchFn]="rechercheChantier"
+                       placeholder="Rechercher un chantier (nom, ville, code)" notFoundText="Aucun chantier">
               <ng-template ng-label-tmp let-item="item">{{ item.nom }}<span *ngIf="item.ville" class="muted"> — {{ item.ville }}</span></ng-template>
-              <ng-template ng-option-tmp let-item="item">{{ item.nom }}<span *ngIf="item.ville" class="muted"> — {{ item.ville }}</span></ng-template>
+              <ng-template ng-option-tmp let-item="item">{{ item.nom }}<span *ngIf="item.ville" class="muted"> — {{ item.ville }}</span><span *ngIf="item.code" class="muted"> · {{ item.code }}</span></ng-template>
             </ng-select>
           </div>
           <div class="form-grid">
@@ -272,42 +290,76 @@ interface VoyageLigne {
           <div *ngIf="!ligneDraft.chantierId" class="muted" style="font-size:12px;padding:8px">Choisissez d'abord un chantier.</div>
 
           <div *ngIf="ligneDraft.chantierId">
-            <input class="filtre-input" [(ngModel)]="ligneDraft.filtreContenu"
-                   placeholder="🔍 Rechercher (désignation, réf, #livraison)…" style="margin:8px 0">
-
-            <h5 class="ligne-section"><i class="fa-solid fa-boxes-stacked"></i> Ordre de fabrication
+            <!-- ═══ Ordre de fabrication : clic sur l'entête → table + ng-select ═══ -->
+            <h5 class="ligne-section clic" (click)="ligneDraft.ofOuvert = !ligneDraft.ofOuvert">
+              <i class="fa-solid" [ngClass]="ligneDraft.ofOuvert ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
+              <i class="fa-solid fa-boxes-stacked"></i> Ordre de fabrication
               <span class="muted">({{ selectedLivCount(ligneDraft) }} sélectionné(s))</span></h5>
-            <div class="art-list full">
-              <div *ngIf="livraisonsDuChantier(ligneDraft).length===0" class="muted" style="font-size:12px;padding:8px">Aucune livraison pour ce chantier.</div>
-              <label class="art-item" *ngFor="let l of livraisonsDuChantier(ligneDraft)" [class.checked]="ligneDraft.selectedLiv[l.id]">
-                <input type="checkbox" [(ngModel)]="ligneDraft.selectedLiv[l.id]">
-                <div class="art-info"><strong>#{{ l.id }}</strong>
-                  <span class="muted">{{ l.nbArticles }} article(s) · {{ l.statutReception || '—' }}</span></div>
-              </label>
+            <div *ngIf="ligneDraft.ofOuvert">
+              <ng-select [items]="ligneDraft.livrDispo || []" bindValue="id" [multiple]="true"
+                         [closeOnSelect]="false" [searchFn]="rechercheLivraison"
+                         [ngModel]="ligneDraft.selLivIds || []" (ngModelChange)="onSelLivChange(ligneDraft, $event)"
+                         placeholder="Sélectionner un ou plusieurs ordres de fabrication"
+                         notFoundText="Aucun ordre de fabrication" clearAllText="Effacer" style="margin-bottom:8px">
+                <ng-template ng-label-tmp let-item="item">#{{ item.id }}</ng-template>
+                <ng-template ng-option-tmp let-item="item">
+                  #{{ item.id }} — {{ item.nbArticles }} article(s)<span class="muted"> · {{ item.statutReception || '—' }}</span></ng-template>
+              </ng-select>
+              <div *ngIf="!(ligneDraft.livrDispo?.length)" class="muted" style="font-size:12px;padding:8px">
+                Aucun ordre de fabrication pour ce chantier.</div>
+              <div class="table-wrap pick-table" *ngIf="ligneDraft.livrDispo?.length">
+                <table>
+                  <thead><tr><th style="width:38px"></th><th>N° OF</th><th>Articles</th><th>Statut</th></tr></thead>
+                  <tbody>
+                    <tr *ngFor="let l of ligneDraft.livrDispo" class="row-link"
+                        [class.row-active]="ligneDraft.selectedLiv[l.id]" (click)="toggleLiv(ligneDraft, l.id)">
+                      <td (click)="$event.stopPropagation()"><input type="checkbox"
+                          [checked]="!!ligneDraft.selectedLiv[l.id]" (change)="toggleLiv(ligneDraft, l.id)"></td>
+                      <td><code>#{{ l.id }}</code></td>
+                      <td>{{ l.nbArticles }}</td>
+                      <td><span class="badge badge-gray">{{ l.statutReception || '—' }}</span></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
 
-            <h5 class="ligne-section"><i class="fa-solid fa-cubes"></i> Matières premières
+            <!-- ═══ Matières premières : clic sur l'entête → commande (ng-select) + table ═══ -->
+            <h5 class="ligne-section clic" (click)="ligneDraft.mpOuvert = !ligneDraft.mpOuvert">
+              <i class="fa-solid" [ngClass]="ligneDraft.mpOuvert ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
+              <i class="fa-solid fa-cubes"></i> Matières premières
               <span class="muted">({{ selectedMpCount(ligneDraft) }} sélectionnée(s))</span></h5>
-            <div class="field" style="margin-bottom:8px"><label>Commande</label>
-              <ng-select [items]="ligneDraft.commandes" bindValue="cdno" [(ngModel)]="ligneDraft.commandeId"
-                         (change)="chargerLignesMp(ligneDraft)" [searchable]="true" [clearable]="true" [searchFn]="rechercheCommande"
-                         placeholder="Choisir une commande" notFoundText="Aucune commande" clearAllText="Effacer">
-                <ng-template ng-label-tmp let-item="item">
-                  #{{ item.cdno }}<span *ngIf="item.tiers"> · {{ item.tiers }}</span></ng-template>
-                <ng-template ng-option-tmp let-item="item">
-                  #{{ item.cdno }}<span *ngIf="item.tiers"> · {{ item.tiers }}</span><span *ngIf="item.pieceFournisseur" class="muted"> · {{ item.pieceFournisseur }}</span></ng-template>
-              </ng-select>
-            </div>
-            <div *ngIf="ligneDraft.loadingMp" class="spinner" style="margin:12px auto"></div>
-            <div class="art-list full" *ngIf="ligneDraft.commandeId && !ligneDraft.loadingMp">
-              <div *ngIf="lignesMpFiltrees(ligneDraft).length===0" class="muted" style="font-size:12px;padding:8px">Aucune ligne.</div>
-              <div class="art-item" *ngFor="let m of lignesMpFiltrees(ligneDraft)" [class.checked]="ligneDraft.selectedMp[m.reference||'']">
-                <input type="checkbox" [(ngModel)]="ligneDraft.selectedMp[m.reference||'']" (change)="onToggleMp(ligneDraft, m)">
-                <div class="art-info"><strong>{{ m.designation || m.reference }}</strong>
-                  <span class="muted">{{ m.reference }} · dispo {{ m.quantite ?? '—' }}</span></div>
-                <input *ngIf="ligneDraft.selectedMp[m.reference||'']" type="number" min="1" step="any" class="qte-input"
-                       [(ngModel)]="ligneDraft.qteMp[m.reference||'']" placeholder="Qté">
+            <div *ngIf="ligneDraft.mpOuvert">
+              <div class="field" style="margin-bottom:8px"><label>Commande</label>
+                <ng-select [items]="ligneDraft.commandes" bindValue="cdno" [(ngModel)]="ligneDraft.commandeId"
+                           (change)="chargerLignesMp(ligneDraft)" [searchable]="true" [clearable]="true" [searchFn]="rechercheCommande"
+                           placeholder="Choisir une commande" notFoundText="Aucune commande" clearAllText="Effacer">
+                  <ng-template ng-label-tmp let-item="item">
+                    #{{ item.cdno }}<span *ngIf="item.tiers"> · {{ item.tiers }}</span></ng-template>
+                  <ng-template ng-option-tmp let-item="item">
+                    #{{ item.cdno }}<span *ngIf="item.tiers"> · {{ item.tiers }}</span><span *ngIf="item.pieceFournisseur" class="muted"> · {{ item.pieceFournisseur }}</span></ng-template>
+                </ng-select>
               </div>
+              <input *ngIf="ligneDraft.commandeId && !ligneDraft.loadingMp" class="filtre-input"
+                     [(ngModel)]="ligneDraft.filtreLignesMp" placeholder="🔍 Filtrer les lignes (désignation, réf)…">
+              <div *ngIf="ligneDraft.loadingMp" class="spinner" style="margin:12px auto"></div>
+              <div class="table-wrap pick-table" *ngIf="ligneDraft.commandeId && !ligneDraft.loadingMp && lignesMpFiltrees(ligneDraft).length">
+                <table>
+                  <thead><tr><th style="width:38px"></th><th>Désignation</th><th>Référence</th><th>Dispo</th><th style="width:90px">Qté</th></tr></thead>
+                  <tbody>
+                    <tr *ngFor="let m of lignesMpFiltrees(ligneDraft)" [class.row-active]="ligneDraft.selectedMp[m.reference||'']">
+                      <td><input type="checkbox" [(ngModel)]="ligneDraft.selectedMp[m.reference||'']" (change)="onToggleMp(ligneDraft, m)"></td>
+                      <td><strong>{{ m.designation || m.reference }}</strong></td>
+                      <td><code>{{ m.reference }}</code></td>
+                      <td>{{ m.quantite ?? '—' }}</td>
+                      <td><input *ngIf="ligneDraft.selectedMp[m.reference||'']" type="number" min="1" step="any" class="qte-input"
+                                 [(ngModel)]="ligneDraft.qteMp[m.reference||'']" placeholder="Qté"></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div *ngIf="ligneDraft.commandeId && !ligneDraft.loadingMp && lignesMpFiltrees(ligneDraft).length===0"
+                   class="muted" style="font-size:12px;padding:8px">Aucune ligne.</div>
             </div>
           </div>
         </div>
@@ -315,6 +367,70 @@ interface VoyageLigne {
           <button class="btn btn-outline" (click)="ligneModal=false">Annuler</button>
           <button class="btn btn-primary" (click)="validerLigne()" [disabled]="!ligneDraft.chantierId">
             <i class="fa-solid fa-check"></i> {{ ligneEditIndex===null ? 'Ajouter la ligne' : 'Enregistrer la ligne' }}</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════ Modal RÉCAPITULATIF avant enregistrement ════════ -->
+    <div class="modal-backdrop" *ngIf="recap" (click)="fermerRecap($event)" style="z-index:1200">
+      <div class="modal" style="max-width:min(820px,96vw)" (click)="$event.stopPropagation()">
+        <div class="m-head"><h3><i class="fa-solid fa-clipboard-check"></i> Récapitulatif du voyage</h3>
+          <button class="x" (click)="recap=false">&times;</button></div>
+        <div class="m-body">
+          <p class="muted" style="margin:0 0 12px;font-size:12px">
+            <i class="fa-solid fa-circle-info"></i> Vérifiez le détail ci-dessous puis confirmez l'enregistrement.
+          </p>
+          <div class="detail-grid">
+            <div><span class="dk">Chauffeur</span><span class="dv">{{ filtreChauffeur || '—' }}</span></div>
+            <div><span class="dk">Local de départ</span><span class="dv">{{ form.localNom || '—' }}</span></div>
+            <div><span class="dk">Lignes</span><span class="dv">{{ lignes.length }}</span></div>
+          </div>
+
+          <h4 class="art-title">Lignes du voyage ({{ lignes.length }})</h4>
+          <div *ngIf="lignes.length===0" class="empty" style="padding:16px">
+            <i class="fa-solid fa-layer-group"></i> Aucune ligne ajoutée</div>
+
+          <div *ngFor="let lg of lignes; let i = index" class="card" style="margin-bottom:12px">
+            <div class="card-body">
+              <strong>{{ lg.filtreChantier || ('Ligne ' + (i + 1)) }}</strong>
+              <div class="muted" style="font-size:12px;margin:2px 0 8px">
+                <span *ngIf="lg.chargementJour">Chargement {{ lg.chargementJour }} {{ lg.chargementHeure || '' }}</span>
+                <span *ngIf="lg.dechargementJour"> · Déchargement {{ lg.dechargementJour }} {{ lg.dechargementHeure || '' }}</span>
+                <span *ngIf="!lg.chargementJour && !lg.dechargementJour">Aucune date planifiée</span>
+              </div>
+
+              <div *ngIf="selectedLivCount(lg)" style="margin-bottom:8px">
+                <span class="dk">Ordres de fabrication ({{ selectedLivCount(lg) }})</span>
+                <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">
+                  <span class="badge badge-gray" *ngFor="let id of selectedLivArray(lg)">#{{ id }}</span>
+                </div>
+              </div>
+
+              <div *ngIf="selectedMpCount(lg)">
+                <span class="dk">Matières premières ({{ selectedMpCount(lg) }})</span>
+                <div class="table-wrap" style="margin-top:4px">
+                  <table>
+                    <thead><tr><th>Désignation</th><th>Référence</th><th>Qté</th></tr></thead>
+                    <tbody>
+                      <tr *ngFor="let m of selectedMpLignes(lg)">
+                        <td><strong>{{ m.designation || m.reference }}</strong></td>
+                        <td><code>{{ m.reference }}</code></td>
+                        <td>{{ lg.qteMp[m.reference || ''] || 1 }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div *ngIf="!selectedLivCount(lg) && !selectedMpCount(lg)" class="muted" style="font-size:12px">
+                Aucun ordre de fabrication ni matière première sélectionné.</div>
+            </div>
+          </div>
+        </div>
+        <div class="m-foot">
+          <button class="btn btn-outline" (click)="recap=false"><i class="fa-solid fa-arrow-left"></i> Retour</button>
+          <button class="btn btn-primary" (click)="confirmerEnregistrement()" [disabled]="saving">
+            <i class="fa-solid fa-floppy-disk"></i> Confirmer et enregistrer</button>
         </div>
       </div>
     </div>
@@ -499,6 +615,12 @@ interface VoyageLigne {
     /* Lignes de commande (MP) : une par rangée, pleine largeur, désignation sur plusieurs lignes */
     .art-list.full { grid-template-columns: 1fr; max-height: 320px; }
     .art-list.full .art-info strong { white-space: normal; }
+    /* Tables de sélection (OF / MP) dans la modale d'ajout de ligne */
+    .pick-table { max-height: 300px; overflow-y: auto; margin-top: 6px; }
+    .pick-table tr.row-link { cursor: pointer; }
+    .pick-table tr.row-active { background: var(--primary-light); }
+    .pick-table .qte-input { width: 90px; min-width: 90px; flex: none; }
+    .pick-table input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent); }
   `]
 })
 export class VoyagesConteneursComponent implements OnInit {
@@ -508,6 +630,8 @@ export class VoyagesConteneursComponent implements OnInit {
   q = '';
   sortState: SortState = { key: '', dir: 'asc' };
   vue: 'en-cours' | 'archives' | 'historique' = 'en-cours';
+  filtresUI = false;
+  colF: ColumnFilters = {};
   modal = false; saving = false;
   editId: number | null = null;
 
@@ -531,9 +655,22 @@ export class VoyagesConteneursComponent implements OnInit {
     return `${item.cdno} ${item.tiers || ''} ${item.pieceFournisseur || ''} ${item.reference || ''} ${item.marche || ''}`
       .toLowerCase().includes(t);
   };
+  /** Recherche ng-select pour le choix d'un chantier (nom, ville, code). */
+  rechercheChantier = (term: string, item: Chantier): boolean => {
+    const t = (term || '').toLowerCase();
+    return `${item.nom || ''} ${item.ville || ''} ${item.code || ''}`.toLowerCase().includes(t);
+  };
+  /** Recherche ng-select pour le choix d'un ordre de fabrication (#OF, chantier, statut). */
+  rechercheLivraison = (term: string, item: GapVoyage): boolean => {
+    const t = (term || '').toLowerCase();
+    return `#${item.id} ${item.projetDesignation || ''} ${item.statutReception || ''}`.toLowerCase().includes(t);
+  };
   form: { localNom?: string; localLat?: number; localLng?: number; localRayon?: number } = {};
   depots: Depot[] = [];
   depotId?: number;
+
+  // Récapitulatif avant enregistrement
+  recap = false;
 
   // Détail (consultation)
   detail: VoyageConteneur | null = null;
@@ -569,9 +706,15 @@ export class VoyagesConteneursComponent implements OnInit {
     });
   }
 
-  /** Voyages filtrés par la recherche (chauffeur, statut, id). */
+  /** Voyages filtrés par la recherche globale ET les filtres par colonne. */
   voyagesFiltres(): VoyageConteneur[] {
-    return this.voyages.filter(v => matchesSearch(v, this.q));
+    return this.voyages.filter(v => matchesSearch(v, this.q) && matchesFilters(v, this.colF));
+  }
+
+  /** Affiche/masque la ligne de filtres par colonne (et réinitialise à la fermeture). */
+  basculerFiltres(): void {
+    this.filtresUI = !this.filtresUI;
+    if (!this.filtresUI) { this.colF = {}; this.page = 1; }
   }
 
   charger(): void {
@@ -689,7 +832,7 @@ export class VoyagesConteneursComponent implements OnInit {
   nouvelleLigne(): VoyageLigne {
     return {
       filtreChantier: '', comboOpen: false, type: 'ARTICLE',
-      selectedLiv: {}, commandes: [], lignesMp: [], loadingMp: false,
+      selectedLiv: {}, livrDispo: [], selLivIds: [], commandes: [], lignesMp: [], loadingMp: false,
       selectedMp: {}, qteMp: {}, filtreContenu: '', filtreLignesMp: ''
     };
   }
@@ -701,6 +844,12 @@ export class VoyagesConteneursComponent implements OnInit {
   /** Édite une ligne existante : travaille sur une copie (annulable). */
   modifierLigne(i: number): void {
     this.ligneDraft = JSON.parse(JSON.stringify(this.lignes[i])) as VoyageLigne;
+    // Recalcule la liste des OF disponibles + le modèle du ng-select (références stables).
+    this.majLivrDispo(this.ligneDraft);
+    this.syncSelLivIds(this.ligneDraft);
+    // Déplie d'emblée les sections qui contiennent déjà une sélection.
+    this.ligneDraft.ofOuvert = this.ligneDraft.ofOuvert || this.selectedLivCount(this.ligneDraft) > 0;
+    this.ligneDraft.mpOuvert = this.ligneDraft.mpOuvert || this.selectedMpCount(this.ligneDraft) > 0;
     this.ligneEditIndex = i;
     this.ligneModal = true;
   }
@@ -711,7 +860,8 @@ export class VoyagesConteneursComponent implements OnInit {
     if (!lg) return;
     const ch = this.chantiers.find(c => c.id === lg.chantierId);
     if (ch) { lg.chantierCode = ch.code; lg.filtreChantier = ch.nom + (ch.ville ? ` — ${ch.ville}` : ''); }
-    lg.selectedLiv = {}; lg.commandes = []; lg.commandeId = undefined; lg.lignesMp = []; lg.selectedMp = {}; lg.qteMp = {};
+    lg.selectedLiv = {}; lg.selLivIds = []; lg.commandes = []; lg.commandeId = undefined; lg.lignesMp = []; lg.selectedMp = {}; lg.qteMp = {};
+    this.majLivrDispo(lg);
     if (lg.chantierId) this.chargerCommandes(lg);
   }
   /** Valide la modale : ajoute la nouvelle ligne ou remplace celle en cours d'édition. */
@@ -774,9 +924,39 @@ export class VoyagesConteneursComponent implements OnInit {
   selectedLivCount(lg: VoyageLigne): number {
     return Object.keys(lg.selectedLiv).filter(k => lg.selectedLiv[+k]).length;
   }
+  /** Ids des ordres de fabrication sélectionnés (pour le récapitulatif). */
+  selectedLivArray(lg: VoyageLigne): number[] {
+    return Object.keys(lg.selectedLiv).filter(k => lg.selectedLiv[+k]).map(k => +k);
+  }
+  /** Recalcule la liste des OF disponibles du chantier (référence stable pour ng-select/table). */
+  majLivrDispo(lg: VoyageLigne): void {
+    lg.livrDispo = this.allLivraisons.filter(l =>
+      l.projetId === lg.chantierId &&
+      !['LIVRE', 'ARCHIVE'].includes((l.statutReception || '').toUpperCase()));
+  }
+  /** Réaligne le tableau d'ids (modèle du ng-select) sur la map selectedLiv. */
+  syncSelLivIds(lg: VoyageLigne): void {
+    lg.selLivIds = Object.keys(lg.selectedLiv).filter(k => lg.selectedLiv[+k]).map(k => +k);
+  }
+  /** Coche/décoche un OF depuis la table (et met à jour le ng-select). */
+  toggleLiv(lg: VoyageLigne, id: number): void {
+    lg.selectedLiv[id] = !lg.selectedLiv[id];
+    this.syncSelLivIds(lg);
+  }
+  /** Sélection via le ng-select multiple : reconstruit la map + le tableau d'ids. */
+  onSelLivChange(lg: VoyageLigne, ids: number[]): void {
+    const list = ids || [];
+    lg.selectedLiv = {};
+    list.forEach(id => lg.selectedLiv[id] = true);
+    lg.selLivIds = list;
+  }
   /** Nb de matières premières sélectionnées dans une ligne. */
   selectedMpCount(lg: VoyageLigne): number {
     return lg.lignesMp.filter(m => lg.selectedMp[m.reference || '']).length;
+  }
+  /** Lignes MP sélectionnées (pour le récapitulatif). */
+  selectedMpLignes(lg: VoyageLigne): MatierePremiere[] {
+    return lg.lignesMp.filter(m => lg.selectedMp[m.reference || '']);
   }
   fermerComboLigne(lg: VoyageLigne): void { setTimeout(() => lg.comboOpen = false, 150); }
 
@@ -830,9 +1010,18 @@ export class VoyagesConteneursComponent implements OnInit {
     if (lg.selectedMp[k] && (lg.qteMp[k] == null || lg.qteMp[k] <= 0)) lg.qteMp[k] = 1;
   }
 
+  /** Étape 1 : valide puis affiche le récapitulatif (l'enregistrement réel se fait à la confirmation). */
   enregistrer(): void {
     if (!this.chauffeurId) { this.toastr.warning('Veuillez choisir un chauffeur.'); return; }
     if (!this.form.localNom) { this.toastr.warning('Veuillez choisir un local de départ (obligatoire).'); return; }
+    this.recap = true;
+  }
+
+  fermerRecap(e: Event): void { if (e.target === e.currentTarget) this.recap = false; }
+
+  /** Étape 2 : construit la requête à partir des lignes et enregistre le voyage. */
+  confirmerEnregistrement(): void {
+    if (!this.chauffeurId || !this.form.localNom) { this.recap = false; return; }
     const livraisonIds: number[] = [];
     const livraisonDates: NonNullable<VoyageConteneurRequest['livraisonDates']> = [];
     const matieres: NonNullable<VoyageConteneurRequest['matieres']> = [];
@@ -865,7 +1054,7 @@ export class VoyagesConteneursComponent implements OnInit {
     this.saving = true;
     const ok = () => {
       this.toastr.success(this.editId ? 'Voyage modifié.' : 'Voyage créé.');
-      this.modal = false; this.saving = false; this.charger();
+      this.recap = false; this.modal = false; this.saving = false; this.charger();
     };
     const ko = () => { this.toastr.error('Échec de l’enregistrement.'); this.saving = false; };
     if (this.editId) {

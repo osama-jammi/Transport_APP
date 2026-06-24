@@ -13,7 +13,7 @@ import {
 } from '../core/models';
 import { environment } from '../../environments/environment';
 import { SortState } from '../shared/sort.pipe';
-import { matchesSearch } from '../shared/column-filter';
+import { matchesSearch, matchesFilters, ColumnFilters } from '../shared/column-filter';
 import * as L from 'leaflet';
 
 @Component({
@@ -22,6 +22,9 @@ import * as L from 'leaflet';
     <div class="toolbar">
       <div class="search"><i class="fa-solid fa-magnifying-glass"></i>
         <input [(ngModel)]="q" (ngModelChange)="page=1" placeholder="Rechercher (client, camion, chauffeur, transporteur)…"></div>
+      <button class="btn" [ngClass]="filtresUI ? 'btn-primary' : 'btn-outline'" (click)="basculerFiltres()"
+              title="Filtrer par colonne">
+        <i class="fa-solid fa-filter"></i> Filtres</button>
     </div>
 
     <div class="card"><div class="card-body" style="padding:0">
@@ -31,7 +34,8 @@ import * as L from 'leaflet';
       </div>
       <div class="table-wrap" *ngIf="!loading && filtres().length">
         <table>
-          <thead><tr>
+          <thead>
+            <tr>
             <th appSortable="id" [(state)]="sortState">ID</th>
             <th appSortable="client" [(state)]="sortState">Client / Chantier</th>
             <th appSortable="chauffeur" [(state)]="sortState">Chauffeur</th>
@@ -39,7 +43,18 @@ import * as L from 'leaflet';
             <th appSortable="dechargementJour" [(state)]="sortState">Déchargement</th>
             <th appSortable="nbArticles" [(state)]="sortState">Articles</th>
             <th appSortable="statut" [(state)]="sortState">Statut</th>
-            <th></th></tr></thead>
+            <th></th></tr>
+            <tr class="col-filter-row" *ngIf="filtresUI">
+              <th appColFilter="id" [filters]="colF" (filterChange)="page=1" placeholder="ID"></th>
+              <th appColFilter="client" [filters]="colF" (filterChange)="page=1" placeholder="Client"></th>
+              <th appColFilter="chauffeur" [filters]="colF" (filterChange)="page=1" placeholder="Chauffeur"></th>
+              <th appColFilter="chargementJour" [filters]="colF" (filterChange)="page=1" placeholder="Chargement"></th>
+              <th appColFilter="dechargementJour" [filters]="colF" (filterChange)="page=1" placeholder="Déchargement"></th>
+              <th appColFilter="nbArticles" [filters]="colF" (filterChange)="page=1" placeholder="Nb"></th>
+              <th appColFilter="statut" [filters]="colF" (filterChange)="page=1" placeholder="Statut"></th>
+              <th></th>
+            </tr>
+          </thead>
           <tbody>
             <tr *ngFor="let v of filtres() | sortBy:sortState | paginate:page:pageSize" class="row-link" (click)="voirDetails(v)">
               <td><code>#{{ v.id }}</code></td>
@@ -194,6 +209,8 @@ export class VoyagesComponent implements OnInit {
   loading = true; saving = false; modal = false;
   page = 1; pageSize = 10;
   q = ''; vue: 'en-cours' | 'archives' = 'en-cours';
+  filtresUI = false;
+  colF: ColumnFilters = {};
   sortState: SortState = { key: '', dir: 'asc' };
   dateDebut = ''; dateFin = '';
 
@@ -262,7 +279,13 @@ export class VoyagesComponent implements OnInit {
   }
 
   filtres(): Voyage[] {
-    return this.voyages.filter(v => matchesSearch(v, this.q));
+    return this.voyages.filter(v => matchesSearch(v, this.q) && matchesFilters(v, this.colF));
+  }
+
+  /** Affiche/masque la ligne de filtres par colonne (et réinitialise à la fermeture). */
+  basculerFiltres(): void {
+    this.filtresUI = !this.filtresUI;
+    if (!this.filtresUI) { this.colF = {}; this.page = 1; }
   }
 
   /* ─────────── Création / Édition ─────────── */

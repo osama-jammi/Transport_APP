@@ -91,12 +91,16 @@ export class AppComponent implements OnInit {
   async ngOnInit(): Promise<void> {
     appliquerTheme(themeActuel());   // applique le thème de couleur choisi
     try {
-      const profile = await this.keycloak.loadUserProfile();
-      this.username = [profile.firstName, profile.lastName].filter(Boolean).join(' ')
-        || profile.username || 'Utilisateur';
+      // Infos utilisateur lues DANS le token (pas d'appel réseau /account → pas de CORS).
+      const kc = this.keycloak.getKeycloakInstance();
+      const claims: any = { ...(kc?.idTokenParsed || {}), ...(kc?.tokenParsed || {}) };
+      const prenom = claims.given_name || '';
+      const nom = claims.family_name || '';
+      this.username = [prenom, nom].filter(Boolean).join(' ')
+        || claims.preferred_username || claims.name || 'Utilisateur';
       this.initials = (this.username.match(/\b\w/g) || ['?']).slice(0, 2).join('');
       this.roleLabel = this.roleLePlusImportant(this.keycloak.getUserRoles());
-    } catch { /* profil indisponible */ }
+    } catch { /* claims indisponibles */ }
     // Charge les fonctionnalités désactivées pour masquer les entrées de menu
     this.adminSvc.getFeatures().subscribe({
       next: features => this.featuresOff = new Set(features.filter(f => !f.actif).map(f => f.cle)),

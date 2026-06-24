@@ -1,13 +1,29 @@
 import axios from 'axios';
 import { API_BASE_URL } from '@/constants/api';
+import { getAccessToken } from './keycloakAuth';
 
-// Authentification mobile = QR code uniquement (pas de Keycloak / pas de token Bearer).
-// On n'injecte donc aucun en-tete Authorization : les endpoints /api/** du backend
-// sont publics pour l'app mobile.
+// Deux modes d'authentification mobile :
+//   • CHAUFFEUR  → QR code, aucun token : il n'appelle que les endpoints publics.
+//   • SUPERVISEUR/ADMIN → connecté via Keycloak : un token est stocké, on l'ajoute
+//     alors en en-tete Authorization pour accéder aux endpoints sécurisés.
 const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 10_000,
   headers: { 'Content-Type': 'application/json' },
+});
+
+// Ajoute le Bearer Keycloak SI un admin est connecté (sinon appel public chauffeur).
+api.interceptors.request.use(async (config) => {
+  try {
+    const token = await getAccessToken();
+    if (token) {
+      config.headers = config.headers ?? {};
+      (config.headers as any).Authorization = `Bearer ${token}`;
+    }
+  } catch {
+    // Pas de token disponible (chauffeur) → requête publique.
+  }
+  return config;
 });
 
 api.interceptors.response.use(

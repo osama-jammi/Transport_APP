@@ -27,6 +27,7 @@ import { PaginatePipe } from './shared/paginate.pipe';
 import { PaginatorComponent } from './shared/paginator.component';
 import { SortPipe } from './shared/sort.pipe';
 import { SortableDirective } from './shared/sortable.directive';
+import { ColFilterComponent } from './shared/col-filter.component';
 
 @NgModule({
   declarations: [
@@ -45,7 +46,8 @@ import { SortableDirective } from './shared/sortable.directive';
     PaginatePipe,
     PaginatorComponent,
     SortPipe,
-    SortableDirective
+    SortableDirective,
+    ColFilterComponent
   ],
   imports: [
     BrowserModule,

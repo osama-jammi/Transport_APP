@@ -3,7 +3,7 @@ import { ToastrService } from 'ngx-toastr';
 import { DepotService } from '../services/depot.service';
 import { Depot } from '../core/models';
 import { SortState } from '../shared/sort.pipe';
-import { matchesSearch } from '../shared/column-filter';
+import { matchesSearch, matchesFilters, ColumnFilters } from '../shared/column-filter';
 import * as L from 'leaflet';
 
 @Component({
@@ -13,6 +13,9 @@ import * as L from 'leaflet';
       <span class="badge badge-blue"><i class="fa-solid fa-warehouse"></i> Dépôts (locaux de départ)</span>
       <div class="search"><i class="fa-solid fa-magnifying-glass"></i>
         <input [(ngModel)]="q" (ngModelChange)="page=1" placeholder="Rechercher un dépôt…"></div>
+      <button class="btn" [ngClass]="filtresUI ? 'btn-primary' : 'btn-outline'" (click)="basculerFiltres()"
+              title="Filtrer par colonne">
+        <i class="fa-solid fa-filter"></i> Filtres</button>
       <button class="btn btn-primary right" (click)="ouvrir()"><i class="fa-solid fa-plus"></i> Nouveau dépôt</button>
     </div>
 
@@ -21,13 +24,23 @@ import * as L from 'leaflet';
       <div *ngIf="!loading && depotsFiltres().length===0" class="empty"><i class="fa-solid fa-warehouse"></i> Aucun dépôt</div>
       <div class="table-wrap" *ngIf="!loading && depotsFiltres().length">
         <table>
-          <thead><tr>
+          <thead>
+            <tr>
             <th appSortable="id" [(state)]="sortState">ID</th>
             <th appSortable="nom" [(state)]="sortState">Nom</th>
             <th appSortable="latitude" [(state)]="sortState">Latitude</th>
             <th appSortable="longitude" [(state)]="sortState">Longitude</th>
             <th appSortable="rayon" [(state)]="sortState">Rayon (m)</th>
-            <th></th></tr></thead>
+            <th></th></tr>
+            <tr class="col-filter-row" *ngIf="filtresUI">
+              <th appColFilter="id" [filters]="colF" (filterChange)="page=1" placeholder="ID"></th>
+              <th appColFilter="nom" [filters]="colF" (filterChange)="page=1" placeholder="Nom"></th>
+              <th appColFilter="latitude" [filters]="colF" (filterChange)="page=1" placeholder="Lat"></th>
+              <th appColFilter="longitude" [filters]="colF" (filterChange)="page=1" placeholder="Lng"></th>
+              <th appColFilter="rayon" [filters]="colF" (filterChange)="page=1" placeholder="m"></th>
+              <th></th>
+            </tr>
+          </thead>
           <tbody>
             <tr *ngFor="let d of depotsFiltres() | sortBy:sortState | paginate:page:pageSize">
               <td><code>{{ d.id }}</code></td>
@@ -81,6 +94,8 @@ export class DepotsComponent implements OnInit {
   editId: number | null = null;
   form: Depot = {};
   q = ''; page = 1; pageSize = 10;
+  filtresUI = false;
+  colF: ColumnFilters = {};
   sortState: SortState = { key: '', dir: 'asc' };
   private map?: L.Map;
   private marker?: L.Marker;
@@ -91,7 +106,13 @@ export class DepotsComponent implements OnInit {
 
   /** Dépôts filtrés par la recherche (nom). */
   depotsFiltres(): Depot[] {
-    return this.depots.filter(d => matchesSearch(d, this.q));
+    return this.depots.filter(d => matchesSearch(d, this.q) && matchesFilters(d, this.colF));
+  }
+
+  /** Affiche/masque la ligne de filtres par colonne (et réinitialise à la fermeture). */
+  basculerFiltres(): void {
+    this.filtresUI = !this.filtresUI;
+    if (!this.filtresUI) { this.colF = {}; this.page = 1; }
   }
 
   charger(): void {

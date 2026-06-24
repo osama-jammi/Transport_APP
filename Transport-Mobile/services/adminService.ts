@@ -1,6 +1,7 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import api from './api';
+import { getAccessToken } from './keycloakAuth';
 import { API_BASE_URL, ENDPOINTS } from '@/constants/api';
 import { getVoyagesEnCours, type Voyage } from './livraisonService';
 
@@ -68,7 +69,8 @@ export async function getDashboardStats(filters: StatsFilters = {}): Promise<Das
 /**
  * Télécharge le rapport complet « toutes statistiques » (.xlsx) depuis le backend
  * et ouvre la feuille de partage du système (enregistrer / envoyer le fichier).
- * Les endpoints /api/** étant publics, on télécharge directement par URL.
+ * /rapports/** est sécurisé → on joint le jeton Keycloak de l'admin connecté
+ * (téléchargement direct hors axios, donc l'en-tête n'est pas ajouté automatiquement).
  * @returns true si le partage a pu être proposé, false sinon.
  */
 export async function downloadRapportComplet(filters: StatsFilters = {}): Promise<boolean> {
@@ -81,7 +83,9 @@ export async function downloadRapportComplet(filters: StatsFilters = {}): Promis
   const url = `${API_BASE_URL}${ENDPOINTS.RAPPORT_COMPLET}${qs.toString() ? `?${qs}` : ''}`;
   const fileUri = `${FileSystem.cacheDirectory}rapport-complet.xlsx`;
 
-  const { uri, status } = await FileSystem.downloadAsync(url, fileUri);
+  const token = await getAccessToken();
+  const options = token ? { headers: { Authorization: `Bearer ${token}` } } : undefined;
+  const { uri, status } = await FileSystem.downloadAsync(url, fileUri, options);
   if (status !== 200) throw new Error(`Téléchargement échoué (HTTP ${status})`);
 
   if (!(await Sharing.isAvailableAsync())) return false;

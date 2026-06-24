@@ -32,7 +32,7 @@ export function imprimerQrChauffeur(blob: Blob, nom: string, prenom: string, onB
         .label { border: 1px solid #ddd; border-radius: 12px; padding: 26px 22px; text-align: center; width: 320px; }
         .label img { width: 250px; height: 250px; }
         .nom { font-size: 22px; font-weight: 700; margin-top: 16px; color: #1f2433; }
-        .role { font-size: 13px; color: #A67C3D; margin-top: 6px; text-transform: uppercase; letter-spacing: 1px; }
+        .role { font-size: 13px; color: #0F7A8B; margin-top: 6px; text-transform: uppercase; letter-spacing: 1px; }
         @media print { .label { border: none; } @page { margin: 8mm; } }
       </style></head>
       <body onload="setTimeout(function(){ window.print(); }, 150)">
@@ -68,7 +68,7 @@ export function imprimerEtiquetteQr(blob: Blob, a: Article, onBlocked: () => voi
         .label img { width: 250px; height: 250px; }
         .nom { font-size: 19px; font-weight: 700; margin-top: 16px; color: #1f2433; }
         .chantier { font-size: 14px; color: #555; margin-top: 6px; }
-        .chantier b { color: #A67C3D; }
+        .chantier b { color: #0F7A8B; }
         .ref { font-size: 12px; color: #999; margin-top: 10px; font-family: monospace; }
         @media print { .label { border: none; } @page { margin: 8mm; } }
       </style></head>

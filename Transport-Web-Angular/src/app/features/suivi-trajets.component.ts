@@ -1,4 +1,4 @@
-import { Component, AfterViewInit, OnDestroy } from '@angular/core';
+import { Component, AfterViewInit, OnDestroy, HostListener } from '@angular/core';
 import * as L from 'leaflet';
 import { forkJoin, of } from 'rxjs';
 import { catchError } from 'rxjs/operators';
@@ -33,7 +33,7 @@ const COULEURS = [
       </div>
     </div>
 
-    <div class="card"><div class="card-body">
+    <div class="card map-card" [class.plein]="plein"><div class="card-body">
       <div *ngIf="loading" class="spinner" style="margin:8px auto"></div>
       <div class="map-legend" *ngIf="!loading">
         <span *ngIf="trajets.length===0" class="muted">Aucun trajet sur cette période.</span>
@@ -45,7 +45,14 @@ const COULEURS = [
         <span *ngIf="selectedIdx!==null" class="leg" (click)="selectionner(selectedIdx)"
               style="color:var(--primary);font-weight:700">✕ Tout afficher</span>
       </div>
-      <div id="suivi-map" class="map"></div>
+      <div class="map-holder">
+        <button type="button" class="btn btn-outline btn-sm map-fs" (click)="basculerPlein()"
+                [title]="plein ? 'Quitter le plein écran (Échap)' : 'Carte en plein écran'">
+          <i class="fa-solid" [ngClass]="plein ? 'fa-compress' : 'fa-expand'"></i>
+          {{ plein ? 'Réduire' : 'Plein écran' }}
+        </button>
+        <div id="suivi-map" class="map"></div>
+      </div>
     </div></div>
 
     <div class="card"><div class="card-head"><h2>Chauffeurs suivis ({{ trajets.length }})</h2></div>
@@ -79,8 +86,16 @@ const COULEURS = [
     .map-legend .leg { cursor:pointer; padding:2px 6px; border-radius:6px; }
     .map-legend .leg.active { background:var(--primary-light); font-weight:700; color:var(--text); }
     .filters label input[type="date"] { margin-left:4px; }
-    /* Carte plein écran */
-    #suivi-map { height: calc(100dvh - 250px); min-height: 480px; }
+    /* Carte : hauteur réduite (laisse de la place au tableau dessous) */
+    .map-holder { position: relative; }
+    #suivi-map { height: calc(100dvh - 430px); min-height: 320px; }
+    .map-fs { position: absolute; top: 12px; right: 12px; z-index: 1000;
+      background: #fff; box-shadow: var(--shadow-sm); }
+    /* Plein écran : la carte occupe tout l'écran */
+    .map-card.plein { position: fixed; inset: 0; z-index: 2000; margin: 0; border-radius: 0; max-height: none; }
+    .map-card.plein .card-body { display: flex; flex-direction: column; height: 100dvh; padding: 12px; }
+    .map-card.plein .map-holder { flex: 1 1 auto; min-height: 0; }
+    .map-card.plein #suivi-map { height: 100%; min-height: 0; }
     tbody tr.row-active { background:var(--primary-light) !important; }
   `]
 })
@@ -100,6 +115,8 @@ export class SuiviTrajetsComponent implements AfterViewInit, OnDestroy {
   loading = false;
   /** Index du chauffeur sélectionné (clic) : seul son trajet est affiché ; null = tous. */
   selectedIdx: number | null = null;
+  /** Carte affichée en plein écran. */
+  plein = false;
 
   private map!: L.Map;
   private layer?: L.LayerGroup;
@@ -118,6 +135,19 @@ export class SuiviTrajetsComponent implements AfterViewInit, OnDestroy {
   }
 
   couleur(i: number): string { return COULEURS[i % COULEURS.length]; }
+
+  /** Bascule la carte en plein écran (et recalcule sa taille). */
+  basculerPlein(): void {
+    this.plein = !this.plein;
+    setTimeout(() => this.map?.invalidateSize(), 60);
+    setTimeout(() => this.map?.invalidateSize(), 320);
+  }
+
+  /** Échap : quitte le plein écran. */
+  @HostListener('document:keydown.escape')
+  quitterPlein(): void {
+    if (this.plein) this.basculerPlein();
+  }
 
   /** Calcule debut/fin (ISO date) à partir du preset choisi. */
   choisirPreset(key: string): void {
