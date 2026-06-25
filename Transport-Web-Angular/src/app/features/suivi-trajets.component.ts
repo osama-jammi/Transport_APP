@@ -1,4 +1,4 @@
-import { Component, AfterViewInit, OnDestroy } from '@angular/core';
+import { Component, AfterViewInit, OnDestroy, HostListener, ViewChild, ElementRef } from '@angular/core';
 import * as L from 'leaflet';
 import { forkJoin, of } from 'rxjs';
 import { catchError } from 'rxjs/operators';
@@ -8,7 +8,7 @@ import { TrajetChauffeur, GapChauffeur } from '../core/models';
 
 /** Palette de couleurs distinctes — une par chauffeur. */
 const COULEURS = [
-  '#C9A063', '#2563eb', '#1F9D55', '#dc2626', '#7c3aed', '#D9901F',
+  '#17A2B8', '#2563eb', '#21BA45', '#dc2626', '#7c3aed', '#E8910C',
   '#0891b2', '#db2777', '#65a30d', '#9333ea', '#0d9488', '#b45309'
 ];
 
@@ -33,16 +33,26 @@ const COULEURS = [
       </div>
     </div>
 
-    <div class="card"><div class="card-body">
+    <div #mapCard class="card map-card" [class.plein]="plein"><div class="card-body">
       <div *ngIf="loading" class="spinner" style="margin:8px auto"></div>
       <div class="map-legend" *ngIf="!loading">
         <span *ngIf="trajets.length===0" class="muted">Aucun trajet sur cette période.</span>
-        <span *ngFor="let t of trajets; let i = index">
+        <span *ngFor="let t of trajets; let i = index" class="leg" [class.active]="selectedIdx===i"
+              (click)="selectionner(i)" title="Afficher seulement ce chauffeur">
           <i class="dot" [style.background]="couleur(i)"></i>
           {{ t.chauffeur || 'Non affecté' }} <span class="muted">({{ t.nbPoints }} pts)</span>
         </span>
+        <span *ngIf="selectedIdx!==null" class="leg" (click)="selectionner(selectedIdx)"
+              style="color:var(--primary);font-weight:700">✕ Tout afficher</span>
       </div>
-      <div id="suivi-map" class="map"></div>
+      <div class="map-holder">
+        <button type="button" class="btn btn-outline btn-sm map-fs" (click)="basculerPlein()"
+                [title]="plein ? 'Quitter le plein écran (Échap)' : 'Carte en plein écran'">
+          <i class="fa-solid" [ngClass]="plein ? 'fa-compress' : 'fa-expand'"></i>
+          {{ plein ? 'Réduire' : 'Plein écran' }}
+        </button>
+        <div id="suivi-map" class="map"></div>
+      </div>
     </div></div>
 
     <div class="card"><div class="card-head"><h2>Chauffeurs suivis ({{ trajets.length }})</h2></div>
@@ -53,14 +63,15 @@ const COULEURS = [
           <table>
             <thead><tr><th></th><th>Chauffeur</th><th>Points</th><th>Début</th><th>Fin</th><th></th></tr></thead>
             <tbody>
-              <tr *ngFor="let t of trajets; let i = index">
+              <tr *ngFor="let t of trajets; let i = index" class="row-link" [class.row-active]="selectedIdx===i"
+                  (click)="selectionner(i)" title="Afficher seulement ce chauffeur sur la carte">
                 <td><i class="dot" [style.background]="couleur(i)"
                        style="display:inline-block;width:12px;height:12px;border-radius:50%"></i></td>
                 <td><strong>{{ t.chauffeur || 'Non affecté' }}</strong></td>
                 <td>{{ t.nbPoints }}</td>
                 <td>{{ debutDe(t) | date:'dd/MM HH:mm' }}</td>
                 <td>{{ finDe(t) | date:'dd/MM HH:mm' }}</td>
-                <td><button class="btn btn-outline btn-sm" (click)="zoomer(i)"
+                <td (click)="$event.stopPropagation()"><button class="btn btn-outline btn-sm" (click)="zoomer(i)"
                             [disabled]="t.nbPoints===0"><i class="fa-solid fa-magnifying-glass-location"></i></button></td>
               </tr>
             </tbody>
@@ -72,7 +83,26 @@ const COULEURS = [
   styles: [`
     .map-legend { display:flex; gap:18px; flex-wrap:wrap; margin-bottom:12px; font-size:12.5px; color:var(--text-soft); }
     .map-legend .dot { display:inline-block; width:11px; height:11px; border-radius:50%; margin-right:6px; vertical-align:middle; }
+    .map-legend .leg { cursor:pointer; padding:2px 6px; border-radius:6px; }
+    .map-legend .leg.active { background:var(--primary-light); font-weight:700; color:var(--text); }
     .filters label input[type="date"] { margin-left:4px; }
+    /* Carte : hauteur réduite (laisse de la place au tableau dessous) */
+    .map-holder { position: relative; }
+    #suivi-map { height: calc(100dvh - 430px); min-height: 320px; }
+    .map-fs { position: absolute; top: 12px; right: 12px; z-index: 1000;
+      background: #fff; box-shadow: var(--shadow-sm); }
+    /* Plein écran NATIF (API Fullscreen = F11) : la carte est placée dans le top
+       layer du navigateur → recouvre tout, y compris la sidebar. */
+    .map-card:fullscreen { background: #fff; margin: 0; border-radius: 0; max-height: none; }
+    .map-card:fullscreen .card-body { display: flex; flex-direction: column; height: 100%; padding: 12px; }
+    .map-card:fullscreen .map-holder { flex: 1 1 auto; min-height: 0; }
+    .map-card:fullscreen #suivi-map { height: 100%; min-height: 0; }
+    /* Repli CSS si l'API plein écran natif est indisponible/refusée. */
+    .map-card.plein:not(:fullscreen) { position: fixed; inset: 0; z-index: 2000; margin: 0; border-radius: 0; max-height: none; }
+    .map-card.plein:not(:fullscreen) .card-body { display: flex; flex-direction: column; height: 100dvh; padding: 12px; }
+    .map-card.plein:not(:fullscreen) .map-holder { flex: 1 1 auto; min-height: 0; }
+    .map-card.plein:not(:fullscreen) #suivi-map { height: 100%; min-height: 0; }
+    tbody tr.row-active { background:var(--primary-light) !important; }
   `]
 })
 export class SuiviTrajetsComponent implements AfterViewInit, OnDestroy {
@@ -89,10 +119,16 @@ export class SuiviTrajetsComponent implements AfterViewInit, OnDestroy {
   chauffeurs: GapChauffeur[] = [];
   trajets: TrajetChauffeur[] = [];
   loading = false;
+  /** Index du chauffeur sélectionné (clic) : seul son trajet est affiché ; null = tous. */
+  selectedIdx: number | null = null;
+  /** Carte affichée en plein écran. */
+  plein = false;
 
   private map!: L.Map;
   private layer?: L.LayerGroup;
   private bounds: L.LatLngBounds[] = [];
+
+  @ViewChild('mapCard') mapCard!: ElementRef<HTMLElement>;
 
   constructor(private svc: GpsService, private chauffeurSvc: ChauffeurService) {}
 
@@ -108,6 +144,58 @@ export class SuiviTrajetsComponent implements AfterViewInit, OnDestroy {
 
   couleur(i: number): string { return COULEURS[i % COULEURS.length]; }
 
+  /**
+   * Bascule la carte en plein écran via l'API Fullscreen native (= F11) : la
+   * carte passe dans le « top layer » du navigateur et recouvre TOUT, sidebar
+   * comprise. Repli sur un plein écran CSS si l'API est indisponible/refusée.
+   */
+  basculerPlein(): void {
+    const el = this.mapCard?.nativeElement as any;
+    const doc = document as any;
+    if (!doc.fullscreenElement && !doc.webkitFullscreenElement) {
+      const demande: (() => Promise<void>) | undefined =
+        el?.requestFullscreen?.bind(el) || el?.webkitRequestFullscreen?.bind(el);
+      if (demande) {
+        Promise.resolve(demande()).catch(() => { this.plein = true; this.resizeMap(); });
+      } else {
+        // Navigateur sans API plein écran : repli CSS.
+        this.plein = true;
+        this.resizeMap();
+      }
+    } else {
+      const sortie: (() => Promise<void>) | undefined =
+        doc.exitFullscreen?.bind(doc) || doc.webkitExitFullscreen?.bind(doc);
+      if (sortie) Promise.resolve(sortie()).catch(() => {});
+      this.plein = false;
+      this.resizeMap();
+    }
+  }
+
+  /** Synchronise l'état + redimensionne la carte quand le plein écran natif change. */
+  @HostListener('document:fullscreenchange')
+  @HostListener('document:webkitfullscreenchange')
+  onFullscreenChange(): void {
+    const doc = document as any;
+    this.plein = !!(doc.fullscreenElement || doc.webkitFullscreenElement);
+    this.resizeMap();
+  }
+
+  /** Échap : quitte le repli CSS (le plein écran natif gère Échap tout seul). */
+  @HostListener('document:keydown.escape')
+  quitterPlein(): void {
+    const doc = document as any;
+    if (this.plein && !doc.fullscreenElement && !doc.webkitFullscreenElement) {
+      this.plein = false;
+      this.resizeMap();
+    }
+  }
+
+  /** Recalcule la taille de la carte Leaflet après un changement de layout. */
+  private resizeMap(): void {
+    setTimeout(() => this.map?.invalidateSize(), 60);
+    setTimeout(() => this.map?.invalidateSize(), 320);
+  }
+
   /** Calcule debut/fin (ISO date) à partir du preset choisi. */
   choisirPreset(key: string): void {
     this.periode = key;
@@ -122,6 +210,7 @@ export class SuiviTrajetsComponent implements AfterViewInit, OnDestroy {
 
   charger(): void {
     this.loading = true;
+    this.selectedIdx = null;   // évite un index périmé après rechargement
     this.svc.trajetsParChauffeur(this.debut || undefined, this.fin || undefined, this.chauffeurId)
       .pipe(catchError(() => of([] as TrajetChauffeur[])))
       .subscribe(d => { this.trajets = d; this.loading = false; setTimeout(() => this.dessiner(), 80); });
@@ -139,6 +228,9 @@ export class SuiviTrajetsComponent implements AfterViewInit, OnDestroy {
         .filter(p => p.latitude != null && p.longitude != null)
         .map(p => [p.latitude as number, p.longitude as number] as L.LatLngTuple);
       if (pts.length === 0) { this.bounds.push(L.latLngBounds([])); return; }
+      this.bounds.push(L.latLngBounds(pts));
+      // Si un chauffeur est sélectionné, on n'affiche que son trajet.
+      if (this.selectedIdx !== null && this.selectedIdx !== i) return;
       const col = this.couleur(i);
       L.polyline(pts, { color: col, weight: 4, opacity: 0.85 }).addTo(this.layer!);
       const dot = (fill: string) => L.divIcon({ className: '',
@@ -146,7 +238,6 @@ export class SuiviTrajetsComponent implements AfterViewInit, OnDestroy {
         iconSize: [13, 13], iconAnchor: [7, 7] });
       L.marker(pts[0], { icon: dot('#16a34a') }).addTo(this.layer!).bindPopup(`${t.chauffeur || 'Non affecté'} — départ`);
       L.marker(pts[pts.length - 1], { icon: dot(col) }).addTo(this.layer!).bindPopup(`${t.chauffeur || 'Non affecté'} — dernière position`);
-      this.bounds.push(L.latLngBounds(pts));
       pts.forEach(p => tous.push(p));
     });
 
@@ -157,6 +248,12 @@ export class SuiviTrajetsComponent implements AfterViewInit, OnDestroy {
   zoomer(i: number): void {
     const b = this.bounds[i];
     if (b && b.isValid()) this.map.fitBounds(b.pad(0.25));
+  }
+
+  /** Clic sur un chauffeur : n'affiche que son trajet sur la carte (re-clic = tous). */
+  selectionner(i: number): void {
+    this.selectedIdx = this.selectedIdx === i ? null : i;
+    this.dessiner();
   }
 
   debutDe(t: TrajetChauffeur): string | undefined { return t.points?.[0]?.horodatage; }

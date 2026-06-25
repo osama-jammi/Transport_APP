@@ -12,17 +12,23 @@ import {
   GapArticle, GapChauffeur, GapVoyageArticle, TrajetVoyage, MatierePremiere, CommandeMp
 } from '../core/models';
 import { environment } from '../../environments/environment';
+import { SortState } from '../shared/sort.pipe';
+import { matchesSearch, matchesFilters, ColumnFilters } from '../shared/column-filter';
+import { FiltreField } from '../shared/filtre-panel.component';
 import * as L from 'leaflet';
 
 @Component({
   selector: 'app-voyages',
   template: `
     <div class="toolbar">
-      <div class="search">
-        <i class="fa-solid fa-magnifying-glass"></i>
-        <input [(ngModel)]="q" (ngModelChange)="page=1" placeholder="Rechercher (client, camion, chauffeur, transporteur)…">
-      </div>
+      <div class="search"><i class="fa-solid fa-magnifying-glass"></i>
+        <input [(ngModel)]="q" (ngModelChange)="page=1" placeholder="Rechercher (client, camion, chauffeur, transporteur)…"></div>
+      <button class="btn" [ngClass]="filtresUI ? 'btn-primary' : 'btn-outline'" (click)="basculerFiltres()"
+              title="Filtrer par colonne">
+        <i class="fa-solid fa-filter"></i> Filtres</button>
     </div>
+
+    <app-filtre-panel *ngIf="filtresUI" [fields]="filterFields" [filters]="colF" (change)="page=1"></app-filtre-panel>
 
     <div class="card"><div class="card-body" style="padding:0">
       <div *ngIf="loading" class="spinner"></div>
@@ -31,10 +37,19 @@ import * as L from 'leaflet';
       </div>
       <div class="table-wrap" *ngIf="!loading && filtres().length">
         <table>
-          <thead><tr><th>ID</th><th>Client / Chantier</th><th>Chauffeur</th>
-            <th>Chargement</th><th>Déchargement</th><th>Articles</th><th>Statut</th><th></th></tr></thead>
+          <thead>
+            <tr>
+            <th appSortable="id" [(state)]="sortState">ID</th>
+            <th appSortable="client" [(state)]="sortState">Client / Chantier</th>
+            <th appSortable="chauffeur" [(state)]="sortState">Chauffeur</th>
+            <th appSortable="chargementJour" [(state)]="sortState">Chargement</th>
+            <th appSortable="dechargementJour" [(state)]="sortState">Déchargement</th>
+            <th appSortable="nbArticles" [(state)]="sortState">Articles</th>
+            <th appSortable="statut" [(state)]="sortState">Statut</th>
+            <th></th></tr>
+          </thead>
           <tbody>
-            <tr *ngFor="let v of filtres() | paginate:page:pageSize" class="row-link" (click)="voirDetails(v)">
+            <tr *ngFor="let v of filtres() | sortBy:sortState | paginate:page:pageSize" class="row-link" (click)="voirDetails(v)">
               <td><code>#{{ v.id }}</code></td>
               <td><strong>{{ v.client || '—' }}</strong></td>
               <td>{{ v.chauffeur || '—' }}</td>
@@ -45,6 +60,8 @@ import * as L from 'leaflet';
               <td class="flex" (click)="$event.stopPropagation()">
                 <button class="btn btn-outline btn-sm" (click)="voirDetails(v)" title="Détails">
                   <i class="fa-solid fa-eye"></i></button>
+                <button class="btn btn-outline btn-sm" (click)="imprimerBL(v)" title="Imprimer le bon de livraison">
+                  <i class="fa-solid fa-print"></i></button>
                 <button *ngIf="v.statut==='EN_COURS'" class="btn btn-outline btn-sm" (click)="archiver(v)" title="Archiver">
                   <i class="fa-solid fa-box-archive"></i></button>
               </td>
@@ -53,7 +70,7 @@ import * as L from 'leaflet';
         </table>
       </div>
       <app-paginator [total]="filtres().length" [page]="page" [pageSize]="pageSize"
-                     (pageChange)="page = $event"></app-paginator>
+                     (pageChange)="page = $event" (pageSizeChange)="pageSize = $event; page = 1"></app-paginator>
     </div></div>
 
     <!-- ════════ Modal NOUVEAU VOYAGE ════════ -->
@@ -173,6 +190,8 @@ import * as L from 'leaflet';
         </div>
         <div class="m-foot">
           <button class="btn btn-outline" (click)="fermerDetailModal()">Fermer</button>
+          <button class="btn btn-primary" (click)="detail && imprimerBL(detail)">
+            <i class="fa-solid fa-print"></i> Imprimer BL</button>
         </div>
       </div>
     </div>
@@ -183,6 +202,18 @@ export class VoyagesComponent implements OnInit {
   loading = true; saving = false; modal = false;
   page = 1; pageSize = 10;
   q = ''; vue: 'en-cours' | 'archives' = 'en-cours';
+  filtresUI = false;
+  colF: ColumnFilters = {};
+  filterFields: FiltreField[] = [
+    { key: 'id', label: 'ID', icon: 'fa-hashtag', placeholder: 'ID' },
+    { key: 'client', label: 'Client / Chantier', icon: 'fa-helmet-safety', placeholder: 'Client ou chantier' },
+    { key: 'chauffeur', label: 'Chauffeur', icon: 'fa-id-card', placeholder: 'Chauffeur' },
+    { key: 'chargementJour', label: 'Chargement', icon: 'fa-calendar-day', placeholder: 'Date de chargement' },
+    { key: 'dechargementJour', label: 'Déchargement', icon: 'fa-calendar-check', placeholder: 'Date de déchargement' },
+    { key: 'nbArticles', label: 'Articles', icon: 'fa-boxes-stacked', placeholder: 'Nombre' },
+    { key: 'statut', label: 'Statut', icon: 'fa-flag', placeholder: 'Statut' },
+  ];
+  sortState: SortState = { key: '', dir: 'asc' };
   dateDebut = ''; dateFin = '';
 
   // Référentiels pour le formulaire (tous depuis GAP)
@@ -250,13 +281,13 @@ export class VoyagesComponent implements OnInit {
   }
 
   filtres(): Voyage[] {
-    const t = this.q.toLowerCase().trim();
-    if (!t) return this.voyages;
-    return this.voyages.filter(v =>
-      (v.client || '').toLowerCase().includes(t) ||
-      (v.camionImmatriculation || '').toLowerCase().includes(t) ||
-      (v.chauffeur || '').toLowerCase().includes(t) ||
-      (v.transporteur || '').toLowerCase().includes(t));
+    return this.voyages.filter(v => matchesSearch(v, this.q) && matchesFilters(v, this.colF));
+  }
+
+  /** Affiche/masque la ligne de filtres par colonne (et réinitialise à la fermeture). */
+  basculerFiltres(): void {
+    this.filtresUI = !this.filtresUI;
+    if (!this.filtresUI) { this.colF = {}; this.page = 1; }
   }
 
   /* ─────────── Création / Édition ─────────── */
@@ -555,6 +586,23 @@ export class VoyagesComponent implements OnInit {
     if (v.etatChargement === 'TERMINE') return { label: 'Chargé', cls: 'badge-blue' };
     if (v.statut === 'ARCHIVE') return { label: 'Archivé', cls: 'badge-gray' };
     return { label: 'En cours', cls: 'badge-orange' };
+  }
+
+  /** Génère le bon de livraison (Jasper) et l'ouvre dans un nouvel onglet (sinon le télécharge). */
+  imprimerBL(v: Voyage): void {
+    this.svc.imprimerBL(v.id).subscribe({
+      next: blob => {
+        const url = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+        const win = window.open(url, '_blank');
+        if (!win) {
+          const a = document.createElement('a');
+          a.href = url; a.download = `bon-livraison-${v.id}.pdf`;
+          document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        }
+        setTimeout(() => URL.revokeObjectURL(url), 30000);
+      },
+      error: () => this.toastr.error('Bon de livraison indisponible.')
+    });
   }
 
   /** Télécharge / ouvre le bon de livraison du voyage */

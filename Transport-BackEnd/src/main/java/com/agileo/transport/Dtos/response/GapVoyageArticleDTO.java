@@ -14,6 +14,7 @@ public class GapVoyageArticleDTO {
     private Long articleId;       // id de l'article GAP
     private String designation;
     private String numPrix;
+    private String origineArticle;   // origine_article : sert d'« ID OF » sur le bon de livraison
     private Double quantite;
     private String statutReception;
     private String projet;

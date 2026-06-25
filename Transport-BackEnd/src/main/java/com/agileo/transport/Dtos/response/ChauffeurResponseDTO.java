@@ -19,4 +19,6 @@ public class ChauffeurResponseDTO {
     /** Camion affecté au chauffeur (pour la remontée GPS mobile) */
     private Long camionId;
     private String camionImmatriculation;
+    /** Jeton d'authentification backend renvoyé après le scan QR (connexion). */
+    private String token;
 }

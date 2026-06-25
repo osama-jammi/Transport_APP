@@ -3,9 +3,11 @@ package com.agileo.transport.config;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Component;
 
 /**
@@ -24,11 +26,17 @@ public class SchemaInitializer {
 
     private final JdbcTemplate primaryJdbcTemplate;
     private final JdbcTemplate gapJdbcTemplate;
+    private final String seedAdminUsername;
+    private final String seedAdminPassword;
 
     public SchemaInitializer(@Qualifier("primaryJdbcTemplate") JdbcTemplate primaryJdbcTemplate,
-                             @Qualifier("gapJdbcTemplate") JdbcTemplate gapJdbcTemplate) {
+                             @Qualifier("gapJdbcTemplate") JdbcTemplate gapJdbcTemplate,
+                             @Value("${app.mobile.seed-admin-username:admin}") String seedAdminUsername,
+                             @Value("${app.mobile.seed-admin-password:Admin@2026}") String seedAdminPassword) {
         this.primaryJdbcTemplate = primaryJdbcTemplate;
         this.gapJdbcTemplate = gapJdbcTemplate;
+        this.seedAdminUsername = seedAdminUsername;
+        this.seedAdminPassword = seedAdminPassword;
     }
 
     @EventListener(ApplicationReadyEvent.class)
@@ -84,6 +92,21 @@ public class SchemaInitializer {
         seedFeature("historique-voyages", "Historique des voyages");
         // Purge de l'ancienne fonctionnalité « tracking » (fusionnée dans « suivi-trajets »).
         exec(primaryJdbcTemplate, "DELETE FROM feature_flag WHERE cle = 'tracking'", "feature_flag:tracking (purge)");
+
+        // Comptes superviseur de l'app mobile (auth locale BCrypt, indépendante de Keycloak)
+        exec(primaryJdbcTemplate,
+                "IF OBJECT_ID('utilisateur_mobile','U') IS NULL " +
+                        "CREATE TABLE utilisateur_mobile (" +
+                        " id BIGINT IDENTITY(1,1) PRIMARY KEY," +
+                        " username VARCHAR(100) NOT NULL UNIQUE," +
+                        " password_hash VARCHAR(100) NOT NULL," +
+                        " nom VARCHAR(100) NULL," +
+                        " prenom VARCHAR(100) NULL," +
+                        " role VARCHAR(30) NOT NULL," +
+                        " actif BIT NOT NULL CONSTRAINT DF_utilisateur_mobile_actif DEFAULT 1," +
+                        " derniere_connexion datetime2 NULL)",
+                "table utilisateur_mobile");
+        seedAdminMobile();
 
         // ── Base GAP (livraisons) ──
         exec(gapJdbcTemplate,
@@ -267,6 +290,30 @@ public class SchemaInitializer {
                 "IF COL_LENGTH('projet','archive') IS NULL " +
                         "ALTER TABLE projet ADD archive BIT NOT NULL CONSTRAINT DF_projet_archive DEFAULT 0",
                 "projet.archive");
+    }
+
+    /**
+     * Crée un compte superviseur initial (ADMIN) si la table est vide pour ce
+     * username. Mot de passe haché en BCrypt. Identifiants paramétrables via
+     * app.mobile.seed-admin-username / app.mobile.seed-admin-password — à
+     * changer / supprimer une fois les vrais comptes créés depuis le web.
+     */
+    private void seedAdminMobile() {
+        try {
+            Integer count = primaryJdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM utilisateur_mobile WHERE username = ?",
+                    Integer.class, seedAdminUsername);
+            if (count != null && count == 0) {
+                String hash = new BCryptPasswordEncoder().encode(seedAdminPassword);
+                primaryJdbcTemplate.update(
+                        "INSERT INTO utilisateur_mobile (username, password_hash, nom, prenom, role, actif) " +
+                                "VALUES (?, ?, ?, ?, ?, 1)",
+                        seedAdminUsername, hash, "Administrateur", "", "ADMIN");
+                log.info("[schema] OK : compte superviseur initial '{}' créé (à changer)", seedAdminUsername);
+            }
+        } catch (Exception e) {
+            log.warn("[schema] Ignoré (seed superviseur) : {}", e.getMessage());
+        }
     }
 
     /** Insère une fonctionnalité par défaut si elle n'existe pas (active par défaut). */

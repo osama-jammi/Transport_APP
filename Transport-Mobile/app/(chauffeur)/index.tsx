@@ -16,7 +16,7 @@ import { logout as logoutService } from '@/services/authService';
 import { startTrajetVoyage, stopTrajetVoyage, startSuiviChauffeur, stopSuiviChauffeur, setTrackingEnabled } from '@/services/gpsService';
 import { isFeatureEnabled } from '@/services/featureService';
 import { enregistrerPush } from '@/services/pushService';
-import { COLORS, GRADIENT } from '@/constants/theme';
+import { COLORS, GRADIENT_HEADER, SHADOWS, RADIUS } from '@/constants/theme';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -218,10 +218,13 @@ export default function VoyagesScreen() {
           </View>
         ) : null}
         <View style={[styles.statusPill, { backgroundColor: st.color + '22' }]}>
+          <View style={[styles.statusDot, { backgroundColor: st.color }]} />
           <Text style={[styles.statusTxt, { color: st.color }]}>{st.label}</Text>
         </View>
       </View>
-      <Ionicons name="chevron-forward" size={20} color={COLORS.textFaint} />
+      <View style={styles.chevronWrap}>
+        <Ionicons name="chevron-forward" size={18} color={COLORS.goldDark} />
+      </View>
     </TouchableOpacity>
     );
   };
@@ -231,8 +234,18 @@ export default function VoyagesScreen() {
       <StatusBar barStyle="light-content" backgroundColor={COLORS.brownDeep} />
 
       {/* Header */}
-      <LinearGradient colors={GRADIENT as any} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.header}>
+      <LinearGradient colors={GRADIENT_HEADER as any} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.header}>
+        {/* Halos decoratifs */}
+        <View style={styles.blobTop} pointerEvents="none" />
+        <View style={styles.blobBottom} pointerEvents="none" />
+
         <View style={styles.brandBar}>
+          <View style={styles.brandLeft}>
+            <View style={styles.brandIcon}>
+              <Ionicons name="cube" size={15} color="#fff" />
+            </View>
+            <Text style={styles.brandTxt}>Transport <Text style={styles.brandTxtLight}>· Livraison</Text></Text>
+          </View>
           <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
             <Ionicons name="log-out-outline" size={20} color="#fff" />
           </TouchableOpacity>
@@ -247,7 +260,28 @@ export default function VoyagesScreen() {
           <View style={{ flex: 1 }}>
             <Text style={styles.headerGreet}>Bonjour 👋</Text>
             <Text style={styles.headerName}>{chauffeur?.prenom} {chauffeur?.nom}</Text>
-            <Text style={styles.headerSub}>{chauffeur?.matricule}</Text>
+            <View style={styles.headerMatRow}>
+              <Ionicons name="id-card-outline" size={12} color="rgba(255,255,255,.7)" />
+              <Text style={styles.headerSub}>{chauffeur?.matricule}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Mini resume En cours / Livres */}
+        <View style={styles.headerStats}>
+          <View style={styles.headerStat}>
+            <Text style={styles.headerStatVal}>{nbEnCours}</Text>
+            <Text style={styles.headerStatLbl}>En cours</Text>
+          </View>
+          <View style={styles.headerStatSep} />
+          <View style={styles.headerStat}>
+            <Text style={styles.headerStatVal}>{nbLivres}</Text>
+            <Text style={styles.headerStatLbl}>Livrés</Text>
+          </View>
+          <View style={styles.headerStatSep} />
+          <View style={styles.headerStat}>
+            <Text style={styles.headerStatVal}>{voyages.length}</Text>
+            <Text style={styles.headerStatLbl}>Total</Text>
           </View>
         </View>
       </LinearGradient>
@@ -264,7 +298,7 @@ export default function VoyagesScreen() {
               activeOpacity={0.8}
               onPress={() => setFiltre(f.key)}
             >
-              <Ionicons name={f.icon as any} size={14} color={active ? COLORS.brown : COLORS.textSub} />
+              <Ionicons name={f.icon as any} size={14} color={active ? '#fff' : COLORS.textSub} />
               <Text style={[styles.filterTxt, active && styles.filterTxtActive]}>{f.label}</Text>
               <View style={[styles.filterCount, active && styles.filterCountActive]}>
                 <Text style={[styles.filterCountTxt, active && styles.filterCountTxtActive]}>{n}</Text>
@@ -314,11 +348,27 @@ const styles = StyleSheet.create({
   header:         {
     backgroundColor: COLORS.brown,
     paddingTop: 50, paddingBottom: 18, paddingHorizontal: 20,
-    borderBottomLeftRadius: 22, borderBottomRightRadius: 22,
+    borderBottomLeftRadius: 28, borderBottomRightRadius: 28,
+    overflow: 'hidden', ...SHADOWS.md,
+  },
+  blobTop:        {
+    position: 'absolute', top: -70, right: -50, width: 190, height: 190, borderRadius: 95,
+    backgroundColor: 'rgba(255,255,255,.10)',
+  },
+  blobBottom:     {
+    position: 'absolute', bottom: -60, left: -40, width: 150, height: 150, borderRadius: 75,
+    backgroundColor: 'rgba(117,213,205,.16)',
   },
   brandBar:       {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end',
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
   },
+  brandLeft:      { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  brandIcon:      {
+    width: 28, height: 28, borderRadius: 9, backgroundColor: 'rgba(255,255,255,.18)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  brandTxt:       { color: '#fff', fontWeight: '800', fontSize: 14, letterSpacing: 0.2 },
+  brandTxtLight:  { color: 'rgba(255,255,255,.7)', fontWeight: '500' },
   logoutBtn:      {
     width: 38, height: 38, borderRadius: 19,
     backgroundColor: 'rgba(255,255,255,.14)',
@@ -327,14 +377,26 @@ const styles = StyleSheet.create({
 
   userRow:        { flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 18 },
   headerAvatar:   {
-    width: 46, height: 46, borderRadius: 23,
+    width: 48, height: 48, borderRadius: 24,
     backgroundColor: COLORS.gold,
     alignItems: 'center', justifyContent: 'center',
+    borderWidth: 2, borderColor: 'rgba(255,255,255,.35)',
   },
-  headerAvatarTxt:{ color: COLORS.brown, fontWeight: '800', fontSize: 16 },
-  headerGreet:    { color: 'rgba(255,255,255,.6)', fontSize: 12 },
-  headerName:     { color: '#fff', fontWeight: '700', fontSize: 16 },
-  headerSub:      { color: 'rgba(255,255,255,.45)', fontSize: 11, marginTop: 1 },
+  headerAvatarTxt:{ color: '#fff', fontWeight: '800', fontSize: 16 },
+  headerGreet:    { color: 'rgba(255,255,255,.7)', fontSize: 12 },
+  headerName:     { color: '#fff', fontWeight: '800', fontSize: 17 },
+  headerMatRow:   { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+  headerSub:      { color: 'rgba(255,255,255,.7)', fontSize: 11 },
+
+  headerStats:    {
+    flexDirection: 'row', alignItems: 'center', marginTop: 18,
+    backgroundColor: 'rgba(255,255,255,.12)', borderRadius: 16, paddingVertical: 10,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,.16)',
+  },
+  headerStat:     { flex: 1, alignItems: 'center' },
+  headerStatVal:  { color: '#fff', fontWeight: '800', fontSize: 18 },
+  headerStatLbl:  { color: 'rgba(255,255,255,.72)', fontSize: 11, marginTop: 1 },
+  headerStatSep:  { width: 1, height: 26, backgroundColor: 'rgba(255,255,255,.18)' },
 
   filterRow:      {
     flexDirection: 'row', gap: 8,
@@ -342,19 +404,19 @@ const styles = StyleSheet.create({
   },
   filterChip:     {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5,
-    backgroundColor: COLORS.card, borderRadius: 22, paddingVertical: 9, paddingHorizontal: 8,
+    backgroundColor: COLORS.card, borderRadius: 22, paddingVertical: 10, paddingHorizontal: 8,
     borderWidth: 1, borderColor: COLORS.border,
   },
-  filterChipActive: { backgroundColor: COLORS.gold, borderColor: COLORS.gold },
+  filterChipActive: { backgroundColor: COLORS.teal, borderColor: COLORS.teal, ...SHADOWS.teal },
   filterTxt:      { fontSize: 12.5, fontWeight: '700', color: COLORS.textSub },
-  filterTxtActive:{ color: COLORS.brown },
+  filterTxtActive:{ color: '#fff' },
   filterCount:    {
     minWidth: 18, height: 18, borderRadius: 9, paddingHorizontal: 5,
     backgroundColor: COLORS.goldTint, alignItems: 'center', justifyContent: 'center',
   },
-  filterCountActive: { backgroundColor: 'rgba(43,33,24,.18)' },
+  filterCountActive: { backgroundColor: 'rgba(255,255,255,.25)' },
   filterCountTxt: { fontSize: 11, fontWeight: '800', color: COLORS.goldDark },
-  filterCountTxtActive: { color: COLORS.brown },
+  filterCountTxtActive: { color: '#fff' },
 
   sectionHeader:  {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
@@ -363,14 +425,16 @@ const styles = StyleSheet.create({
   sectionTitle:   { fontSize: 15, fontWeight: '800', color: COLORS.text },
 
   card:           {
-    backgroundColor: COLORS.card, borderRadius: 14, padding: 14,
+    backgroundColor: COLORS.card, borderRadius: RADIUS.lg, padding: 14,
     flexDirection: 'row', alignItems: 'center', gap: 12,
-    shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,
+    borderWidth: 1, borderColor: COLORS.border,
+    ...SHADOWS.sm,
   },
   cardLeft:       { alignItems: 'center' },
   indexBadge:     {
-    width: 32, height: 32, borderRadius: 16,
+    width: 36, height: 36, borderRadius: 18,
     alignItems: 'center', justifyContent: 'center',
+    ...SHADOWS.sm,
   },
   indexBadgeTxt:  { color: '#fff', fontWeight: '800', fontSize: 13 },
   cardBody:       { flex: 1, gap: 4 },
@@ -378,8 +442,12 @@ const styles = StyleSheet.create({
   cardTitle:      { fontSize: 15, fontWeight: '700', color: COLORS.text },
   cardMeta:       { flexDirection: 'row', alignItems: 'center', gap: 4 },
   cardMetaTxt:    { fontSize: 12, color: COLORS.textSub },
-  statusPill:     { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 20, marginTop: 2 },
-  statusTxt:      { fontSize: 11, fontWeight: '700' },
+  statusPill:     { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start',
+                    paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, marginTop: 4 },
+  statusDot:      { width: 6, height: 6, borderRadius: 3 },
+  statusTxt:      { fontSize: 11, fontWeight: '800' },
+  chevronWrap:    { width: 30, height: 30, borderRadius: 15, backgroundColor: COLORS.goldTint,
+                    alignItems: 'center', justifyContent: 'center' },
 
   empty:          { alignItems: 'center', paddingTop: 60, gap: 10 },
   emptyTxt:       { fontSize: 16, fontWeight: '600', color: COLORS.textSub },

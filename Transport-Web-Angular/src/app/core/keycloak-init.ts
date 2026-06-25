@@ -24,6 +24,8 @@ export function initializeKeycloak(keycloak: KeycloakService) {
           window.location.origin + '/assets/silent-check-sso.html'
       },
       enableBearerInterceptor: false, // on fournit notre propre intercepteur
-      loadUserProfileAtStartUp: true
+      // false : on NE charge PAS le profil via l'endpoint /account de Keycloak
+      // (bloqué par CORS sur localhost). On lit les infos dans le token (cf. AppComponent).
+      loadUserProfileAtStartUp: false
     });
 }

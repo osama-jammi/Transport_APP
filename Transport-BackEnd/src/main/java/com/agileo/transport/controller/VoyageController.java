@@ -4,6 +4,7 @@ import com.agileo.transport.Dtos.request.VoyageRequestDTO;
 import com.agileo.transport.Dtos.response.ArticleResponseDTO;
 import com.agileo.transport.Dtos.response.ArriveeResponseDTO;
 import com.agileo.transport.service.ArticleService;
+import com.agileo.transport.service.BonLivraisonService;
 import com.agileo.transport.Dtos.response.GapVoyageArticleDTO;
 import com.agileo.transport.Dtos.response.GapVoyageDTO;
 import com.agileo.transport.Dtos.response.VoyageResponseDTO;
@@ -37,6 +38,7 @@ public class VoyageController {
     private final ArticleService articleService;
     private final GapReadService gapReadService;
     private final CamionRepository camionRepository;
+    private final BonLivraisonService bonLivraisonService;
 
     /** Code de forçage d'arrivée fourni par l'administration. */
     @Value("${app.arrivee.force-code:AGILEO2026}")
@@ -245,6 +247,16 @@ public class VoyageController {
         } catch (java.io.IOException e) {
             throw new RuntimeException("Fichier BL introuvable", e);
         }
+    }
+
+    @GetMapping("/{id}/bl/imprimer")
+    @Operation(summary = "Imprimer le bon de livraison (PDF JasperReports) du voyage GAP")
+    public ResponseEntity<byte[]> imprimerBL(@PathVariable Long id) {
+        byte[] pdf = bonLivraisonService.genererBL(id);
+        return ResponseEntity.ok()
+                .header("Content-Disposition", "inline; filename=\"bon-livraison-" + id + ".pdf\"")
+                .contentType(org.springframework.http.MediaType.APPLICATION_PDF)
+                .body(pdf);
     }
 
     @PatchMapping("/{id}/force-code")

@@ -77,6 +77,26 @@ export interface ChauffeurRequest {
   admin?: boolean;
 }
 
+/** Compte superviseur de l'app mobile (table utilisateur_mobile, auth backend BCrypt). */
+export interface Superviseur {
+  id: number;
+  username: string;
+  nom?: string;
+  prenom?: string;
+  role?: string;
+  actif?: boolean;
+  derniereConnexion?: string;
+}
+
+/** Création / modification d'un compte superviseur (password vide en édition = inchangé). */
+export interface SuperviseurRequest {
+  username: string;
+  password?: string;
+  nom?: string;
+  prenom?: string;
+  actif?: boolean;
+}
+
 export interface Chantier {
   id: number;
   nom: string;

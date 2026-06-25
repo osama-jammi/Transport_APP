@@ -2,6 +2,9 @@ import { Component, OnInit } from '@angular/core';
 import { ToastrService } from 'ngx-toastr';
 import { DepotService } from '../services/depot.service';
 import { Depot } from '../core/models';
+import { SortState } from '../shared/sort.pipe';
+import { matchesSearch, matchesFilters, ColumnFilters } from '../shared/column-filter';
+import { FiltreField } from '../shared/filtre-panel.component';
 import * as L from 'leaflet';
 
 @Component({
@@ -9,17 +12,32 @@ import * as L from 'leaflet';
   template: `
     <div class="toolbar">
       <span class="badge badge-blue"><i class="fa-solid fa-warehouse"></i> Dépôts (locaux de départ)</span>
+      <div class="search"><i class="fa-solid fa-magnifying-glass"></i>
+        <input [(ngModel)]="q" (ngModelChange)="page=1" placeholder="Rechercher un dépôt…"></div>
+      <button class="btn" [ngClass]="filtresUI ? 'btn-primary' : 'btn-outline'" (click)="basculerFiltres()"
+              title="Filtrer par colonne">
+        <i class="fa-solid fa-filter"></i> Filtres</button>
       <button class="btn btn-primary right" (click)="ouvrir()"><i class="fa-solid fa-plus"></i> Nouveau dépôt</button>
     </div>
 
+    <app-filtre-panel *ngIf="filtresUI" [fields]="filterFields" [filters]="colF" (change)="page=1"></app-filtre-panel>
+
     <div class="card"><div class="card-body" style="padding:0">
       <div *ngIf="loading" class="spinner"></div>
-      <div *ngIf="!loading && depots.length===0" class="empty"><i class="fa-solid fa-warehouse"></i> Aucun dépôt</div>
-      <div class="table-wrap" *ngIf="!loading && depots.length">
+      <div *ngIf="!loading && depotsFiltres().length===0" class="empty"><i class="fa-solid fa-warehouse"></i> Aucun dépôt</div>
+      <div class="table-wrap" *ngIf="!loading && depotsFiltres().length">
         <table>
-          <thead><tr><th>ID</th><th>Nom</th><th>Latitude</th><th>Longitude</th><th>Rayon (m)</th><th></th></tr></thead>
+          <thead>
+            <tr>
+            <th appSortable="id" [(state)]="sortState">ID</th>
+            <th appSortable="nom" [(state)]="sortState">Nom</th>
+            <th appSortable="latitude" [(state)]="sortState">Latitude</th>
+            <th appSortable="longitude" [(state)]="sortState">Longitude</th>
+            <th appSortable="rayon" [(state)]="sortState">Rayon (m)</th>
+            <th></th></tr>
+          </thead>
           <tbody>
-            <tr *ngFor="let d of depots">
+            <tr *ngFor="let d of depotsFiltres() | sortBy:sortState | paginate:page:pageSize">
               <td><code>{{ d.id }}</code></td>
               <td><strong>{{ d.nom || '—' }}</strong></td>
               <td>{{ d.latitude ?? '—' }}</td>
@@ -33,6 +51,8 @@ import * as L from 'leaflet';
           </tbody>
         </table>
       </div>
+      <app-paginator [total]="depotsFiltres().length" [page]="page" [pageSize]="pageSize"
+                     (pageChange)="page = $event" (pageSizeChange)="pageSize = $event; page = 1"></app-paginator>
     </div></div>
 
     <div class="modal-backdrop" *ngIf="modal" (click)="fermer($event)">
@@ -68,12 +88,34 @@ export class DepotsComponent implements OnInit {
   loading = true; saving = false; modal = false;
   editId: number | null = null;
   form: Depot = {};
+  q = ''; page = 1; pageSize = 10;
+  filtresUI = false;
+  colF: ColumnFilters = {};
+  filterFields: FiltreField[] = [
+    { key: 'id', label: 'ID', icon: 'fa-hashtag', placeholder: 'ID' },
+    { key: 'nom', label: 'Nom', icon: 'fa-warehouse', placeholder: 'Nom du dépôt' },
+    { key: 'latitude', label: 'Latitude', icon: 'fa-location-crosshairs', placeholder: 'Lat' },
+    { key: 'longitude', label: 'Longitude', icon: 'fa-location-crosshairs', placeholder: 'Lng' },
+    { key: 'rayon', label: 'Rayon (m)', icon: 'fa-circle-notch', placeholder: 'Rayon en mètres' },
+  ];
+  sortState: SortState = { key: '', dir: 'asc' };
   private map?: L.Map;
   private marker?: L.Marker;
 
   constructor(private svc: DepotService, private toastr: ToastrService) {}
 
   ngOnInit(): void { this.charger(); }
+
+  /** Dépôts filtrés par la recherche (nom). */
+  depotsFiltres(): Depot[] {
+    return this.depots.filter(d => matchesSearch(d, this.q) && matchesFilters(d, this.colF));
+  }
+
+  /** Affiche/masque la ligne de filtres par colonne (et réinitialise à la fermeture). */
+  basculerFiltres(): void {
+    this.filtresUI = !this.filtresUI;
+    if (!this.filtresUI) { this.colF = {}; this.page = 1; }
+  }
 
   charger(): void {
     this.loading = true;

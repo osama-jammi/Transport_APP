@@ -5,8 +5,12 @@ import { forkJoin, of } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
 import { ChauffeurService } from '../services/chauffeur.service';
 import { CamionService } from '../services/camion.service';
-import { Chauffeur, ChauffeurRequest, Camion } from '../core/models';
+import { SuperviseurService } from '../services/superviseur.service';
+import { Chauffeur, ChauffeurRequest, Camion, Superviseur, SuperviseurRequest } from '../core/models';
 import { imprimerQrChauffeur } from '../core/qr-print';
+import { SortState } from '../shared/sort.pipe';
+import { matchesFilters, ColumnFilters } from '../shared/column-filter';
+import { FiltreField } from '../shared/filtre-panel.component';
 
 /**
  * Flotte = vue combinée Chauffeurs + Camions.
@@ -19,7 +23,10 @@ interface FleetUnit { chauffeur: Chauffeur; camion?: Camion; }
   template: `
     <div class="toolbar">
       <div class="search"><i class="fa-solid fa-magnifying-glass"></i>
-        <input [(ngModel)]="q" placeholder="Rechercher (chauffeur, matricule, camion)…"></div>
+        <input [(ngModel)]="q" (ngModelChange)="pageCam=1; pageUtil=1" placeholder="Rechercher (chauffeur, matricule, camion)…"></div>
+      <button class="btn" [ngClass]="filtresUI ? 'btn-primary' : 'btn-outline'" (click)="basculerFiltres()"
+              title="Filtrer les tableaux par colonne">
+        <i class="fa-solid fa-filter"></i> Filtres</button>
       <button class="btn btn-outline right" (click)="ouvrirChauffeur()">
         <i class="fa-solid fa-user-plus"></i> Nouvel utilisateur</button>
       <button class="btn btn-primary" (click)="ouvrirCamion()">
@@ -72,13 +79,24 @@ interface FleetUnit { chauffeur: Chauffeur; camion?: Camion; }
       </div>
     </div>
 
+    <app-filtre-panel *ngIf="filtresUI && !loading" [fields]="filterFieldsCam" [filters]="colFCam"
+                      (change)="pageCam=1"></app-filtre-panel>
+
     <!-- Camions non affectés -->
     <div class="card" *ngIf="!loading && camionsLibres().length">
       <div class="card-head"><h2>Camions sans chauffeur ({{ camionsLibres().length }})</h2></div>
       <div class="table-wrap"><table>
-        <thead><tr><th>ID</th><th>Immatriculation</th><th>Type</th><th>Marque</th><th>État</th><th></th></tr></thead>
+        <thead>
+          <tr>
+          <th appSortable="id" [(state)]="sortCam">ID</th>
+          <th appSortable="immatriculation" [(state)]="sortCam">Immatriculation</th>
+          <th appSortable="type" [(state)]="sortCam">Type</th>
+          <th appSortable="marque" [(state)]="sortCam">Marque</th>
+          <th appSortable="etat" [(state)]="sortCam">État</th>
+          <th></th></tr>
+        </thead>
         <tbody>
-          <tr *ngFor="let c of camionsLibres() | paginate:pageCam:pageSize">
+          <tr *ngFor="let c of camionsLibres() | sortBy:sortCam | paginate:pageCam:pageSize">
             <td><code>{{ c.id }}</code></td>
             <td><strong>{{ c.immatriculation }}</strong></td>
             <td>{{ c.type || '—' }}</td>
@@ -92,37 +110,56 @@ interface FleetUnit { chauffeur: Chauffeur; camion?: Camion; }
         </tbody>
       </table></div>
       <app-paginator [total]="camionsLibres().length" [page]="pageCam" [pageSize]="pageSize"
-                     (pageChange)="pageCam = $event"></app-paginator>
+                     (pageChange)="pageCam = $event" (pageSizeChange)="pageSize = $event; pageCam = 1; pageUtil = 1"></app-paginator>
     </div>
 
-    <!-- Utilisateurs (comptes app mobile) -->
-    <div class="card" *ngIf="!loading && utilisateurs.length">
-      <div class="card-head"><h2><i class="fa-solid fa-users"></i> Utilisateurs — app mobile ({{ utilisateurs.length }})</h2></div>
-      <div class="table-wrap"><table>
-        <thead><tr><th>Nom</th><th>Matricule</th><th>Rôle</th><th>Statut</th><th>Dernière connexion</th><th></th></tr></thead>
+    <app-filtre-panel *ngIf="filtresUI && !loading" [fields]="filterFieldsUtil" [filters]="colFUtil"
+                      (change)="pageUtil=1"></app-filtre-panel>
+
+    <!-- Utilisateurs — comptes superviseur de l'app mobile (table utilisateur_mobile) -->
+    <div class="card" *ngIf="!loading">
+      <div class="card-head">
+        <h2><i class="fa-solid fa-users"></i> Utilisateurs — app mobile ({{ utilisateursFiltres().length }})</h2>
+        <button class="btn btn-primary btn-sm" (click)="ouvrirSuperviseur()">
+          <i class="fa-solid fa-user-plus"></i> Nouveau superviseur</button>
+      </div>
+      <div class="table-wrap" *ngIf="utilisateursFiltres().length"><table>
+        <thead>
+          <tr>
+          <th appSortable="nom" [(state)]="sortUtil">Nom</th>
+          <th appSortable="username" [(state)]="sortUtil">Identifiant</th>
+          <th appSortable="role" [(state)]="sortUtil">Rôle</th>
+          <th appSortable="actif" [(state)]="sortUtil">Statut</th>
+          <th appSortable="derniereConnexion" [(state)]="sortUtil">Dernière connexion</th>
+          <th></th></tr>
+        </thead>
         <tbody>
-          <tr *ngFor="let a of utilisateurs | paginate:pageUtil:pageSize">
+          <tr *ngFor="let a of utilisateursFiltres() | sortBy:sortUtil | paginate:pageUtil:pageSize">
             <td><strong>{{ a.prenom }} {{ a.nom }}</strong></td>
-            <td><code>{{ a.matricule }}</code></td>
-            <td><span class="badge" [ngClass]="a.admin ? 'badge-orange' : 'badge-gray'">
-              <i class="fa-solid" [ngClass]="a.admin ? 'fa-user-shield' : 'fa-user'"></i>
-              {{ a.admin ? 'Administrateur' : 'Utilisateur' }}</span></td>
+            <td><code>{{ a.username }}</code></td>
+            <td><span class="badge badge-orange">
+              <i class="fa-solid fa-user-shield"></i> {{ a.role || 'SUPERVISEUR' }}</span></td>
             <td><span class="badge" [ngClass]="a.actif !== false ? 'badge-green' : 'badge-gray'">
               {{ a.actif !== false ? 'Actif' : 'Inactif' }}</span></td>
             <td>{{ a.derniereConnexion ? (a.derniereConnexion | date:'dd/MM/yy HH:mm') : 'Jamais connecté' }}</td>
             <td class="flex">
-              <button class="btn btn-outline btn-sm" (click)="voirQrLocal(a)"><i class="fa-solid fa-qrcode"></i> QR</button>
-              <button class="btn btn-outline btn-sm" (click)="ouvrirChauffeur(a)"><i class="fa-solid fa-pen"></i></button>
+              <button class="btn btn-outline btn-sm" (click)="ouvrirSuperviseur(a)" title="Modifier / changer le mot de passe">
+                <i class="fa-solid fa-pen"></i></button>
               <button class="btn btn-sm" [ngClass]="a.actif !== false ? 'btn-danger' : 'btn-primary'"
-                      (click)="basculerActifLocal(a)"
+                      (click)="basculerActifSuperviseur(a)"
                       [title]="a.actif !== false ? 'Désactiver' : 'Activer'">
                 <i class="fa-solid" [ngClass]="a.actif !== false ? 'fa-user-slash' : 'fa-user-check'"></i></button>
+              <button class="btn btn-danger btn-sm" (click)="supprimerSuperviseur(a)" title="Supprimer">
+                <i class="fa-solid fa-trash"></i></button>
             </td>
           </tr>
         </tbody>
       </table></div>
-      <app-paginator [total]="utilisateurs.length" [page]="pageUtil" [pageSize]="pageSize"
-                     (pageChange)="pageUtil = $event"></app-paginator>
+      <div *ngIf="!utilisateursFiltres().length" class="empty">
+        <i class="fa-solid fa-users"></i> Aucun compte superviseur</div>
+      <app-paginator *ngIf="utilisateursFiltres().length"
+                     [total]="utilisateursFiltres().length" [page]="pageUtil" [pageSize]="pageSize"
+                     (pageChange)="pageUtil = $event" (pageSizeChange)="pageSize = $event; pageCam = 1; pageUtil = 1"></app-paginator>
     </div>
 
     <!-- Modal chauffeur -->
@@ -193,6 +230,38 @@ interface FleetUnit { chauffeur: Chauffeur; camion?: Camion; }
       </div>
     </div>
 
+    <!-- Modal superviseur (compte app mobile) -->
+    <div class="modal-backdrop" *ngIf="modalSuperviseur" (click)="closeBackdropSuperviseur($event)">
+      <div class="modal" (click)="$event.stopPropagation()">
+        <div class="m-head"><h3>{{ editSuperviseurId ? 'Modifier le superviseur' : 'Nouveau superviseur' }}</h3>
+          <button class="x" (click)="modalSuperviseur=false">&times;</button></div>
+        <div class="m-body"><div class="form-grid">
+          <div class="field"><label>Identifiant *</label>
+            <input [(ngModel)]="formSuperviseur.username" [disabled]="!!editSuperviseurId" autocomplete="off">
+            <small class="muted" *ngIf="editSuperviseurId">L'identifiant ne peut pas être modifié.</small>
+          </div>
+          <div class="field"><label>{{ editSuperviseurId ? 'Nouveau mot de passe' : 'Mot de passe *' }}</label>
+            <input type="password" [(ngModel)]="formSuperviseur.password" autocomplete="new-password"
+                   [placeholder]="editSuperviseurId ? 'Laisser vide = inchangé' : ''">
+          </div>
+          <div class="field"><label>Prénom</label><input [(ngModel)]="formSuperviseur.prenom"></div>
+          <div class="field"><label>Nom</label><input [(ngModel)]="formSuperviseur.nom"></div>
+          <div class="field" style="grid-column:1/-1">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+              <input type="checkbox" [(ngModel)]="formSuperviseur.actif" style="width:auto">
+              <span><i class="fa-solid fa-user-shield"></i> Compte actif (accès à l'app mobile)</span>
+            </label>
+            <small class="muted">Le superviseur se connecte avec identifiant + mot de passe (tableau de bord mobile).</small>
+          </div>
+        </div></div>
+        <div class="m-foot">
+          <button class="btn btn-outline" (click)="modalSuperviseur=false">Annuler</button>
+          <button class="btn btn-primary" (click)="enregistrerSuperviseur()" [disabled]="saving">
+            <i class="fa-solid fa-floppy-disk"></i> Enregistrer</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Modal QR -->
     <div class="modal-backdrop" *ngIf="qrModal" (click)="qrModal=false">
       <div class="modal" style="max-width:360px;text-align:center" (click)="$event.stopPropagation()">
@@ -215,11 +284,27 @@ interface FleetUnit { chauffeur: Chauffeur; camion?: Camion; }
 })
 export class FlotteComponent implements OnInit {
   chauffeurs: Chauffeur[] = [];
-  utilisateurs: Chauffeur[] = [];   // comptes app mobile (table locale : admin ou non)
+  utilisateurs: Superviseur[] = [];   // comptes superviseur app mobile (table utilisateur_mobile)
   camions: Camion[] = [];
   loading = true; saving = false;
   pageUtil = 1; pageCam = 1; pageSize = 10;
   q = '';
+  filtresUI = false;
+  colFCam: ColumnFilters = {};
+  colFUtil: ColumnFilters = {};
+  filterFieldsCam: FiltreField[] = [
+    { key: 'id', label: 'ID', icon: 'fa-hashtag', placeholder: 'ID' },
+    { key: 'immatriculation', label: 'Immatriculation', icon: 'fa-truck', placeholder: 'Immatriculation' },
+    { key: 'type', label: 'Type', icon: 'fa-truck-moving', placeholder: 'Type' },
+    { key: 'marque', label: 'Marque', icon: 'fa-tag', placeholder: 'Marque' },
+    { key: 'etat', label: 'État', icon: 'fa-flag', placeholder: 'État' },
+  ];
+  filterFieldsUtil: FiltreField[] = [
+    { key: 'nom', label: 'Nom', icon: 'fa-user', placeholder: 'Nom ou prénom' },
+    { key: 'username', label: 'Identifiant', icon: 'fa-at', placeholder: 'Identifiant' },
+  ];
+  sortCam: SortState = { key: '', dir: 'asc' };
+  sortUtil: SortState = { key: '', dir: 'asc' };
 
   modalChauffeur = false; editChauffeurId: number | null = null;
   formChauffeur: ChauffeurRequest = { nom: '', prenom: '', matricule: '', telephone: '', admin: false };
@@ -231,9 +316,13 @@ export class FlotteComponent implements OnInit {
 
   qrModal = false; qrUrl: SafeUrl | null = null; qrChauffeur: Chauffeur | null = null;
 
+  modalSuperviseur = false; editSuperviseurId: number | null = null;
+  formSuperviseur: SuperviseurRequest = { username: '', password: '', nom: '', prenom: '', actif: true };
+
   constructor(
     private chauffeurSvc: ChauffeurService,
     private camionSvc: CamionService,
+    private superviseurSvc: SuperviseurService,
     private toastr: ToastrService,
     private san: DomSanitizer
   ) {}
@@ -256,9 +345,9 @@ export class FlotteComponent implements OnInit {
         catchError(() => of([] as Chauffeur[]))
       ),
       camions:    this.camionSvc.getAll().pipe(catchError(() => of([] as Camion[]))),
-      // Comptes app mobile : tous les chauffeurs de la table locale (admin ou non, actifs ou non)
-      utilisateurs: this.chauffeurSvc.getAll().pipe(
-        catchError(() => of([] as Chauffeur[]))
+      // Comptes superviseur de l'app mobile (table utilisateur_mobile, auth backend)
+      utilisateurs: this.superviseurSvc.lister().pipe(
+        catchError(() => of([] as Superviseur[]))
       )
     }).subscribe(({ chauffeurs, camions, utilisateurs }) => {
       this.chauffeurs = chauffeurs;
@@ -285,7 +374,22 @@ export class FlotteComponent implements OnInit {
     const t = this.q.toLowerCase().trim();
     return this.camions
       .filter(c => !c.chauffeurId)
-      .filter(c => !t || `${c.immatriculation} ${c.device}`.toLowerCase().includes(t));
+      .filter(c => !t || `${c.immatriculation} ${c.device}`.toLowerCase().includes(t))
+      .filter(c => matchesFilters(c, this.colFCam));
+  }
+
+  /** Comptes superviseur filtrés par la recherche globale + colonnes. */
+  utilisateursFiltres(): Superviseur[] {
+    const t = this.q.toLowerCase().trim();
+    return this.utilisateurs
+      .filter(u => !t || `${u.nom} ${u.prenom} ${u.username}`.toLowerCase().includes(t))
+      .filter(u => matchesFilters(u, this.colFUtil));
+  }
+
+  /** Affiche/masque les lignes de filtres par colonne (et réinitialise à la fermeture). */
+  basculerFiltres(): void {
+    this.filtresUI = !this.filtresUI;
+    if (!this.filtresUI) { this.colFCam = {}; this.colFUtil = {}; this.pageCam = 1; this.pageUtil = 1; }
   }
 
   closeBackdrop(e: Event, which: 'chauffeur' | 'camion'): void {
@@ -337,6 +441,52 @@ export class FlotteComponent implements OnInit {
     if (!confirm(`Supprimer ${c.nom} ${c.prenom} ?`)) return;
     this.chauffeurSvc.delete(c.id).subscribe({
       next: () => { this.toastr.success('Chauffeur supprimé.'); this.charger(); },
+      error: () => this.toastr.error('Échec suppression.')
+    });
+  }
+
+  /* ───── Superviseurs (comptes app mobile) CRUD ───── */
+  closeBackdropSuperviseur(e: Event): void {
+    if (e.target === e.currentTarget) this.modalSuperviseur = false;
+  }
+  ouvrirSuperviseur(s?: Superviseur): void {
+    if (s) {
+      this.editSuperviseurId = s.id;
+      this.formSuperviseur = { username: s.username, password: '', nom: s.nom, prenom: s.prenom, actif: s.actif !== false };
+    } else {
+      this.editSuperviseurId = null;
+      this.formSuperviseur = { username: '', password: '', nom: '', prenom: '', actif: true };
+    }
+    this.modalSuperviseur = true;
+  }
+  enregistrerSuperviseur(): void {
+    if (!this.formSuperviseur.username?.trim()) { this.toastr.warning('Identifiant obligatoire.'); return; }
+    if (!this.editSuperviseurId && !this.formSuperviseur.password?.trim()) {
+      this.toastr.warning('Mot de passe obligatoire à la création.'); return;
+    }
+    this.saving = true;
+    const obs = this.editSuperviseurId
+      ? this.superviseurSvc.modifier(this.editSuperviseurId, this.formSuperviseur)
+      : this.superviseurSvc.creer(this.formSuperviseur);
+    obs.subscribe({
+      next: () => { this.toastr.success('Compte enregistré.'); this.modalSuperviseur = false; this.saving = false; this.charger(); },
+      error: (err: any) => { this.toastr.error(err?.error?.message || 'Échec enregistrement.'); this.saving = false; }
+    });
+  }
+  /** Active/désactive un compte superviseur (via PUT, mot de passe inchangé). */
+  basculerActifSuperviseur(s: Superviseur): void {
+    const actif = s.actif === false;
+    const verbe = actif ? 'Activer' : 'Désactiver';
+    if (!confirm(`${verbe} le compte ${s.username} ?`)) return;
+    this.superviseurSvc.modifier(s.id, { username: s.username, actif }).subscribe({
+      next: () => { s.actif = actif; this.toastr.success(actif ? 'Compte activé.' : 'Compte désactivé.'); },
+      error: () => this.toastr.error('Échec de la mise à jour.')
+    });
+  }
+  supprimerSuperviseur(s: Superviseur): void {
+    if (!confirm(`Supprimer le compte ${s.username} ?`)) return;
+    this.superviseurSvc.supprimer(s.id).subscribe({
+      next: () => { this.toastr.success('Compte supprimé.'); this.charger(); },
       error: () => this.toastr.error('Échec suppression.')
     });
   }

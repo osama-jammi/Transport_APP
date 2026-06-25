@@ -5,6 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { HttpClientModule, HTTP_INTERCEPTORS } from '@angular/common/http';
 import { KeycloakAngularModule, KeycloakService } from 'keycloak-angular';
 import { ToastrModule } from 'ngx-toastr';
+import { NgSelectModule } from '@ng-select/ng-select';
 
 import { AppRoutingModule } from './app-routing.module';
 import { AppComponent } from './app.component';
@@ -24,6 +25,10 @@ import { AdministrationComponent } from './features/administration.component';
 import { RapportsComponent } from './features/rapports.component';
 import { PaginatePipe } from './shared/paginate.pipe';
 import { PaginatorComponent } from './shared/paginator.component';
+import { SortPipe } from './shared/sort.pipe';
+import { SortableDirective } from './shared/sortable.directive';
+import { ColFilterComponent } from './shared/col-filter.component';
+import { FiltrePanelComponent } from './shared/filtre-panel.component';
 
 @NgModule({
   declarations: [
@@ -40,7 +45,11 @@ import { PaginatorComponent } from './shared/paginator.component';
     AdministrationComponent,
     RapportsComponent,
     PaginatePipe,
-    PaginatorComponent
+    PaginatorComponent,
+    SortPipe,
+    SortableDirective,
+    ColFilterComponent,
+    FiltrePanelComponent
   ],
   imports: [
     BrowserModule,
@@ -49,6 +58,7 @@ import { PaginatorComponent } from './shared/paginator.component';
     HttpClientModule,
     AppRoutingModule,
     KeycloakAngularModule,
+    NgSelectModule,
     ToastrModule.forRoot({ positionClass: 'toast-bottom-right', timeOut: 3500, progressBar: true })
   ],
   providers: [
