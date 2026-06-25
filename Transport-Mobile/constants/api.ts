@@ -40,6 +40,8 @@ export const API_BASE_URL = resolveBaseUrl();
 export const ENDPOINTS = {
   // Authentification / appairage
   CONNECT_QR: '/chauffeurs/connect',
+  // Connexion superviseur (backend, hors Keycloak)
+  MOBILE_LOGIN: '/mobile/auth/login',
 
   // Voyages — lus depuis GAP (livraisons), filtrés par chauffeur
   VOYAGES_EN_COURS: '/voyages/gap',
