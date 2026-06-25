@@ -4,6 +4,7 @@ import { MatierePremiereService } from '../services/matiere-premiere.service';
 import { CommandeMp, MatierePremiere } from '../core/models';
 import { SortState } from '../shared/sort.pipe';
 import { matchesSearch, matchesFilters, ColumnFilters } from '../shared/column-filter';
+import { FiltreField } from '../shared/filtre-panel.component';
 
 @Component({
   selector: 'app-matieres-premieres',
@@ -19,6 +20,8 @@ import { matchesSearch, matchesFilters, ColumnFilters } from '../shared/column-f
         <i class="fa-solid fa-rotate"></i> Actualiser</button>
     </div>
 
+    <app-filtre-panel *ngIf="filtresUI" [fields]="filterFields" [filters]="colF" (change)="page=1"></app-filtre-panel>
+
     <div class="card"><div class="card-body" style="padding:0">
       <div *ngIf="loadingCmd" class="spinner"></div>
       <div *ngIf="!loadingCmd && commandesFiltrees().length===0" class="empty">
@@ -33,14 +36,6 @@ import { matchesSearch, matchesFilters, ColumnFilters } from '../shared/column-f
             <th appSortable="tiers" [(state)]="sortState">Fournisseur</th>
             <th appSortable="reference" [(state)]="sortState">Pièce fournisseur</th>
             <th></th></tr>
-            <tr class="col-filter-row" *ngIf="filtresUI">
-              <th appColFilter="cdno" [filters]="colF" (filterChange)="page=1" placeholder="N°"></th>
-              <th appColFilter="date" [filters]="colF" (filterChange)="page=1" placeholder="AAAA-MM-JJ"></th>
-              <th appColFilter="projet" [filters]="colF" (filterChange)="page=1" placeholder="Affaire"></th>
-              <th appColFilter="tiers" [filters]="colF" (filterChange)="page=1" placeholder="Fournisseur"></th>
-              <th appColFilter="reference" [filters]="colF" (filterChange)="page=1" placeholder="Pièce"></th>
-              <th></th>
-            </tr>
           </thead>
           <tbody>
             <tr *ngFor="let c of commandesFiltrees() | sortBy:sortState | paginate:page:pageSize" class="row-link" (click)="choisir(c)">
@@ -99,6 +94,13 @@ export class MatieresPremieresComponent implements OnInit {
   q = '';
   filtresUI = false;
   colF: ColumnFilters = {};
+  filterFields: FiltreField[] = [
+    { key: 'cdno', label: 'N° pièce', icon: 'fa-hashtag', placeholder: 'N°' },
+    { key: 'date', label: 'Date', icon: 'fa-calendar-day', placeholder: 'AAAA-MM-JJ' },
+    { key: 'projet', label: 'Affaire', icon: 'fa-briefcase', placeholder: 'Affaire' },
+    { key: 'tiers', label: 'Fournisseur', icon: 'fa-truck-field', placeholder: 'Fournisseur' },
+    { key: 'reference', label: 'Pièce fournisseur', icon: 'fa-file-invoice', placeholder: 'Pièce' },
+  ];
   sortState: SortState = { key: '', dir: 'asc' };
   selected: CommandeMp | null = null;
   lignes: MatierePremiere[] = [];
