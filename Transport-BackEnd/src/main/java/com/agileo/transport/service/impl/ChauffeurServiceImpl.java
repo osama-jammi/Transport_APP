@@ -7,6 +7,8 @@ import com.agileo.transport.entity.Camion;
 import com.agileo.transport.entity.Chauffeur;
 import com.agileo.transport.repository.CamionRepository;
 import com.agileo.transport.repository.ChauffeurRepository;
+import com.agileo.transport.security.JwtService;
+import com.agileo.transport.security.QrCipherService;
 import com.agileo.transport.service.ChauffeurService;
 import com.agileo.transport.service.GapReadService;
 import com.google.zxing.BarcodeFormat;
@@ -34,9 +36,13 @@ public class ChauffeurServiceImpl implements ChauffeurService {
     private final ChauffeurRepository chauffeurRepository;
     private final CamionRepository camionRepository;
     private final GapReadService gapReadService;
+    private final JwtService jwtService;
+    private final QrCipherService qrCipherService;
 
-    /** Préfixe encodé dans le QR d'un chauffeur GAP. */
+    /** Préfixe historique (QR en clair) d'un chauffeur GAP — gardé pour compat ascendante. */
     private static final String PREFIXE_QR_GAP = "CHAUFFEUR_GAP:";
+    /** Rôle applicatif des jetons chauffeur. */
+    private static final String ROLE_CHAUFFEUR = "CHAUFFEUR";
 
     @Override
     @Transactional(readOnly = true)
@@ -114,19 +120,25 @@ public class ChauffeurServiceImpl implements ChauffeurService {
 
     @Override
     public byte[] generateQrCode(Long id) {
-        Chauffeur chauffeur = findById(id);
-        // Régénère si absent
-        if (chauffeur.getQrCode() == null) {
-            chauffeur.setQrCode(UUID.randomUUID().toString());
-            chauffeurRepository.save(chauffeur);
-        }
-        return encodeQr(chauffeur.getQrCode());
+        Chauffeur c = findById(id);
+        // QR chiffré (AES) : "LOC|{id}|{matricule}|{nom prenom}".
+        String payload = "LOC|" + c.getId() + "|"
+                + (c.getMatricule() == null ? "" : c.getMatricule()) + "|"
+                + nomComplet(c.getNom(), c.getPrenom());
+        return encodeQr(qrCipherService.chiffrer(payload));
     }
 
     @Override
     public byte[] generateQrCodeGap(Long gapChauffeurId) {
-        // Le QR encode l'id du chauffeur GAP (pour identification / appairage).
-        return encodeQr("CHAUFFEUR_GAP:" + gapChauffeurId);
+        GapChauffeurDTO gap = gapReadService.getChauffeurById(gapChauffeurId);
+        if (gap == null) {
+            throw new EntityNotFoundException("Chauffeur GAP introuvable : " + gapChauffeurId);
+        }
+        // QR chiffré (AES) : "GAP|{id}|{matricule}|{nom prenom}".
+        String payload = "GAP|" + gapChauffeurId + "|"
+                + (gap.getMatricule() == null ? "" : String.valueOf(gap.getMatricule())) + "|"
+                + nomComplet(gap.getNom(), gap.getPrenom());
+        return encodeQr(qrCipherService.chiffrer(payload));
     }
 
     @Override
@@ -155,19 +167,49 @@ public class ChauffeurServiceImpl implements ChauffeurService {
 
     @Override
     public ChauffeurResponseDTO connectByQrCode(String qrCode) {
-        // Nouveau format : QR d'un chauffeur GAP → appairage à partir de la base GAP
-        if (qrCode != null && qrCode.startsWith(PREFIXE_QR_GAP)) {
-            return connectChauffeurGap(qrCode);
+        // Format courant : QR chiffré (AES) → on déchiffre pour retrouver "TYPE|id|matricule|nom".
+        String contenu = qrCode;
+        try {
+            String clair = qrCipherService.dechiffrer(qrCode);
+            if (clair.startsWith("GAP|") || clair.startsWith("LOC|")) {
+                String[] p = clair.split("\\|", 4);
+                Long id = Long.parseLong(p[1]);
+                return "GAP".equals(p[0])
+                        ? connectChauffeurGap(PREFIXE_QR_GAP + id)
+                        : connectChauffeurLocal(id);
+            }
+            contenu = clair;
+        } catch (IllegalArgumentException notEncrypted) {
+            // QR non chiffré → on retombe sur les formats historiques (compat ascendante).
         }
-        // Ancien format : QR stocké dans la table locale
-        Chauffeur chauffeur = chauffeurRepository.findByQrCode(qrCode)
+
+        // ── Formats historiques (QR en clair) ──
+        if (contenu != null && contenu.startsWith(PREFIXE_QR_GAP)) {
+            return connectChauffeurGap(contenu);
+        }
+        Chauffeur chauffeur = chauffeurRepository.findByQrCode(contenu)
                 .orElseThrow(() -> new EntityNotFoundException("QR code chauffeur invalide"));
         if (Boolean.FALSE.equals(chauffeur.getActif())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                     "Compte désactivé. Contactez l'administrateur.");
         }
         chauffeur.setDerniereConnexion(LocalDateTime.now());
-        return toDTO(chauffeurRepository.save(chauffeur));
+        ChauffeurResponseDTO dto = toDTO(chauffeurRepository.save(chauffeur));
+        dto.setToken(jwtService.generer("chauffeur:" + dto.getId(), ROLE_CHAUFFEUR, dto.getNom(), dto.getPrenom()));
+        return dto;
+    }
+
+    /** Appairage d'un chauffeur de la table locale (QR "LOC|...") → jeton chauffeur. */
+    private ChauffeurResponseDTO connectChauffeurLocal(Long id) {
+        Chauffeur chauffeur = findById(id);
+        if (Boolean.FALSE.equals(chauffeur.getActif())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Compte désactivé. Contactez l'administrateur.");
+        }
+        chauffeur.setDerniereConnexion(LocalDateTime.now());
+        ChauffeurResponseDTO dto = toDTO(chauffeurRepository.save(chauffeur));
+        dto.setToken(jwtService.generer("chauffeur:" + dto.getId(), ROLE_CHAUFFEUR, dto.getNom(), dto.getPrenom()));
+        return dto;
     }
 
     /** Appairage d'un chauffeur GAP (QR = "CHAUFFEUR_GAP:{id}"). */
@@ -200,6 +242,7 @@ public class ChauffeurServiceImpl implements ChauffeurService {
             dto.setCamionId(cam.getId());
             dto.setCamionImmatriculation(cam.getImmatriculation());
         });
+        dto.setToken(jwtService.generer("chauffeur:" + dto.getId(), ROLE_CHAUFFEUR, dto.getNom(), dto.getPrenom()));
         return dto;
     }
 
@@ -220,6 +263,11 @@ public class ChauffeurServiceImpl implements ChauffeurService {
     private Chauffeur findById(Long id) {
         return chauffeurRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Chauffeur introuvable : " + id));
+    }
+
+    /** Concatène nom + prénom de façon sûre (valeurs nulles tolérées). */
+    private static String nomComplet(String nom, String prenom) {
+        return ((nom == null ? "" : nom) + " " + (prenom == null ? "" : prenom)).trim();
     }
 
     private byte[] encodeQr(String content) {
