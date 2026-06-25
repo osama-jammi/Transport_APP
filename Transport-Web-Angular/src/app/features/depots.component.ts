@@ -4,6 +4,7 @@ import { DepotService } from '../services/depot.service';
 import { Depot } from '../core/models';
 import { SortState } from '../shared/sort.pipe';
 import { matchesSearch, matchesFilters, ColumnFilters } from '../shared/column-filter';
+import { FiltreField } from '../shared/filtre-panel.component';
 import * as L from 'leaflet';
 
 @Component({
@@ -19,6 +20,8 @@ import * as L from 'leaflet';
       <button class="btn btn-primary right" (click)="ouvrir()"><i class="fa-solid fa-plus"></i> Nouveau dépôt</button>
     </div>
 
+    <app-filtre-panel *ngIf="filtresUI" [fields]="filterFields" [filters]="colF" (change)="page=1"></app-filtre-panel>
+
     <div class="card"><div class="card-body" style="padding:0">
       <div *ngIf="loading" class="spinner"></div>
       <div *ngIf="!loading && depotsFiltres().length===0" class="empty"><i class="fa-solid fa-warehouse"></i> Aucun dépôt</div>
@@ -32,14 +35,6 @@ import * as L from 'leaflet';
             <th appSortable="longitude" [(state)]="sortState">Longitude</th>
             <th appSortable="rayon" [(state)]="sortState">Rayon (m)</th>
             <th></th></tr>
-            <tr class="col-filter-row" *ngIf="filtresUI">
-              <th appColFilter="id" [filters]="colF" (filterChange)="page=1" placeholder="ID"></th>
-              <th appColFilter="nom" [filters]="colF" (filterChange)="page=1" placeholder="Nom"></th>
-              <th appColFilter="latitude" [filters]="colF" (filterChange)="page=1" placeholder="Lat"></th>
-              <th appColFilter="longitude" [filters]="colF" (filterChange)="page=1" placeholder="Lng"></th>
-              <th appColFilter="rayon" [filters]="colF" (filterChange)="page=1" placeholder="m"></th>
-              <th></th>
-            </tr>
           </thead>
           <tbody>
             <tr *ngFor="let d of depotsFiltres() | sortBy:sortState | paginate:page:pageSize">
@@ -96,6 +91,13 @@ export class DepotsComponent implements OnInit {
   q = ''; page = 1; pageSize = 10;
   filtresUI = false;
   colF: ColumnFilters = {};
+  filterFields: FiltreField[] = [
+    { key: 'id', label: 'ID', icon: 'fa-hashtag', placeholder: 'ID' },
+    { key: 'nom', label: 'Nom', icon: 'fa-warehouse', placeholder: 'Nom du dépôt' },
+    { key: 'latitude', label: 'Latitude', icon: 'fa-location-crosshairs', placeholder: 'Lat' },
+    { key: 'longitude', label: 'Longitude', icon: 'fa-location-crosshairs', placeholder: 'Lng' },
+    { key: 'rayon', label: 'Rayon (m)', icon: 'fa-circle-notch', placeholder: 'Rayon en mètres' },
+  ];
   sortState: SortState = { key: '', dir: 'asc' };
   private map?: L.Map;
   private marker?: L.Marker;
