@@ -1,4 +1,4 @@
-import { Component, AfterViewInit, OnDestroy, HostListener } from '@angular/core';
+import { Component, AfterViewInit, OnDestroy, HostListener, ViewChild, ElementRef } from '@angular/core';
 import * as L from 'leaflet';
 import { forkJoin, of } from 'rxjs';
 import { catchError } from 'rxjs/operators';
@@ -33,7 +33,7 @@ const COULEURS = [
       </div>
     </div>
 
-    <div class="card map-card" [class.plein]="plein"><div class="card-body">
+    <div #mapCard class="card map-card" [class.plein]="plein"><div class="card-body">
       <div *ngIf="loading" class="spinner" style="margin:8px auto"></div>
       <div class="map-legend" *ngIf="!loading">
         <span *ngIf="trajets.length===0" class="muted">Aucun trajet sur cette période.</span>
@@ -91,11 +91,17 @@ const COULEURS = [
     #suivi-map { height: calc(100dvh - 430px); min-height: 320px; }
     .map-fs { position: absolute; top: 12px; right: 12px; z-index: 1000;
       background: #fff; box-shadow: var(--shadow-sm); }
-    /* Plein écran : la carte occupe tout l'écran */
-    .map-card.plein { position: fixed; inset: 0; z-index: 2000; margin: 0; border-radius: 0; max-height: none; }
-    .map-card.plein .card-body { display: flex; flex-direction: column; height: 100dvh; padding: 12px; }
-    .map-card.plein .map-holder { flex: 1 1 auto; min-height: 0; }
-    .map-card.plein #suivi-map { height: 100%; min-height: 0; }
+    /* Plein écran NATIF (API Fullscreen = F11) : la carte est placée dans le top
+       layer du navigateur → recouvre tout, y compris la sidebar. */
+    .map-card:fullscreen { background: #fff; margin: 0; border-radius: 0; max-height: none; }
+    .map-card:fullscreen .card-body { display: flex; flex-direction: column; height: 100%; padding: 12px; }
+    .map-card:fullscreen .map-holder { flex: 1 1 auto; min-height: 0; }
+    .map-card:fullscreen #suivi-map { height: 100%; min-height: 0; }
+    /* Repli CSS si l'API plein écran natif est indisponible/refusée. */
+    .map-card.plein:not(:fullscreen) { position: fixed; inset: 0; z-index: 2000; margin: 0; border-radius: 0; max-height: none; }
+    .map-card.plein:not(:fullscreen) .card-body { display: flex; flex-direction: column; height: 100dvh; padding: 12px; }
+    .map-card.plein:not(:fullscreen) .map-holder { flex: 1 1 auto; min-height: 0; }
+    .map-card.plein:not(:fullscreen) #suivi-map { height: 100%; min-height: 0; }
     tbody tr.row-active { background:var(--primary-light) !important; }
   `]
 })
@@ -122,6 +128,8 @@ export class SuiviTrajetsComponent implements AfterViewInit, OnDestroy {
   private layer?: L.LayerGroup;
   private bounds: L.LatLngBounds[] = [];
 
+  @ViewChild('mapCard') mapCard!: ElementRef<HTMLElement>;
+
   constructor(private svc: GpsService, private chauffeurSvc: ChauffeurService) {}
 
   ngAfterViewInit(): void {
@@ -136,17 +144,56 @@ export class SuiviTrajetsComponent implements AfterViewInit, OnDestroy {
 
   couleur(i: number): string { return COULEURS[i % COULEURS.length]; }
 
-  /** Bascule la carte en plein écran (et recalcule sa taille). */
+  /**
+   * Bascule la carte en plein écran via l'API Fullscreen native (= F11) : la
+   * carte passe dans le « top layer » du navigateur et recouvre TOUT, sidebar
+   * comprise. Repli sur un plein écran CSS si l'API est indisponible/refusée.
+   */
   basculerPlein(): void {
-    this.plein = !this.plein;
-    setTimeout(() => this.map?.invalidateSize(), 60);
-    setTimeout(() => this.map?.invalidateSize(), 320);
+    const el = this.mapCard?.nativeElement as any;
+    const doc = document as any;
+    if (!doc.fullscreenElement && !doc.webkitFullscreenElement) {
+      const demande: (() => Promise<void>) | undefined =
+        el?.requestFullscreen?.bind(el) || el?.webkitRequestFullscreen?.bind(el);
+      if (demande) {
+        Promise.resolve(demande()).catch(() => { this.plein = true; this.resizeMap(); });
+      } else {
+        // Navigateur sans API plein écran : repli CSS.
+        this.plein = true;
+        this.resizeMap();
+      }
+    } else {
+      const sortie: (() => Promise<void>) | undefined =
+        doc.exitFullscreen?.bind(doc) || doc.webkitExitFullscreen?.bind(doc);
+      if (sortie) Promise.resolve(sortie()).catch(() => {});
+      this.plein = false;
+      this.resizeMap();
+    }
   }
 
-  /** Échap : quitte le plein écran. */
+  /** Synchronise l'état + redimensionne la carte quand le plein écran natif change. */
+  @HostListener('document:fullscreenchange')
+  @HostListener('document:webkitfullscreenchange')
+  onFullscreenChange(): void {
+    const doc = document as any;
+    this.plein = !!(doc.fullscreenElement || doc.webkitFullscreenElement);
+    this.resizeMap();
+  }
+
+  /** Échap : quitte le repli CSS (le plein écran natif gère Échap tout seul). */
   @HostListener('document:keydown.escape')
   quitterPlein(): void {
-    if (this.plein) this.basculerPlein();
+    const doc = document as any;
+    if (this.plein && !doc.fullscreenElement && !doc.webkitFullscreenElement) {
+      this.plein = false;
+      this.resizeMap();
+    }
+  }
+
+  /** Recalcule la taille de la carte Leaflet après un changement de layout. */
+  private resizeMap(): void {
+    setTimeout(() => this.map?.invalidateSize(), 60);
+    setTimeout(() => this.map?.invalidateSize(), 320);
   }
 
   /** Calcule debut/fin (ISO date) à partir du preset choisi. */
