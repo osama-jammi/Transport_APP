@@ -4,6 +4,7 @@ import { ArticleService } from '../services/article.service';
 import { GapArticle } from '../core/models';
 import { SortState } from '../shared/sort.pipe';
 import { matchesSearch, matchesFilters, ColumnFilters } from '../shared/column-filter';
+import { FiltreField } from '../shared/filtre-panel.component';
 
 @Component({
   selector: 'app-articles',
@@ -18,6 +19,8 @@ import { matchesSearch, matchesFilters, ColumnFilters } from '../shared/column-f
       <button class="btn btn-outline right" (click)="charger()" [disabled]="loading">
         <i class="fa-solid fa-rotate"></i> Actualiser depuis GAP</button>
     </div>
+
+    <app-filtre-panel *ngIf="filtresUI" [fields]="filterFields" [filters]="colF" (change)="page=1"></app-filtre-panel>
 
     <div class="card"><div class="card-body" style="padding:0">
       <div *ngIf="loading" class="spinner"></div>
@@ -36,16 +39,6 @@ import { matchesSearch, matchesFilters, ColumnFilters } from '../shared/column-f
             <th appSortable="numPrix" [(state)]="sortState">N° prix</th>
             <th appSortable="origineArticle" [(state)]="sortState">Origine</th>
           </tr>
-            <tr class="col-filter-row" *ngIf="filtresUI">
-              <th appColFilter="id" [filters]="colF" (filterChange)="page=1" placeholder="ID"></th>
-              <th appColFilter="designation" [filters]="colF" (filterChange)="page=1" placeholder="Désignation"></th>
-              <th appColFilter="unite" [filters]="colF" (filterChange)="page=1" placeholder="Unité"></th>
-              <th appColFilter="quantiteTot" [filters]="colF" (filterChange)="page=1" placeholder="Qté"></th>
-              <th appColFilter="quantiteLivre" [filters]="colF" (filterChange)="page=1" placeholder="Qté"></th>
-              <th appColFilter="quantiteReste" [filters]="colF" (filterChange)="page=1" placeholder="Reste"></th>
-              <th appColFilter="numPrix" [filters]="colF" (filterChange)="page=1" placeholder="N° prix"></th>
-              <th appColFilter="origineArticle" [filters]="colF" (filterChange)="page=1" placeholder="Origine"></th>
-            </tr>
           </thead>
           <tbody>
             <tr *ngFor="let a of filtres() | sortBy:sortState | paginate:page:pageSize">
@@ -73,6 +66,16 @@ export class ArticlesComponent implements OnInit {
   q = '';
   filtresUI = false;
   colF: ColumnFilters = {};
+  filterFields: FiltreField[] = [
+    { key: 'id', label: 'ID', icon: 'fa-hashtag', placeholder: 'ID' },
+    { key: 'designation', label: 'Désignation', icon: 'fa-box', placeholder: 'Désignation' },
+    { key: 'unite', label: 'Unité', icon: 'fa-ruler', placeholder: 'Unité' },
+    { key: 'quantiteTot', label: 'Qté totale', icon: 'fa-layer-group', placeholder: 'Quantité' },
+    { key: 'quantiteLivre', label: 'Qté livrée', icon: 'fa-truck-ramp-box', placeholder: 'Quantité' },
+    { key: 'quantiteReste', label: 'Reste', icon: 'fa-boxes-stacked', placeholder: 'Reste' },
+    { key: 'numPrix', label: 'N° prix', icon: 'fa-tag', placeholder: 'N° prix' },
+    { key: 'origineArticle', label: 'Origine', icon: 'fa-industry', placeholder: 'Origine' },
+  ];
   sortState: SortState = { key: '', dir: 'asc' };
 
   constructor(private svc: ArticleService, private toastr: ToastrService) {}
