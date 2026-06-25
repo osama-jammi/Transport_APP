@@ -1,27 +1,27 @@
 import axios from 'axios';
 import { API_BASE_URL } from '@/constants/api';
-import { getAccessToken } from './keycloakAuth';
+import { getMobileToken } from './mobileToken';
 
-// Deux modes d'authentification mobile :
-//   • CHAUFFEUR  → QR code, aucun token : il n'appelle que les endpoints publics.
-//   • SUPERVISEUR/ADMIN → connecté via Keycloak : un token est stocké, on l'ajoute
-//     alors en en-tete Authorization pour accéder aux endpoints sécurisés.
+// Authentification mobile unifiée : le backend Transport émet un jeton (HS256)
+// pour les DEUX profils — CHAUFFEUR (scan QR) et SUPERVISEUR (login). Ce jeton
+// est ajouté en en-tête Authorization sur toutes les requêtes. Keycloak n'est
+// plus utilisé côté mobile (réservé au web).
 const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 10_000,
   headers: { 'Content-Type': 'application/json' },
 });
 
-// Ajoute le Bearer Keycloak SI un admin est connecté (sinon appel public chauffeur).
+// Ajoute le Bearer backend si un jeton est stocké (sinon : appel public — login / connect).
 api.interceptors.request.use(async (config) => {
   try {
-    const token = await getAccessToken();
+    const token = await getMobileToken();
     if (token) {
       config.headers = config.headers ?? {};
       (config.headers as any).Authorization = `Bearer ${token}`;
     }
   } catch {
-    // Pas de token disponible (chauffeur) → requête publique.
+    // Pas encore de jeton (avant login / connect) → requête publique.
   }
   return config;
 });
