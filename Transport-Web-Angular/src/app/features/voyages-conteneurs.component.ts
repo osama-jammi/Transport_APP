@@ -16,6 +16,7 @@ import {
 } from '../core/models';
 import { SortState } from '../shared/sort.pipe';
 import { matchesSearch, matchesFilters, ColumnFilters } from '../shared/column-filter';
+import { FiltreField } from '../shared/filtre-panel.component';
 import * as L from 'leaflet';
 
 /** Une ligne du voyage : un chantier, une date, et soit des livraisons (articles) soit des MP. */
@@ -65,6 +66,8 @@ interface VoyageLigne {
       </button>
     </div>
 
+    <app-filtre-panel *ngIf="filtresUI" [fields]="filterFields" [filters]="colF" (change)="page=1"></app-filtre-panel>
+
     <div class="card"><div class="card-body" style="padding:0">
       <div *ngIf="loading" class="spinner"></div>
       <div *ngIf="!loading && voyagesFiltres().length===0" class="empty">
@@ -81,15 +84,6 @@ interface VoyageLigne {
             <th appSortable="nbMatieres" [(state)]="sortState">Mat. premières</th>
             <th appSortable="statut" [(state)]="sortState">Statut</th>
             <th></th></tr>
-            <tr class="col-filter-row" *ngIf="filtresUI">
-              <th appColFilter="id" [filters]="colF" (filterChange)="page=1" placeholder="ID"></th>
-              <th appColFilter="dateVoyage" [filters]="colF" (filterChange)="page=1" placeholder="AAAA-MM-JJ"></th>
-              <th appColFilter="chauffeur" [filters]="colF" (filterChange)="page=1" placeholder="Chauffeur"></th>
-              <th appColFilter="nbLivraisons" [filters]="colF" (filterChange)="page=1" placeholder="Nb"></th>
-              <th appColFilter="nbMatieres" [filters]="colF" (filterChange)="page=1" placeholder="Nb"></th>
-              <th appColFilter="statut" [filters]="colF" (filterChange)="page=1" placeholder="Statut"></th>
-              <th></th>
-            </tr>
           </thead>
           <tbody>
             <tr *ngFor="let v of voyagesFiltres() | sortBy:sortState | paginate:page:pageSize">
@@ -632,6 +626,14 @@ export class VoyagesConteneursComponent implements OnInit {
   vue: 'en-cours' | 'archives' | 'historique' = 'en-cours';
   filtresUI = false;
   colF: ColumnFilters = {};
+  filterFields: FiltreField[] = [
+    { key: 'id', label: 'ID', icon: 'fa-hashtag', placeholder: 'ID' },
+    { key: 'dateVoyage', label: 'Date', icon: 'fa-calendar-day', placeholder: 'AAAA-MM-JJ' },
+    { key: 'chauffeur', label: 'Chauffeur', icon: 'fa-id-card', placeholder: 'Chauffeur' },
+    { key: 'nbLivraisons', label: 'Livraisons', icon: 'fa-truck-ramp-box', placeholder: 'Nombre' },
+    { key: 'nbMatieres', label: 'Mat. premières', icon: 'fa-cubes', placeholder: 'Nombre' },
+    { key: 'statut', label: 'Statut', icon: 'fa-flag', placeholder: 'Statut' },
+  ];
   modal = false; saving = false;
   editId: number | null = null;
 
