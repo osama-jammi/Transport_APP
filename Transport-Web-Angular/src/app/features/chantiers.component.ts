@@ -5,6 +5,7 @@ import { ChantierService } from '../services/chantier.service';
 import { Chantier, ChantierRequest } from '../core/models';
 import { SortState } from '../shared/sort.pipe';
 import { matchesSearch, matchesFilters, ColumnFilters } from '../shared/column-filter';
+import { FiltreField } from '../shared/filtre-panel.component';
 
 @Component({
   selector: 'app-chantiers',
@@ -18,6 +19,8 @@ import { matchesSearch, matchesFilters, ColumnFilters } from '../shared/column-f
       <button class="btn btn-primary right" (click)="ouvrir()">
         <i class="fa-solid fa-plus"></i> Nouveau chantier</button>
     </div>
+
+    <app-filtre-panel *ngIf="filtresUI" [fields]="filterFields" [filters]="colF" (change)="page=1"></app-filtre-panel>
 
     <div class="card"><div class="card-body" style="padding:0">
       <div *ngIf="loading" class="spinner"></div>
@@ -34,16 +37,6 @@ import { matchesSearch, matchesFilters, ColumnFilters } from '../shared/column-f
             <th appSortable="rayonMetres" [(state)]="sortState">Zone</th>
             <th appSortable="actif" [(state)]="sortState">Statut</th>
             <th>Actions</th></tr>
-            <tr class="col-filter-row" *ngIf="filtresUI">
-              <th appColFilter="id" [filters]="colF" (filterChange)="page=1" placeholder="ID"></th>
-              <th appColFilter="nom" [filters]="colF" (filterChange)="page=1" placeholder="Nom"></th>
-              <th appColFilter="ville" [filters]="colF" (filterChange)="page=1" placeholder="Ville"></th>
-              <th appColFilter="lieu" [filters]="colF" (filterChange)="page=1" placeholder="Lieu"></th>
-              <th></th>
-              <th appColFilter="rayonMetres" [filters]="colF" (filterChange)="page=1" placeholder="m"></th>
-              <th></th>
-              <th></th>
-            </tr>
           </thead>
           <tbody>
             <tr *ngFor="let c of filtres() | sortBy:sortState | paginate:page:pageSize">
@@ -127,6 +120,13 @@ export class ChantiersComponent implements OnInit {
   q = ''; editId: number | null = null;
   filtresUI = false;
   colF: ColumnFilters = {};
+  filterFields: FiltreField[] = [
+    { key: 'id', label: 'ID', icon: 'fa-hashtag', placeholder: 'ID' },
+    { key: 'nom', label: 'Nom', icon: 'fa-helmet-safety', placeholder: 'Nom du chantier' },
+    { key: 'ville', label: 'Ville', icon: 'fa-city', placeholder: 'Ville' },
+    { key: 'lieu', label: 'Lieu', icon: 'fa-location-dot', placeholder: 'Lieu' },
+    { key: 'rayonMetres', label: 'Zone (m)', icon: 'fa-circle-notch', placeholder: 'Rayon en mètres' },
+  ];
   sortState: SortState = { key: '', dir: 'asc' };
   form: ChantierRequest = { nom: '', rayonMetres: 100 };
   presets = [100, 250, 500, 1000];
