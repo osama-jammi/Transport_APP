@@ -12,8 +12,7 @@ interface NavItem { path: string; label: string; icon: string; feature?: string;
       <div class="sidebar-scrim" [class.show]="menuOpen" (click)="menuOpen=false"></div>
       <aside class="sidebar" [class.open]="menuOpen">
         <div class="brand">
-          <i class="fa-solid fa-truck-fast"></i>
-          <div>Transport<small>DivNet · Livraison</small></div>
+          <img src="assets/rb-logo.png" alt="Riche Bois" class="brand-logo">
         </div>
         <nav class="nav">
           <div class="group-label">Pilotage</div>
@@ -27,7 +26,6 @@ interface NavItem { path: string; label: string; icon: string; feature?: string;
             <i class="fa-solid {{it.icon}}"></i>{{ it.label }}
           </a>
         </nav>
-        <div class="foot">v2.0 · Sécurisé par Keycloak</div>
       </aside>
 
       <div class="main">
