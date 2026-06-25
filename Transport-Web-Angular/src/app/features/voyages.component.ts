@@ -14,6 +14,7 @@ import {
 import { environment } from '../../environments/environment';
 import { SortState } from '../shared/sort.pipe';
 import { matchesSearch, matchesFilters, ColumnFilters } from '../shared/column-filter';
+import { FiltreField } from '../shared/filtre-panel.component';
 import * as L from 'leaflet';
 
 @Component({
@@ -26,6 +27,8 @@ import * as L from 'leaflet';
               title="Filtrer par colonne">
         <i class="fa-solid fa-filter"></i> Filtres</button>
     </div>
+
+    <app-filtre-panel *ngIf="filtresUI" [fields]="filterFields" [filters]="colF" (change)="page=1"></app-filtre-panel>
 
     <div class="card"><div class="card-body" style="padding:0">
       <div *ngIf="loading" class="spinner"></div>
@@ -44,16 +47,6 @@ import * as L from 'leaflet';
             <th appSortable="nbArticles" [(state)]="sortState">Articles</th>
             <th appSortable="statut" [(state)]="sortState">Statut</th>
             <th></th></tr>
-            <tr class="col-filter-row" *ngIf="filtresUI">
-              <th appColFilter="id" [filters]="colF" (filterChange)="page=1" placeholder="ID"></th>
-              <th appColFilter="client" [filters]="colF" (filterChange)="page=1" placeholder="Client"></th>
-              <th appColFilter="chauffeur" [filters]="colF" (filterChange)="page=1" placeholder="Chauffeur"></th>
-              <th appColFilter="chargementJour" [filters]="colF" (filterChange)="page=1" placeholder="Chargement"></th>
-              <th appColFilter="dechargementJour" [filters]="colF" (filterChange)="page=1" placeholder="Déchargement"></th>
-              <th appColFilter="nbArticles" [filters]="colF" (filterChange)="page=1" placeholder="Nb"></th>
-              <th appColFilter="statut" [filters]="colF" (filterChange)="page=1" placeholder="Statut"></th>
-              <th></th>
-            </tr>
           </thead>
           <tbody>
             <tr *ngFor="let v of filtres() | sortBy:sortState | paginate:page:pageSize" class="row-link" (click)="voirDetails(v)">
@@ -211,6 +204,15 @@ export class VoyagesComponent implements OnInit {
   q = ''; vue: 'en-cours' | 'archives' = 'en-cours';
   filtresUI = false;
   colF: ColumnFilters = {};
+  filterFields: FiltreField[] = [
+    { key: 'id', label: 'ID', icon: 'fa-hashtag', placeholder: 'ID' },
+    { key: 'client', label: 'Client / Chantier', icon: 'fa-helmet-safety', placeholder: 'Client ou chantier' },
+    { key: 'chauffeur', label: 'Chauffeur', icon: 'fa-id-card', placeholder: 'Chauffeur' },
+    { key: 'chargementJour', label: 'Chargement', icon: 'fa-calendar-day', placeholder: 'Date de chargement' },
+    { key: 'dechargementJour', label: 'Déchargement', icon: 'fa-calendar-check', placeholder: 'Date de déchargement' },
+    { key: 'nbArticles', label: 'Articles', icon: 'fa-boxes-stacked', placeholder: 'Nombre' },
+    { key: 'statut', label: 'Statut', icon: 'fa-flag', placeholder: 'Statut' },
+  ];
   sortState: SortState = { key: '', dir: 'asc' };
   dateDebut = ''; dateFin = '';
 
