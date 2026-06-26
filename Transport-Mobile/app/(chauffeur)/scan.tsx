@@ -58,7 +58,7 @@ function feedbackErreur() {
 export default function ScanArticleScreen() {
   const router   = useRouter();
   const dispatch = useDispatch();
-  const { articleNom, articleQr, destination, voyageId, phase: phaseParam } =
+  const { articleNom, articleQr, destination, voyageId, phase: phaseParam, vcId, projetCode } =
     useLocalSearchParams<{
       articleId?: string;
       articleNom?: string;
@@ -66,6 +66,8 @@ export default function ScanArticleScreen() {
       destination?: string;
       voyageId?: string;
       phase?: string;
+      vcId?: string;
+      projetCode?: string;
     }>();
 
   // Phase de scan : CHARGEMENT (depart) ou LIVRAISON (a destination)
@@ -97,8 +99,16 @@ export default function ScanArticleScreen() {
         ? arts.filter(a => a.statutScan !== 'SCANNE_LIVRAISON').length
         : arts.filter(a => a.statutScan === 'NON_SCANNE').length;
       if (reste === 0) {
-        const pathname = livraison ? '/(chauffeur)/bl' : '/(chauffeur)/navigation';
-        router.replace({ pathname, params: { voyageId: String(voyageId) } });
+        if (livraison) {
+          // Phase LIVRAISON terminée → BL
+          router.replace({ pathname: '/(chauffeur)/bl', params: { voyageId: String(voyageId) } });
+        } else {
+          // Phase CHARGEMENT terminée → navigation/arrivée avec vcId+projetCode
+          router.replace({
+            pathname: '/(chauffeur)/navigation',
+            params: { voyageId: String(voyageId), vcId: vcId ?? '', projetCode: projetCode ?? '' },
+          });
+        }
         return;
       }
     } catch {

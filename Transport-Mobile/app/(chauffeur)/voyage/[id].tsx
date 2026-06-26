@@ -13,10 +13,10 @@ import {
 } from '@/services/livraisonService';
 import { COLORS } from '@/constants/theme';
 
-const statutLivraison = (v: Voyage): { label: string; color: string; icon: string } => {
-  if (v.etatDechargement === 'TERMINE') return { label: 'Livré ✓',  color: COLORS.success, icon: 'checkmark-done-circle' };
-  if (v.etatChargement === 'TERMINE')   return { label: 'Chargé ✓', color: COLORS.goldDark, icon: 'checkmark-circle' };
-  return { label: 'À charger', color: COLORS.warn, icon: 'radio-button-off-outline' };
+const statutLivraison = (v: Voyage): { label: string; color: string; icon: string; action: string } => {
+  if (v.etatDechargement === 'TERMINE') return { label: 'Livré ✓',   color: COLORS.success,  icon: 'checkmark-done-circle', action: 'Voir' };
+  if (v.etatChargement === 'TERMINE')   return { label: 'Chargé ✓',  color: COLORS.goldDark, icon: 'checkmark-circle',      action: 'Confirmer arrivée' };
+  return                                       { label: 'À charger',  color: COLORS.warn,     icon: 'radio-button-off-outline', action: 'Scanner chargement' };
 };
 
 interface Groupe {
@@ -119,19 +119,20 @@ export default function VoyageLivraisonsScreen() {
   };
 
   const ouvrirLivraison = (liv: Voyage) => {
-    const deja = liv.etatDechargement === 'TERMINE';
-    if (deja) {
-      // Livraison déjà livrée → vue lecture seule
-      router.push({
-        pathname: '/(chauffeur)/livraison/[id]',
-        params: { id: String(liv.id), vcId: String(voyageId), projetCode: liv.projetCode ?? '' },
-      });
-    } else {
-      // Livraison en cours → d'abord navigation + confirmation d'arrivée
+    const params = { id: String(liv.id), vcId: String(voyageId), projetCode: liv.projetCode ?? '' };
+
+    if (liv.etatDechargement === 'TERMINE') {
+      // Tout terminé → lecture seule
+      router.push({ pathname: '/(chauffeur)/livraison/[id]', params });
+    } else if (liv.etatChargement === 'TERMINE') {
+      // Chargement fait, livraison pas encore → navigation + arrivée
       router.push({
         pathname: '/(chauffeur)/navigation',
         params: { voyageId: String(liv.id), vcId: String(voyageId), projetCode: liv.projetCode ?? '' },
       });
+    } else {
+      // Pas encore chargé → scan chargement (articles + MP) directement
+      router.push({ pathname: '/(chauffeur)/livraison/[id]', params });
     }
   };
 
@@ -231,6 +232,7 @@ export default function VoyageLivraisonsScreen() {
                         {g.livraison.nbArticles ?? g.livraison.nbColis} article(s)
                         {g.livraison.bl ? `  ·  BL ${g.livraison.bl}` : ''}
                       </Text>
+                      <Text style={[styles.livAction, { color: s.color }]}>{s.action} →</Text>
                     </View>
                     <View style={[styles.statusPill, { backgroundColor: s.color + '1F' }]}>
                       <Text style={[styles.statusTxt, { color: s.color }]}>{s.label}</Text>
@@ -248,12 +250,11 @@ export default function VoyageLivraisonsScreen() {
                 </View>
               )}
 
-              {/* ── Matières premières du groupe ── */}
-              {g.matieres.length > 0 && (
-                <View style={[styles.mpZone, g.livraison ? styles.mpZoneBorder : undefined]}>
+              {/* ── Matières premières inline seulement si PAS de livraison (MP orphelines) ── */}
+              {!g.livraison && g.matieres.length > 0 && (
+                <View style={styles.mpZone}>
                   <Text style={styles.mpZoneTitle}>
-                    <Ionicons name="layers-outline" size={12} color={COLORS.brownSoft} />
-                    {'  '}Matières premières ({g.matieres.filter(m => (m.statut||'').toUpperCase()==='LIVRE').length}/{g.matieres.length} livrée(s))
+                    {g.matieres.filter(m => (m.statut||'').toUpperCase()==='LIVRE').length}/{g.matieres.length} matière(s) livrée(s)
                   </Text>
                   {g.matieres.map(m => {
                     const livre = (m.statut || '').toUpperCase() === 'LIVRE';
@@ -262,7 +263,6 @@ export default function VoyageLivraisonsScreen() {
                         <View style={styles.mpInfo}>
                           <Text style={styles.mpDesig} numberOfLines={2}>{m.designation || m.reference || '—'}</Text>
                           {m.reference ? <Text style={styles.mpMeta}>Réf {m.reference}</Text> : null}
-                          {m.pieceFournisseur ? <Text style={styles.mpMeta}>Pièce {m.pieceFournisseur}</Text> : null}
                           <Text style={styles.mpMeta}>Qté : {m.quantite ?? '—'}{m.unite ? ` ${m.unite}` : ''}</Text>
                         </View>
                         <View style={styles.mpRight}>
@@ -281,6 +281,16 @@ export default function VoyageLivraisonsScreen() {
                       </View>
                     );
                   })}
+                </View>
+              )}
+
+              {/* Indicateur MP dans la livraison (visible sur la card, pas inline) */}
+              {g.livraison && g.matieres.length > 0 && (
+                <View style={styles.mpBadgeRow}>
+                  <Ionicons name="layers-outline" size={12} color={COLORS.textSub} />
+                  <Text style={styles.mpBadgeTxt}>
+                    {g.matieres.length} matière(s) première(s) — voir dans le détail
+                  </Text>
                 </View>
               )}
             </View>
@@ -328,6 +338,7 @@ const styles = StyleSheet.create({
   livBody:      { flex: 1, gap: 2 },
   livTitle:     { fontSize: 14, fontWeight: '700', color: COLORS.text },
   livMeta:      { fontSize: 12, color: COLORS.textSub },
+  livAction:    { fontSize: 11, fontWeight: '700', marginTop: 2 },
   statusPill:   { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 },
   statusTxt:    { fontSize: 10, fontWeight: '700' },
 
@@ -348,6 +359,8 @@ const styles = StyleSheet.create({
   mpRight:      { alignItems: 'flex-end', gap: 5 },
   mpScanBtn:    { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: COLORS.gold, paddingHorizontal: 9, paddingVertical: 5, borderRadius: 7 },
   mpScanTxt:    { fontSize: 11, fontWeight: '700', color: COLORS.brown },
+  mpBadgeRow:   { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 14, paddingVertical: 7, borderTopWidth: 1, borderTopColor: COLORS.border + '60' },
+  mpBadgeTxt:   { fontSize: 11, color: COLORS.textSub, fontStyle: 'italic' },
 
   empty:        { alignItems: 'center', paddingTop: 60, gap: 12 },
   emptyTxt:     { fontSize: 15, color: COLORS.textSub, fontWeight: '600', textAlign: 'center' },

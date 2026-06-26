@@ -101,15 +101,17 @@ export default function LivraisonArticlesScreen() {
         destination: article.chantierDestination,
         voyageId:    String(voyageId),
         phase,
+        vcId:        vcId ?? '',
+        projetCode:  projetCode ?? '',
       },
     });
   };
 
-  // Ouvre le scanner en mode libre : accepte le QR du voyage (marque tout) ou de n'importe quel article.
+  // Ouvre le scanner en mode libre (QR voyage, QR article, ou QR MP).
   const openScanLibre = () => {
     router.push({
       pathname: '/(chauffeur)/scan',
-      params: { voyageId: String(voyageId), phase },
+      params: { voyageId: String(voyageId), phase, vcId: vcId ?? '', projetCode: projetCode ?? '' },
     });
   };
 
@@ -117,7 +119,10 @@ export default function LivraisonArticlesScreen() {
     router.push({ pathname: '/(chauffeur)/bl', params: { voyageId: String(voyageId) } });
 
   const allerNavigation = () =>
-    router.push({ pathname: '/(chauffeur)/navigation', params: { voyageId: String(voyageId) } });
+    router.push({
+      pathname: '/(chauffeur)/navigation',
+      params: { voyageId: String(voyageId), vcId: vcId ?? '', projetCode: projetCode ?? '' },
+    });
 
   const renderItem = ({ item }: { item: ArticleScan }) => {
     const s = statutArticle(item.statutScan);
