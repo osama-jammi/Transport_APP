@@ -502,87 +502,132 @@ interface VoyageLigne {
             </div>
           </div>
 
-          <h4 class="art-title">Livraisons ({{ detailLivraisons.length }})</h4>
+          <h4 class="art-title">Lignes du voyage ({{ livraisonsGroupees().length }})</h4>
           <div *ngIf="detailLoading" class="spinner" style="margin:20px auto"></div>
-          <div *ngIf="!detailLoading && detailLivraisons.length===0" class="empty" style="padding:16px">
+          <div *ngIf="!detailLoading && detailLivraisons.length===0 && detailMatieres.length===0"
+               class="empty" style="padding:16px">
             <i class="fa-solid fa-box"></i> Aucune livraison rattachée</div>
 
-          <div *ngFor="let l of detailLivraisons" class="card" style="margin-bottom:12px">
-            <div class="card-body">
+          <!-- Groupes par chantier : livraisons + MP affichées UNE SEULE FOIS -->
+          <div *ngFor="let grp of livraisonsGroupees()" style="margin-bottom:16px;border:1px solid var(--border);border-radius:12px;overflow:hidden">
+
+            <!-- En-tête du groupe -->
+            <div style="padding:10px 14px;background:#f5f3ff;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border)">
+              <i class="fa-solid fa-location-dot" style="color:var(--accent-dark)"></i>
+              <strong style="flex:1">{{ grp.label }}</strong>
+              <span class="badge badge-gray">{{ grp.livraisons.length }} OF</span>
+              <span *ngIf="grp.matieres.length" class="badge badge-blue">{{ grp.matieres.length }} MP</span>
+            </div>
+
+            <!-- Livraisons du groupe -->
+            <div *ngFor="let l of grp.livraisons; let last=last" style="border-bottom:1px solid var(--border)">
               <div class="row-link" (click)="openLivId = openLivId===l.id ? null : l.id"
-                   style="display:flex;align-items:center;gap:8px">
+                   style="display:flex;align-items:center;gap:8px;padding:12px 14px">
                 <i class="fa-solid" [ngClass]="openLivId===l.id ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
-                <strong>#{{ l.id }} — {{ l.projetDesignation || l.projetCode || 'Sans chantier' }}</strong>
+                <strong>#{{ l.id }}</strong>
                 <span class="badge badge-gray">{{ l.statutReception || '—' }}</span>
                 <span style="margin-left:auto;display:flex;gap:6px" (click)="$event.stopPropagation()">
-                  <img [src]="qrLivraisonUrl(l.id)" alt="QR" style="width:40px;height:40px;vertical-align:middle;cursor:zoom-in"
-                       title="Voir le QR" (click)="voirQr(qrLivraisonUrl(l.id), 'QR livraison #' + l.id, 'qr-livraison-' + l.id)">
-                  <button class="btn btn-outline btn-sm" title="Voir / télécharger le QR de la livraison"
+                  <img [src]="qrLivraisonUrl(l.id)" alt="QR" style="width:36px;height:36px;vertical-align:middle;cursor:zoom-in"
+                       (click)="voirQr(qrLivraisonUrl(l.id), 'QR livraison #' + l.id, 'qr-livraison-' + l.id)">
+                  <button class="btn btn-outline btn-sm"
                           (click)="voirQr(qrLivraisonUrl(l.id), 'QR livraison #' + l.id, 'qr-livraison-' + l.id)">
                     <i class="fa-solid fa-qrcode"></i></button>
-                  <button class="btn btn-outline btn-sm" (click)="chargerBls(l.id)"
-                          title="Voir les bons de livraison">
+                  <button class="btn btn-outline btn-sm" (click)="chargerBls(l.id)" title="BL">
                     <i class="fa-solid fa-file-lines"></i> BL
                     <span *ngIf="(blsParLivraison[l.id]?.length ?? 0) > 0" class="badge badge-blue" style="margin-left:4px">{{ blsParLivraison[l.id].length }}</span>
                   </button>
                   <button class="btn btn-danger btn-sm" (click)="detacher(l)"
                           [disabled]="estScanne(detail) || livraisonScannee(l)"
-                          [title]="(estScanne(detail) || livraisonScannee(l)) ? 'Livraison scannée : modification impossible' : 'Retirer du voyage'">
+                          [title]="(estScanne(detail) || livraisonScannee(l)) ? 'Scannée : modification impossible' : 'Retirer du voyage'">
                     <i class="fa-solid fa-link-slash"></i> Retirer</button>
                 </span>
               </div>
 
-              <div *ngIf="openLivId===l.id">
-              <div style="display:flex;align-items:center;gap:10px;margin:8px 0;padding:8px;background:#faf9fb;border-radius:8px">
-                <span class="dk">Code de forçage d'arrivée</span>
-                <strong>{{ l.forceCode || '— non généré —' }}</strong>
-                <button class="btn btn-outline btn-sm" style="margin-left:auto"
-                        (click)="regenererForce(l)" [disabled]="regenForce">
-                  <i class="fa-solid fa-rotate"></i> Régénérer</button>
-              </div>
-              <!-- Articles -->
-              <div class="table-wrap" *ngIf="contenu[l.id]?.articles?.length" style="margin-top:8px">
-                <table>
-                  <thead><tr><th>Article</th><th>Qté</th><th>Statut</th><th>QR</th></tr></thead>
-                  <tbody>
-                    <ng-container *ngFor="let a of contenu[l.id].articles">
-                      <tr class="row-link" (click)="artDetailId = artDetailId===a.id ? null : a.id">
-                        <td><strong>{{ a.designation || '—' }}</strong></td>
-                        <td>{{ a.quantite ?? '—' }}</td>
-                        <td><span class="badge badge-gray">{{ a.statutReception || '—' }}</span></td>
-                        <td style="white-space:nowrap" (click)="$event.stopPropagation()">
-                          <img [src]="qrArticleUrl(a.id)" alt="QR" style="width:48px;height:48px;vertical-align:middle;cursor:zoom-in"
-                               title="Voir le QR" (click)="voirQr(qrArticleUrl(a.id), 'QR article #' + a.id, 'qr-article-' + a.id)">
-                          <button class="btn btn-outline btn-sm" style="margin-left:6px" title="Voir / télécharger le QR"
-                                  (click)="voirQr(qrArticleUrl(a.id), 'QR article #' + a.id, 'qr-article-' + a.id)">
-                            <i class="fa-solid fa-eye"></i></button>
-                        </td>
-                      </tr>
-                      <tr *ngIf="artDetailId===a.id">
-                        <td colspan="4" class="muted" style="font-size:12px;background:#faf9fb">
-                          N° prix : <code>{{ a.numPrix || '—' }}</code> ·
-                          Projet : {{ a.projet || '—' }} ·
-                          Heure scan : {{ a.heureScan ? (a.heureScan | date:'dd/MM/yy HH:mm:ss') : '—' }} ·
-                          Réf ligne : <code>#{{ a.id }}</code>
-                        </td>
-                      </tr>
-                    </ng-container>
-                  </tbody>
-                </table>
-              </div>
+              <div *ngIf="openLivId===l.id" style="padding:0 14px 12px">
+                <div style="display:flex;align-items:center;gap:10px;margin:8px 0;padding:8px;background:#faf9fb;border-radius:8px">
+                  <span class="dk">Code de forçage d'arrivée</span>
+                  <strong>{{ l.forceCode || '— non généré —' }}</strong>
+                  <button class="btn btn-outline btn-sm" style="margin-left:auto"
+                          (click)="regenererForce(l)" [disabled]="regenForce">
+                    <i class="fa-solid fa-rotate"></i> Régénérer</button>
+                </div>
+                <!-- Articles -->
+                <div class="table-wrap" *ngIf="contenu[l.id]?.articles?.length" style="margin-top:8px">
+                  <table>
+                    <thead><tr><th>Article</th><th>Qté</th><th>Statut</th><th>QR</th></tr></thead>
+                    <tbody>
+                      <ng-container *ngFor="let a of contenu[l.id].articles">
+                        <tr class="row-link" (click)="artDetailId = artDetailId===a.id ? null : a.id">
+                          <td><strong>{{ a.designation || '—' }}</strong></td>
+                          <td>{{ a.quantite ?? '—' }}</td>
+                          <td><span class="badge badge-gray">{{ a.statutReception || '—' }}</span></td>
+                          <td style="white-space:nowrap" (click)="$event.stopPropagation()">
+                            <img [src]="qrArticleUrl(a.id)" alt="QR" style="width:48px;height:48px;vertical-align:middle;cursor:zoom-in"
+                                 (click)="voirQr(qrArticleUrl(a.id), 'QR article #' + a.id, 'qr-article-' + a.id)">
+                            <button class="btn btn-outline btn-sm" style="margin-left:6px"
+                                    (click)="voirQr(qrArticleUrl(a.id), 'QR article #' + a.id, 'qr-article-' + a.id)">
+                              <i class="fa-solid fa-eye"></i></button>
+                          </td>
+                        </tr>
+                        <tr *ngIf="artDetailId===a.id">
+                          <td colspan="4" class="muted" style="font-size:12px;background:#faf9fb">
+                            N° prix : <code>{{ a.numPrix || '—' }}</code> ·
+                            Projet : {{ a.projet || '—' }} ·
+                            Heure scan : {{ a.heureScan ? (a.heureScan | date:'dd/MM/yy HH:mm:ss') : '—' }}
+                          </td>
+                        </tr>
+                      </ng-container>
+                    </tbody>
+                  </table>
+                </div>
+                <div *ngIf="!contenu[l.id]?.articles?.length" class="muted" style="margin-top:6px;font-size:12px">Aucun article</div>
 
-              <!-- Matières premières liées à cette livraison (même chantier) -->
-              <ng-container *ngIf="matieresDeLivraison(l).length">
-                <h5 style="margin:10px 0 4px;font-size:13px;font-weight:700;color:var(--primary)">
+                <!-- BL par livraison -->
+                <div style="margin-top:10px">
+                  <h5 style="margin:0 0 6px;font-size:13px;font-weight:700">
+                    <i class="fa-solid fa-file-lines" style="margin-right:6px;color:var(--accent-dark)"></i>
+                    Bons de livraison ({{ blsParLivraison[l.id]?.length ?? '?' }})</h5>
+                  <div *ngIf="!blsParLivraison[l.id]" class="muted" style="font-size:12px">Chargement…</div>
+                  <div *ngIf="blsParLivraison[l.id]?.length===0" class="muted" style="font-size:12px">Aucun BL enregistré.</div>
+                  <div *ngFor="let bl of (blsParLivraison[l.id] ?? [])"
+                       style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
+                    <i class="fa-solid fa-file-image" style="color:var(--accent)"></i>
+                    <span style="flex:1;font-size:13px">{{ bl.reference || ('BL #' + bl.id) }}</span>
+                    <span class="badge badge-gray" style="font-size:10px">{{ bl.contentType?.includes('pdf') ? 'PDF' : 'Image' }}</span>
+                    <a [href]="svc.blUrl(l.id, bl.id)" target="_blank" class="btn btn-outline btn-sm"><i class="fa-solid fa-eye"></i></a>
+                    <a [href]="svc.blUrl(l.id, bl.id)" [download]="'bl-' + l.id + '-' + bl.id" class="btn btn-outline btn-sm"><i class="fa-solid fa-download"></i></a>
+                  </div>
+                  <div *ngIf="blUploadLivId !== l.id" style="margin-top:8px">
+                    <button class="btn btn-outline btn-sm" (click)="blUploadLivId=l.id;blUploadRef='';blUploadFile=null">
+                      <i class="fa-solid fa-plus"></i> Ajouter un BL</button>
+                  </div>
+                  <div *ngIf="blUploadLivId===l.id" style="margin-top:8px;padding:10px;background:#faf9fb;border-radius:8px;border:1px solid var(--border)">
+                    <div class="form-grid" style="margin-bottom:8px">
+                      <div class="field"><label>Référence (optionnel)</label><input [(ngModel)]="blUploadRef" placeholder="Réf BL…"></div>
+                      <div class="field"><label>Fichier</label><input type="file" accept="image/*,application/pdf" (change)="onBlFileChange($event)"></div>
+                    </div>
+                    <div style="display:flex;gap:8px">
+                      <button class="btn btn-outline btn-sm" (click)="blUploadLivId=null">Annuler</button>
+                      <button class="btn btn-primary btn-sm" (click)="uploaderBl(l.id)" [disabled]="blUploading||!blUploadFile">
+                        <i class="fa-solid fa-upload"></i> {{ blUploading ? 'Envoi…' : 'Envoyer' }}</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Matières premières du groupe — affichées UNE SEULE FOIS -->
+            <ng-container *ngIf="grp.matieres.length">
+              <div style="padding:10px 14px;background:#fdf8ff;border-top:1px solid var(--border)">
+                <h5 style="margin:0 0 8px;font-size:13px;font-weight:700">
                   <i class="fa-solid fa-cubes" style="margin-right:6px;color:var(--accent-dark)"></i>
-                  Matières premières ({{ matieresDeLivraison(l).length }})
-                </h5>
+                  Matières premières ({{ grp.matieres.length }})</h5>
                 <div class="table-wrap">
                   <table>
                     <thead><tr><th>Désignation</th><th>Pièce fournisseur</th><th>Affaire</th>
                       <th>Qté cmd.</th><th>Qté livrée</th><th>Reste</th><th>Statut</th><th>QR</th><th></th></tr></thead>
                     <tbody>
-                      <tr *ngFor="let m of matieresDeLivraison(l)" [class.row-done]="estCloturee(m)">
+                      <tr *ngFor="let m of grp.matieres" [class.row-done]="estCloturee(m)">
                         <td><strong>{{ m.designation || '—' }}</strong>
                           <div class="muted" style="font-size:11px">Réf {{ m.reference || '—' }}</div></td>
                         <td><code>{{ m.pieceFournisseur || '—' }}</code></td>
@@ -594,15 +639,14 @@ interface VoyageLigne {
                           {{ estCloturee(m) ? 'Livrée' : 'En attente' }}</span></td>
                         <td style="white-space:nowrap">
                           <img [src]="qrMatiereUrl(m.id)" alt="QR" style="width:48px;height:48px;vertical-align:middle;cursor:zoom-in"
-                               title="Voir le QR" (click)="voirQr(qrMatiereUrl(m.id), 'QR matière #' + m.id, 'qr-mp-' + m.id)">
-                          <button class="btn btn-outline btn-sm" style="margin-left:6px" title="Voir / télécharger le QR"
+                               (click)="voirQr(qrMatiereUrl(m.id), 'QR matière #' + m.id, 'qr-mp-' + m.id)">
+                          <button class="btn btn-outline btn-sm" style="margin-left:6px"
                                   (click)="voirQr(qrMatiereUrl(m.id), 'QR matière #' + m.id, 'qr-mp-' + m.id)">
                             <i class="fa-solid fa-eye"></i></button>
                         </td>
                         <td style="white-space:nowrap">
                           <button class="btn btn-sm" [ngClass]="estCloturee(m) ? 'btn-outline' : 'btn-primary'"
-                                  (click)="basculerMatiere(m)" [disabled]="majMatiere"
-                                  [title]="estCloturee(m) ? 'Rouvrir' : 'Clôturer (marquer livrée)'">
+                                  (click)="basculerMatiere(m)" [disabled]="majMatiere">
                             <i class="fa-solid" [ngClass]="estCloturee(m) ? 'fa-rotate-left' : 'fa-check'"></i>
                             {{ estCloturee(m) ? 'Rouvrir' : 'Clôturer' }}</button>
                         </td>
@@ -610,53 +654,10 @@ interface VoyageLigne {
                     </tbody>
                   </table>
                 </div>
-              </ng-container>
-
-              <div *ngIf="!contenu[l.id]?.articles?.length && !contenu[l.id]?.matieres?.length"
-                   class="muted" style="margin-top:6px;font-size:12px">Aucun contenu</div>
-
-              <!-- Bons de livraison -->
-              <div style="margin-top:10px">
-                <h5 style="margin:0 0 6px;font-size:13px;font-weight:700">
-                  <i class="fa-solid fa-file-lines" style="margin-right:6px;color:var(--accent-dark)"></i>
-                  Bons de livraison ({{ blsParLivraison[l.id]?.length ?? '?' }})
-                </h5>
-                <div *ngIf="!blsParLivraison[l.id]" class="muted" style="font-size:12px">
-                  Chargement…</div>
-                <div *ngIf="blsParLivraison[l.id]?.length===0" class="muted" style="font-size:12px">
-                  Aucun BL enregistré.</div>
-                <div *ngFor="let bl of (blsParLivraison[l.id] ?? [])"
-                     style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
-                  <i class="fa-solid fa-file-image" style="color:var(--accent)"></i>
-                  <span style="flex:1;font-size:13px">{{ bl.reference || ('BL #' + bl.id) }}</span>
-                  <span class="badge badge-gray" style="font-size:10px">{{ bl.contentType?.includes('pdf') ? 'PDF' : 'Image' }}</span>
-                  <a [href]="svc.blUrl(l.id, bl.id)" target="_blank" class="btn btn-outline btn-sm" title="Voir">
-                    <i class="fa-solid fa-eye"></i></a>
-                  <a [href]="svc.blUrl(l.id, bl.id)" [download]="'bl-' + l.id + '-' + bl.id" class="btn btn-outline btn-sm" title="Télécharger">
-                    <i class="fa-solid fa-download"></i></a>
-                </div>
-                <!-- Ajouter un BL -->
-                <div *ngIf="blUploadLivId !== l.id" style="margin-top:8px">
-                  <button class="btn btn-outline btn-sm" (click)="blUploadLivId=l.id;blUploadRef='';blUploadFile=null">
-                    <i class="fa-solid fa-plus"></i> Ajouter un BL</button>
-                </div>
-                <div *ngIf="blUploadLivId===l.id" style="margin-top:8px;padding:10px;background:#faf9fb;border-radius:8px;border:1px solid var(--border)">
-                  <div class="form-grid" style="margin-bottom:8px">
-                    <div class="field"><label>Référence (optionnel)</label>
-                      <input [(ngModel)]="blUploadRef" placeholder="Réf BL, numéro…"></div>
-                    <div class="field"><label>Fichier (photo / PDF)</label>
-                      <input type="file" accept="image/*,application/pdf" (change)="onBlFileChange($event)"></div>
-                  </div>
-                  <div style="display:flex;gap:8px">
-                    <button class="btn btn-outline btn-sm" (click)="blUploadLivId=null">Annuler</button>
-                    <button class="btn btn-primary btn-sm" (click)="uploaderBl(l.id)" [disabled]="blUploading||!blUploadFile">
-                      <i class="fa-solid fa-upload"></i> {{ blUploading ? 'Envoi…' : 'Envoyer' }}</button>
-                  </div>
-                </div>
               </div>
-              </div>
-            </div>
-          </div>
+            </ng-container>
+
+          </div><!-- fin groupe -->
 
           <h4 class="art-title">Suivi GPS du chauffeur</h4>
           <div *ngIf="trajetLoading" class="spinner" style="margin:20px auto"></div>
@@ -1419,10 +1420,35 @@ export class VoyagesConteneursComponent implements OnInit {
   }
 
   /* ─────────── Matières premières : clôture (statut local, sans impact ERP) ─────────── */
-  /** Retourne les MP du voyage qui appartiennent à cette livraison (même chantier). */
+  /** Regroupe les livraisons par chantier et y associe les MP (une seule fois par groupe). */
+  livraisonsGroupees(): { code: string; label: string; livraisons: GapVoyage[]; matieres: MatierePremiere[] }[] {
+    const norm = (s?: string | null) => (s || '').trim();
+    const map = new Map<string, GapVoyage[]>();
+    for (const l of this.detailLivraisons) {
+      const k = norm(l.projetCode);
+      if (!map.has(k)) map.set(k, []);
+      map.get(k)!.push(l);
+    }
+    const result: { code: string; label: string; livraisons: GapVoyage[]; matieres: MatierePremiere[] }[] = [];
+    const mpUtilisees = new Set<number>();
+    map.forEach((livs, code) => {
+      const mps = code
+        ? this.detailMatieres.filter(m => norm(m.projet) === code)
+        : this.detailMatieres.filter(m => !m.projet);
+      mps.forEach(m => mpUtilisees.add(m.id));
+      result.push({ code, label: livs[0].projetDesignation || livs[0].projetCode || 'Sans chantier', livraisons: livs, matieres: mps });
+    });
+    // MP sans chantier correspondant → groupe orphelin
+    const orphelines = this.detailMatieres.filter(m => !mpUtilisees.has(m.id));
+    if (orphelines.length) {
+      result.push({ code: '', label: '—', livraisons: [], matieres: orphelines });
+    }
+    return result;
+  }
+
+  /** @deprecated Utiliser livraisonsGroupees() */
   matieresDeLivraison(l: GapVoyage): MatierePremiere[] {
-    if (!l.projetCode) return this.detailMatieres.filter(m => !m.projet);
-    return this.detailMatieres.filter(m => m.projet === l.projetCode);
+    return this.livraisonsGroupees().find(g => g.livraisons.some(x => x.id === l.id))?.matieres ?? [];
   }
 
   estCloturee(m: MatierePremiere): boolean { return (m.statut || '').toUpperCase() === 'LIVRE'; }

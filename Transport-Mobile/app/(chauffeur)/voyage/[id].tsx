@@ -20,58 +20,60 @@ const statutLivraison = (v: Voyage): { label: string; color: string; icon: strin
 };
 
 interface Groupe {
-  livraison?: Voyage;           // peut être absent si ligne MP-only
+  livraisons: Voyage[];      // toutes les livraisons du même chantier
   chantierCode: string;
   chantierLabel: string;
-  matieres: MatiereMp[];
+  matieres: MatiereMp[];     // MP affichées UNE SEULE FOIS par groupe
 }
 
-/** Construit les groupes : une livraison + ses MP (même projetCode), puis MP orphelines. */
+const norm = (s?: string | null) => (s || '').trim();
+
+/** Groupe les livraisons par chantier ; associe les MP une seule fois par groupe. */
 function construireGroupes(livraisons: Voyage[], matieres: MatiereMp[]): Groupe[] {
+  // 1. Regrouper livraisons par chantier (projetCode normalisé)
+  const parChantier = new Map<string, Voyage[]>();
+  for (const liv of livraisons) {
+    const k = norm(liv.projetCode);
+    if (!parChantier.has(k)) parChantier.set(k, []);
+    parChantier.get(k)!.push(liv);
+  }
+
   const groupes: Groupe[] = [];
   const mpUtilisees = new Set<number>();
 
-  for (const liv of livraisons) {
-    const code = liv.projetCode ?? null;
-    // Correspondance : même code OU si code null → on cherche les MP sans projet
-    const mps = code
-      ? matieres.filter(m => (m.projet ?? null) === code)
+  parChantier.forEach((livs, key) => {
+    // MP correspondant au chantier de ce groupe
+    const mps = key
+      ? matieres.filter(m => norm(m.projet) === key)
       : matieres.filter(m => !m.projet);
     mps.forEach(m => mpUtilisees.add(m.id));
     groupes.push({
-      livraison: liv,
-      chantierCode: code ?? '',
-      chantierLabel: liv.client || `Livraison #${liv.id}`,
+      livraisons: livs,
+      chantierCode: key,
+      chantierLabel: livs[0].client || `#${livs[0].id}`,
       matieres: mps,
+    });
+  });
+
+  // 2. MP orphelines (pas de livraison avec le même chantier)
+  const orphelines = matieres.filter(m => !mpUtilisees.has(m.id));
+  if (orphelines.length) {
+    // Grouper les orphelines par chantier
+    const parChantierOrph = new Map<string, MatiereMp[]>();
+    for (const m of orphelines) {
+      const k = norm(m.projet) || '—';
+      if (!parChantierOrph.has(k)) parChantierOrph.set(k, []);
+      parChantierOrph.get(k)!.push(m);
+    }
+    parChantierOrph.forEach((mps, k) => {
+      groupes.push({ livraisons: [], chantierCode: k, chantierLabel: k, matieres: mps });
     });
   }
 
-  // MP non rattachées à une livraison → groupées par chantier
-  const orphelines = matieres.filter(m => !mpUtilisees.has(m.id));
-
-  // Si pas de livraison du tout, attacher TOUTES les MP au premier groupe (MP seules)
-  if (livraisons.length === 0 && orphelines.length === 0 && matieres.length > 0) {
-    // Toutes les MP sont déjà orphelines
-  }
-
-  const parChantier = new Map<string, MatiereMp[]>();
-  for (const m of orphelines) {
-    const k = m.projet || '—';
-    if (!parChantier.has(k)) parChantier.set(k, []);
-    parChantier.get(k)!.push(m);
-  }
-  parChantier.forEach((mps, k) => {
-    groupes.push({ chantierCode: k, chantierLabel: k, matieres: mps });
-  });
-
-  // Si aucun groupe n'a de MP alors qu'il y en a dans le voyage,
-  // les rattacher à leur livraison (les codes ne correspondent pas → fallback)
+  // 3. Fallback : si aucun groupe n'a de MP mais le voyage en a → rattacher au 1er groupe
   if (matieres.length > 0 && groupes.every(g => g.matieres.length === 0)) {
-    if (groupes.length > 0) {
-      groupes[0].matieres = matieres;
-    } else {
-      groupes.push({ chantierCode: '', chantierLabel: 'Matières premières', matieres });
-    }
+    if (groupes.length > 0) groupes[0].matieres = matieres;
+    else groupes.push({ livraisons: [], chantierCode: '', chantierLabel: 'Matières premières', matieres });
   }
 
   return groupes;
@@ -210,47 +212,53 @@ export default function VoyageLivraisonsScreen() {
             <Text style={styles.scanVoyageTxt}>Scanner le QR du voyage (tout valider)</Text>
           </TouchableOpacity>
 
-          {/* Groupes : livraison + ses MP / ou MP seules */}
+          {/* Groupes par chantier : toutes les livraisons + MP UNE SEULE FOIS */}
           {groupes.map((g, idx) => (
             <View key={idx} style={styles.groupCard}>
 
-              {/* ── Livraison (si présente) ── */}
-              {g.livraison && (() => {
-                const s = statutLivraison(g.livraison);
+              {/* ── En-tête chantier ── */}
+              <View style={styles.chantierHeader}>
+                <Ionicons name="business-outline" size={14} color={COLORS.goldDark} />
+                <Text style={styles.chantierTxt} numberOfLines={1}>{g.chantierLabel}</Text>
+                {g.livraisons.length > 0 && (
+                  <View style={[styles.statusPill, { backgroundColor: COLORS.goldDark + '22' }]}>
+                    <Text style={[styles.statusTxt, { color: COLORS.goldDark }]}>{g.livraisons.length} OF</Text>
+                  </View>
+                )}
+                {g.matieres.length > 0 && (
+                  <View style={[styles.statusPill, { backgroundColor: COLORS.teal + '22' }]}>
+                    <Text style={[styles.statusTxt, { color: COLORS.teal }]}>{g.matieres.length} MP</Text>
+                  </View>
+                )}
+              </View>
+
+              {/* ── Une card par livraison du groupe ── */}
+              {g.livraisons.map(liv => {
+                const s = statutLivraison(liv);
                 return (
-                  <TouchableOpacity style={styles.livRow} onPress={() => ouvrirLivraison(g.livraison!)} activeOpacity={0.85}>
+                  <TouchableOpacity key={String(liv.id)}
+                    style={[styles.livRow, { borderTopWidth: 1, borderTopColor: COLORS.border + '50' }]}
+                    onPress={() => ouvrirLivraison(liv)} activeOpacity={0.85}>
                     <View style={[styles.statusIcon, { backgroundColor: s.color + '1F' }]}>
-                      <Ionicons name={s.icon as any} size={22} color={s.color} />
+                      <Ionicons name={s.icon as any} size={20} color={s.color} />
                     </View>
                     <View style={styles.livBody}>
-                      <Text style={styles.livTitle} numberOfLines={1}>{g.livraison.client || `Livraison #${g.livraison.id}`}</Text>
-                      <Text style={styles.livMeta}>
-                        {g.livraison.nbArticles ?? g.livraison.nbColis} article(s)
-                        {g.livraison.bl ? `  ·  BL ${g.livraison.bl}` : ''}
-                      </Text>
+                      <Text style={styles.livMeta}>OF #{liv.id}  ·  {liv.nbArticles ?? liv.nbColis} article(s)</Text>
                       <Text style={[styles.livAction, { color: s.color }]}>{s.action} →</Text>
                     </View>
                     <View style={[styles.statusPill, { backgroundColor: s.color + '1F' }]}>
                       <Text style={[styles.statusTxt, { color: s.color }]}>{s.label}</Text>
                     </View>
-                    <Ionicons name="chevron-forward" size={18} color={COLORS.textFaint} />
+                    <Ionicons name="chevron-forward" size={16} color={COLORS.textFaint} />
                   </TouchableOpacity>
                 );
-              })()}
+              })}
 
-              {/* ── Titre chantier (si pas de livraison = MP seules) ── */}
-              {!g.livraison && g.matieres.length > 0 && (
-                <View style={styles.chantierHeader}>
-                  <Ionicons name="business-outline" size={15} color={COLORS.goldDark} />
-                  <Text style={styles.chantierTxt} numberOfLines={1}>{g.chantierLabel}</Text>
-                </View>
-              )}
-
-              {/* MP orphelines (sans livraison) : affichage info seulement, pas de scan ici */}
-              {!g.livraison && g.matieres.length > 0 && (
+              {/* ── MP du groupe — affichées UNE SEULE FOIS ── */}
+              {g.matieres.length > 0 && (
                 <View style={styles.mpZone}>
                   <Text style={styles.mpZoneTitle}>
-                    {g.matieres.filter(m => (m.statut||'').toUpperCase()==='LIVRE').length}/{g.matieres.length} matière(s) — voir dans la livraison
+                    Matières premières : {g.matieres.filter(m => (m.statut||'').toUpperCase()==='LIVRE').length}/{g.matieres.length} livrée(s)
                   </Text>
                   {g.matieres.map(m => {
                     const livre = (m.statut || '').toUpperCase() === 'LIVRE';
@@ -269,16 +277,6 @@ export default function VoyageLivraisonsScreen() {
                       </View>
                     );
                   })}
-                </View>
-              )}
-
-              {/* Indicateur MP dans la livraison (visible sur la card, pas inline) */}
-              {g.livraison && g.matieres.length > 0 && (
-                <View style={styles.mpBadgeRow}>
-                  <Ionicons name="layers-outline" size={12} color={COLORS.textSub} />
-                  <Text style={styles.mpBadgeTxt}>
-                    {g.matieres.length} matière(s) première(s) — voir dans le détail
-                  </Text>
                 </View>
               )}
             </View>
@@ -324,7 +322,6 @@ const styles = StyleSheet.create({
   },
   statusIcon:   { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
   livBody:      { flex: 1, gap: 2 },
-  livTitle:     { fontSize: 14, fontWeight: '700', color: COLORS.text },
   livMeta:      { fontSize: 12, color: COLORS.textSub },
   livAction:    { fontSize: 11, fontWeight: '700', marginTop: 2 },
   statusPill:   { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 },
@@ -334,18 +331,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 8,
     backgroundColor: COLORS.goldTint, paddingHorizontal: 14, paddingVertical: 10,
   },
-  chantierTxt:  { fontSize: 13, fontWeight: '700', color: COLORS.brown, flex: 1 },
+  chantierTxt:   { fontSize: 13, fontWeight: '700', color: COLORS.brown, flex: 1 },
+  chantierBadge: { fontSize: 10, fontWeight: '700', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10,
+                   backgroundColor: COLORS.goldDark + '22', color: COLORS.goldDark },
 
-  mpZone:       { paddingHorizontal: 14, paddingBottom: 10 },
-  mpZoneBorder: { borderTopWidth: 1, borderTopColor: COLORS.border, paddingTop: 8 },
-  mpZoneTitle:  { fontSize: 11, fontWeight: '600', color: COLORS.textSub, marginBottom: 6 },
+  mpZone:        { paddingHorizontal: 14, paddingBottom: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: COLORS.border },
+  mpZoneTitle:   { fontSize: 11, fontWeight: '600', color: COLORS.textSub, marginBottom: 6 },
 
-  mpRow:        { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 7, borderTopWidth: 1, borderTopColor: COLORS.border + '80' },
+  mpRow:        { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 7, borderTopWidth: 1, borderTopColor: COLORS.border + '60' },
   mpInfo:       { flex: 1, gap: 1 },
   mpDesig:      { fontSize: 13, fontWeight: '600', color: COLORS.text },
   mpMeta:       { fontSize: 11, color: COLORS.textSub },
-  mpBadgeRow:   { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 14, paddingVertical: 7, borderTopWidth: 1, borderTopColor: COLORS.border + '60' },
-  mpBadgeTxt:   { fontSize: 11, color: COLORS.textSub, fontStyle: 'italic' },
 
   empty:        { alignItems: 'center', paddingTop: 60, gap: 12 },
   emptyTxt:     { fontSize: 15, color: COLORS.textSub, fontWeight: '600', textAlign: 'center' },
