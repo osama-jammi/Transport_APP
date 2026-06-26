@@ -185,6 +185,21 @@ public class ArticleServiceImpl implements ArticleService {
         if (qrCode != null && qrCode.startsWith("LIVRAISON:")) {
             return scanLivraisonGap(qrCode, phase);
         }
+        // QR d'une matière première ("DETAIL_MP:{id}") → clôture la ligne de matière
+        if (qrCode != null && qrCode.startsWith("DETAIL_MP:")) {
+            Long mpId;
+            try {
+                mpId = Long.parseLong(qrCode.substring("DETAIL_MP:".length()).trim());
+            } catch (NumberFormatException e) {
+                throw new EntityNotFoundException("QR matière invalide : " + qrCode);
+            }
+            gapReadService.updateVoyageMatiereStatut(mpId, "LIVRE");
+            ArticleResponseDTO dto = new ArticleResponseDTO();
+            dto.setId(mpId);
+            dto.setNom("Matière première #" + mpId + " — livrée");
+            dto.setStatutScan(Article.StatutScan.SCANNE_LIVRAISON);
+            return dto;
+        }
         // Nouveau format : QR d'une ligne de livraison GAP ("DETAIL:{id}")
         if (qrCode != null && qrCode.startsWith("DETAIL:")) {
             return scanDetailGap(qrCode, phase);

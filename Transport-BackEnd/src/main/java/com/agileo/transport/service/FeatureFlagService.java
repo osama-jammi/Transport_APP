@@ -26,7 +26,7 @@ public class FeatureFlagService {
     private static final Map<String, String> DEFAUTS = new LinkedHashMap<>() {{
         // Le suivi GPS est désormais inclus dans « suivi-trajets » (plus de flag « tracking » séparé).
         put("suivi-trajets", "Suivi des trajets (carte + GPS chauffeurs)");
-        put("cloture-mp", "Clôture des matières premières");
+        put("cloture-mp", "Activé matière première");
         put("historique-voyages", "Historique des voyages");
         put("voyage-nouvelle-saisie", "Nouvelle saisie des voyages (Ordre de fabrication repliable, ng-select)");
     }};
@@ -38,8 +38,13 @@ public class FeatureFlagService {
     public void seed() {
         try {
             DEFAUTS.forEach((cle, libelle) -> {
-                if (!repository.existsById(cle)) {
+                FeatureFlag existant = repository.findById(cle).orElse(null);
+                if (existant == null) {
                     repository.save(FeatureFlag.builder().cle(cle).libelle(libelle).actif(true).build());
+                } else if (!libelle.equals(existant.getLibelle())) {
+                    // Synchronise le libellé si modifié dans le code (sans toucher à l'état actif).
+                    existant.setLibelle(libelle);
+                    repository.save(existant);
                 }
             });
             // Purge des fonctionnalités obsolètes (ex. « tracking » fusionné dans « suivi-trajets »).
