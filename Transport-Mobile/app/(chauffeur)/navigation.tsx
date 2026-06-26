@@ -22,7 +22,7 @@ function distanceMeters(a: { latitude: number; longitude: number }, b: { latitud
 
 export default function NavigationScreen() {
   const router = useRouter();
-  const { voyageId } = useLocalSearchParams<{ voyageId?: string }>();
+  const { voyageId, vcId, projetCode } = useLocalSearchParams<{ voyageId?: string; vcId?: string; projetCode?: string }>();
   const voyages = useSelector((s: RootState) => s.livraison.voyages);
   const voyage = voyages.find(v => v.id === Number(voyageId)) ?? voyages[0] ?? null;
 
@@ -84,10 +84,12 @@ export default function NavigationScreen() {
       });
       if (res.confirmed) {
         setForceOpen(false);
-        Alert.alert('Arrivee confirmee', res.message + '\n\nScannez maintenant les articles livres.', [
+        // Construire les params ici pour éviter la perte dans la closure
+        const livParams = { id: String(voyage.id), vcId: vcId ?? '', projetCode: projetCode ?? '' };
+        Alert.alert('Arrivee confirmee', res.message + '\n\nScannez maintenant les articles et matières premières.', [
           {
             text: 'Scanner la livraison',
-            onPress: () => router.replace({ pathname: '/(chauffeur)/livraison/[id]', params: { id: String(voyage.id) } }),
+            onPress: () => router.replace({ pathname: '/(chauffeur)/livraison/[id]', params: livParams }),
           },
         ]);
       } else if (res.forcageRequis) {

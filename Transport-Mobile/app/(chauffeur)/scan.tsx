@@ -114,6 +114,8 @@ export default function ScanArticleScreen() {
     const estQrVoyage = typeof data === 'string' && data.startsWith('VOYAGE:');
     // Si on attendait un article precis, verifier la correspondance (sauf QR voyage)
     if (!estQrVoyage && articleQr && data !== articleQr) {
+      // Gele immediatement la camera pour eviter les scans/alertes en rafale
+      setScanned(true);
       feedbackErreur();
       Alert.alert(
         'Mauvais article',
