@@ -893,7 +893,7 @@ export class VoyagesConteneursComponent implements OnInit {
           lg.chantierCode = ch?.code; lg.filtreChantier = ch ? ch.nom : (livs[0].projetDesignation || '');
           livs.forEach(l => lg.selectedLiv[l.id] = true);
           // La ligne peut aussi recevoir des MP : on charge ses commandes.
-          if (lg.chantierCode) this.chargerCommandes(lg);
+          if (lg.chantierCode || lg.chantierId) this.chargerCommandes(lg);
           this.lignes.push(lg);
         });
         // Reconstruit les lignes « matières premières »
@@ -909,24 +909,33 @@ export class VoyagesConteneursComponent implements OnInit {
             });
             grp.forEach(items => {
               const first = items[0];
-              const ch = chantiers.find(c => c.code === first.projet);
-              // Cherche une ligne existante (livraison) du même chantier sans commande MP
-              const existante = this.lignes.find(lg =>
-                lg.chantierCode === first.projet && !lg.commandeId);
+              // Trouver le chantier par code (normalisation : null == '')
+              const norm = (s?: string | null) => (s || '').trim();
+              const ch = chantiers.find(c => norm(c.code) === norm(first.projet));
+              // Chercher une ligne existante par chantierId (plus fiable que chantierCode)
+              // ou par chantierCode normalisé en fallback
+              const existante = ch
+                ? this.lignes.find(lg => lg.chantierId === ch.id && !lg.commandeId)
+                : this.lignes.find(lg => norm(lg.chantierCode) === norm(first.projet) && !lg.commandeId);
               const lg = existante ?? this.nouvelleLigne();
               if (!existante) {
                 lg.type = 'MATIERE_PREMIERE';
-                lg.chantierCode = first.projet;
+                lg.chantierCode = ch?.code ?? first.projet;
                 if (ch) { lg.chantierId = ch.id; lg.filtreChantier = ch.nom; } else { lg.filtreChantier = first.projet || ''; }
                 const split = (iso?: string) => iso ? { j: iso.slice(0, 10), h: iso.slice(11, 16) } : { j: undefined, h: undefined };
                 const c = split(first.dateChargement); const d = split(first.dateDechargement);
                 lg.chargementJour = c.j; lg.chargementHeure = c.h; lg.dechargementJour = d.j; lg.dechargementHeure = d.h;
                 this.lignes.push(lg);
               }
+              // Assurer que chantierCode est renseigné même sur une ligne existante
+              if (!lg.chantierCode && (ch?.code || first.projet)) {
+                lg.chantierCode = ch?.code ?? first.projet;
+              }
               lg.commandeId = first.cdno;
               lg.lignesMp = items;
               items.forEach(m => { const r = m.reference || ''; lg.selectedMp[r] = true; lg.qteMp[r] = m.quantite || 1; });
-              if (first.cdno || first.projet) this.matiereSvc.getCommandes(first.projet).subscribe({ next: cmds => lg.commandes = cmds, error: () => {} });
+              const codeChantier = lg.chantierCode || first.projet;
+              if (codeChantier) this.matiereSvc.getCommandes(codeChantier).subscribe({ next: cmds => lg.commandes = cmds, error: () => {} });
             });
           },
           error: () => {}
@@ -1175,8 +1184,10 @@ export class VoyagesConteneursComponent implements OnInit {
         livraisonDates.push({ id: +k, chargement: ch, dechargement: de });
       });
       const cmd = lg.commandes.find(c => c.cdno === lg.commandeId);
-      // MP de la commande courante
-      lg.lignesMp.filter(m => lg.selectedMp[m.reference || '']).forEach(m => {
+      // Refs déjà dans mpSauvegardes → ne pas les envoyer deux fois
+      const refsSauvegardees = new Set((lg.mpSauvegardes ?? []).map(s => s.m.reference || ''));
+      // MP de la commande courante (exclure celles déjà sauvegardées)
+      lg.lignesMp.filter(m => lg.selectedMp[m.reference || ''] && !refsSauvegardees.has(m.reference || '')).forEach(m => {
         const ref = m.reference || '';
         matieres.push({
           projet: lg.chantierCode, cdno: lg.commandeId, ref,
