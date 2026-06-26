@@ -62,8 +62,6 @@ import * as L from 'leaflet';
                   <i class="fa-solid fa-eye"></i></button>
                 <button class="btn btn-outline btn-sm" (click)="imprimerBL(v)" title="Imprimer le bon de livraison">
                   <i class="fa-solid fa-print"></i></button>
-                <button *ngIf="v.statut==='EN_COURS'" class="btn btn-outline btn-sm" (click)="archiver(v)" title="Archiver">
-                  <i class="fa-solid fa-box-archive"></i></button>
               </td>
             </tr>
           </tbody>
