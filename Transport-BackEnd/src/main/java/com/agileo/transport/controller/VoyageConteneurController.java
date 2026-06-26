@@ -150,6 +150,34 @@ public class VoyageConteneurController {
         return ResponseEntity.noContent().build();
     }
 
+    @PatchMapping("/{id}/dates")
+    @Operation(summary = "Mettre à jour les dates prévu/réel du voyage conteneur")
+    public ResponseEntity<Void> mettreAJourDates(
+            @PathVariable Long id,
+            @RequestParam(required = false) String chargementJour,
+            @RequestParam(required = false) String chargementHeure,
+            @RequestParam(required = false) String dechargementJour,
+            @RequestParam(required = false) String dechargementHeure,
+            @RequestParam(required = false) String realChargementJour,
+            @RequestParam(required = false) String realChargementHeure,
+            @RequestParam(required = false) String realDechargementJour,
+            @RequestParam(required = false) String realDechargementHeure) {
+        java.time.LocalDateTime chargement = combinerStr(chargementJour, chargementHeure);
+        java.time.LocalDateTime dechargement = combinerStr(dechargementJour, dechargementHeure);
+        java.time.LocalDateTime realChargement = combinerStr(realChargementJour, realChargementHeure);
+        java.time.LocalDateTime realDechargement = combinerStr(realDechargementJour, realDechargementHeure);
+        gapReadService.updateVoyageDatesPrevues(id, chargement, dechargement);
+        gapReadService.updateVoyageDatesReelles(id, realChargement, realDechargement);
+        return ResponseEntity.noContent().build();
+    }
+
+    private static java.time.LocalDateTime combinerStr(String jour, String heure) {
+        if (jour == null || jour.isBlank()) return null;
+        java.time.LocalDate d = java.time.LocalDate.parse(jour);
+        java.time.LocalTime h = (heure != null && !heure.isBlank()) ? java.time.LocalTime.parse(heure) : java.time.LocalTime.MIDNIGHT;
+        return d.atTime(h);
+    }
+
     @org.springframework.web.bind.annotation.PatchMapping("/matieres/{mpId}/statut")
     @Operation(summary = "Clôturer / rouvrir une ligne de matière première (statut local, sans impact ERP)")
     public ResponseEntity<Void> statutMatiere(@PathVariable Long mpId,

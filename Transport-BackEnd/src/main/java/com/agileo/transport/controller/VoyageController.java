@@ -229,6 +229,59 @@ public class VoyageController {
         return ResponseEntity.ok(enrichirCamion(gapReadService.getVoyageById(id)));
     }
 
+    @PostMapping(value = "/{id}/bls", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Ajouter un bon de livraison (plusieurs BL possibles par livraison)")
+    public ResponseEntity<Long> ajouterBl(
+            @PathVariable Long id,
+            @RequestParam(value = "fichier", required = false) org.springframework.web.multipart.MultipartFile fichier,
+            @RequestParam(value = "reference", required = false) String reference) {
+        String fichierNom = null;
+        String contentType = null;
+        if (fichier != null && !fichier.isEmpty()) {
+            try {
+                java.nio.file.Path dir = java.nio.file.Paths.get(uploadDir, "bl");
+                java.nio.file.Files.createDirectories(dir);
+                String ct = fichier.getContentType();
+                String ext = ct != null && ct.contains("pdf") ? ".pdf"
+                        : ct != null && ct.contains("png") ? ".png" : ".jpg";
+                fichierNom = "bl-voyage-" + id + "-" + System.currentTimeMillis() + ext;
+                java.nio.file.Files.write(dir.resolve(fichierNom), fichier.getBytes());
+                contentType = ct != null ? ct : "image/jpeg";
+            } catch (java.io.IOException e) {
+                throw new RuntimeException("Échec de l'enregistrement du bon de livraison", e);
+            }
+        }
+        String ref = (reference != null && !reference.isBlank()) ? reference.trim() : null;
+        Long blId = gapReadService.addBlFile(id, ref, fichierNom, contentType);
+        return ResponseEntity.ok(blId);
+    }
+
+    @GetMapping("/{id}/bls")
+    @Operation(summary = "Lister tous les bons de livraison d'une livraison")
+    public ResponseEntity<List<com.agileo.transport.Dtos.response.BonLivraisonFileDTO>> listerBls(@PathVariable Long id) {
+        return ResponseEntity.ok(gapReadService.listBlFiles(id));
+    }
+
+    @GetMapping("/{id}/bls/{blId}")
+    @Operation(summary = "Télécharger un bon de livraison spécifique")
+    public ResponseEntity<byte[]> telechargerBlById(@PathVariable Long id, @PathVariable Long blId) {
+        com.agileo.transport.Dtos.response.BonLivraisonFileDTO bl = gapReadService.getBlFileById(blId);
+        if (bl == null || bl.getFichier() == null) {
+            throw new jakarta.persistence.EntityNotFoundException("Bon de livraison introuvable : " + blId);
+        }
+        try {
+            byte[] data = java.nio.file.Files.readAllBytes(
+                    java.nio.file.Paths.get(uploadDir, "bl", bl.getFichier()));
+            String ct = bl.getContentType() != null ? bl.getContentType() : "application/octet-stream";
+            return ResponseEntity.ok()
+                    .header("Content-Disposition", "inline; filename=\"bl-" + blId + "\"")
+                    .contentType(org.springframework.http.MediaType.parseMediaType(ct))
+                    .body(data);
+        } catch (java.io.IOException e) {
+            throw new RuntimeException("Fichier BL introuvable", e);
+        }
+    }
+
     @GetMapping("/{id}/bl")
     @Operation(summary = "Télécharger le bon de livraison du voyage")
     public ResponseEntity<byte[]> telechargerBL(@PathVariable Long id) {
