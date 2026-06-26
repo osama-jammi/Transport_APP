@@ -98,17 +98,17 @@ export default function ScanArticleScreen() {
         ? arts.filter(a => a.statutScan !== 'SCANNE_LIVRAISON').length
         : arts.filter(a => a.statutScan === 'NON_SCANNE').length;
 
-      // MP vérifiées dans les DEUX phases :
-      // - CHARGEMENT : scanner les MP confirme qu'elles sont bien chargées (→ navigation)
-      // - LIVRAISON  : MP doivent aussi être LIVRE pour accéder au BL
+      // MP vérifiées dans les DEUX phases (CHARGEMENT et LIVRAISON).
+      // Fallback : si le filtre projetCode ne donne rien, on prend toutes les MP du voyage.
       let resteMp = 0;
       if (vcId && Number(vcId)) {
         const allMp = await getMatieresDuVoyageConteneur(Number(vcId));
-        const code = projetCode || null;
-        const mpLivraison = code
-          ? allMp.filter(m => (m.projet ?? null) === code)
-          : allMp;
-        resteMp = mpLivraison.filter(m => (m.statut || '').toUpperCase() !== 'LIVRE').length;
+        if (allMp.length > 0) {
+          const code = projetCode || null;
+          const filtered = code ? allMp.filter(m => (m.projet ?? null) === code) : allMp;
+          const mpLivraison = filtered.length > 0 ? filtered : allMp;
+          resteMp = mpLivraison.filter(m => (m.statut || '').toUpperCase() !== 'LIVRE').length;
+        }
       }
 
       const toutFait = resteArts === 0 && resteMp === 0;
