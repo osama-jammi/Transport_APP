@@ -16,6 +16,7 @@ export interface Voyage {
   statut: 'EN_COURS' | 'ARCHIVE' | 'SUPPRIME';
   // Destination (chantier) pour la navigation / arrivée
   chantierId?: number | null;
+  projetCode?: string | null;
   destinationNom?: string | null;
   destinationLat?: number | null;
   destinationLng?: number | null;
@@ -70,6 +71,7 @@ function mapGapVoyage(g: any): Voyage {
     bl: g.bl ?? null,
     statut: g.statutReception === 'ARCHIVE' ? 'ARCHIVE' : 'EN_COURS',
     chantierId: g.projetId ?? null,
+    projetCode: g.projetCode ?? null,
     destinationNom: g.projetDesignation ?? null,
     destinationLat: g.destinationLat ?? null,
     destinationLng: g.destinationLng ?? null,
@@ -143,6 +145,48 @@ export async function enregistrerBL(
     headers: { 'Content-Type': 'multipart/form-data' },
   });
   return data;
+}
+
+export interface MatiereMp {
+  id: number;
+  reference?: string;
+  designation?: string;
+  quantite?: number;
+  unite?: string;
+  projet?: string;
+  pieceFournisseur?: string;
+  qteCommande?: number;
+  statut?: string;
+}
+
+/** Matières premières d'un voyage conteneur, filtrées par chantier de la livraison. */
+export async function getMatieresDuVoyageConteneur(voyageConteneurId: number): Promise<MatiereMp[]> {
+  const { data } = await api.get<any[]>(`/voyages-conteneurs/${voyageConteneurId}/matieres`);
+  return (data || []).map((m) => ({
+    id: m.id,
+    reference: m.reference ?? undefined,
+    designation: m.designation ?? undefined,
+    quantite: m.quantite ?? undefined,
+    unite: m.unite ?? undefined,
+    projet: m.projet ?? undefined,
+    pieceFournisseur: m.pieceFournisseur ?? undefined,
+    qteCommande: m.qteCommande ?? undefined,
+    statut: m.statut ?? undefined,
+  } as MatiereMp));
+}
+
+/** Clôture / rouvre une ligne de matière première (statut local). */
+export async function cloturerMatiere(mpId: number, statut: 'LIVRE' | 'EN_ATTENTE'): Promise<void> {
+  await api.patch(`/voyages-conteneurs/matieres/${mpId}/statut`, null, { params: { statut } });
+}
+
+/** Upload un BL (photo ou PDF) pour une livraison — endpoint multi-BL. */
+export async function ajouterBlFile(voyageId: number, photoUri: string, reference?: string): Promise<void> {
+  const ext = photoUri.endsWith('.pdf') ? 'pdf' : 'jpg';
+  const form = new FormData();
+  form.append('fichier', { uri: photoUri, name: `bl-${voyageId}-${Date.now()}.${ext}`, type: ext === 'pdf' ? 'application/pdf' : 'image/jpeg' } as any);
+  if (reference) form.append('reference', reference);
+  await api.post(`/voyages/${voyageId}/bls`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
 }
 
 /** Articles d'un voyage (lus depuis GAP : detail_livraison), mappés au modèle mobile. */
