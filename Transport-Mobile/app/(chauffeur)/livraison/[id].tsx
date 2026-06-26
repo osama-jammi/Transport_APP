@@ -1,13 +1,16 @@
 import { useState, useCallback } from 'react';
 import {
-  View, Text, FlatList, TouchableOpacity,
-  StyleSheet, ActivityIndicator, RefreshControl, StatusBar,
+  View, Text, TouchableOpacity,
+  StyleSheet, ActivityIndicator, RefreshControl, StatusBar, ScrollView,
 } from 'react-native';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { useSelector } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
 import type { RootState } from '@/store';
-import { getArticlesByVoyage, type ArticleScan } from '@/services/livraisonService';
+import {
+  getArticlesByVoyage, getMatieresDuVoyageConteneur,
+  type ArticleScan, type MatiereMp,
+} from '@/services/livraisonService';
 import { COLORS } from '@/constants/theme';
 
 // Libelle/couleur d'un article selon son statut de scan et la phase courante.
@@ -20,31 +23,51 @@ const statutArticle = (statut: ArticleScan['statutScan']) => {
 };
 
 export default function LivraisonArticlesScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, vcId, projetCode } = useLocalSearchParams<{ id: string; vcId?: string; projetCode?: string }>();
   const router  = useRouter();
   const voyageId = Number(id);
+  const voyageConteneurId = vcId ? Number(vcId) : null;
 
   const voyage = useSelector((s: RootState) => s.livraison.voyages.find(v => v.id === voyageId));
 
-  const [articles, setArticles] = useState<ArticleScan[]>([]);
-  const [loading,  setLoading]  = useState(true);
-  const [error,    setError]    = useState<string | null>(null);
+  const [articles,  setArticles]  = useState<ArticleScan[]>([]);
+  const [matieres,  setMatieres]  = useState<MatiereMp[]>([]);
+  const [loading,   setLoading]   = useState(true);
+  const [error,     setError]     = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await getArticlesByVoyage(voyageId);
-      setArticles(data);
+      const [arts, allMp] = await Promise.all([
+        getArticlesByVoyage(voyageId),
+        voyageConteneurId ? getMatieresDuVoyageConteneur(voyageConteneurId) : Promise.resolve([]),
+      ]);
+      setArticles(arts);
+      // Filtrer par chantier quand le code est défini ET qu'il y a des correspondances
+      // Sinon afficher toutes les MP du voyage (le chauffeur doit toutes les valider)
+      const code = projetCode || null;
+      const filtered = code ? allMp.filter(m => (m.projet ?? null) === code) : allMp;
+      setMatieres(filtered.length > 0 ? filtered : allMp);
     } catch {
       setError('Impossible de charger les articles.');
     } finally {
       setLoading(false);
     }
-  }, [voyageId]);
+  }, [voyageId, voyageConteneurId, projetCode]);
+
+  const scannerMp = (m: MatiereMp) => {
+    router.push({
+      pathname: '/(chauffeur)/scan',
+      params: {
+        articleNom: m.designation ?? m.reference,
+        articleQr:  `DETAIL_MP:${m.id}`,
+        phase: 'LIVRAISON',
+      },
+    });
+  };
 
   // Recharge a chaque fois que l'ecran reprend le focus (ex. retour depuis le scan)
-  // pour que la progression des articles se mette a jour.
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const total      = articles.length;
@@ -53,7 +76,10 @@ export default function LivraisonArticlesScreen() {
 
   // Phase : tant que tout n'est pas chargé → CHARGEMENT ; sinon → LIVRAISON (à destination).
   const chargementComplet = total > 0 && articles.every(a => a.statutScan !== 'NON_SCANNE');
-  const livraisonComplete = total > 0 && articles.every(a => a.statutScan === 'SCANNE_LIVRAISON');
+  const articlesTousLivres  = total === 0 || articles.every(a => a.statutScan === 'SCANNE_LIVRAISON');
+  const matieresToutesLivrees = matieres.every(m => (m.statut || '').toUpperCase() === 'LIVRE');
+  // Livraison complète = tous les articles livrés ET toutes les MP clôturées
+  const livraisonComplete = (total > 0 || matieres.length > 0) && articlesTousLivres && matieresToutesLivrees;
   const dejaLivre = voyage?.etatDechargement === 'TERMINE' || livraisonComplete;
   const phase: 'CHARGEMENT' | 'LIVRAISON' = chargementComplet ? 'LIVRAISON' : 'CHARGEMENT';
 
@@ -156,11 +182,18 @@ export default function LivraisonArticlesScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Bandeau consultation (lecture seule) */}
-      <View style={styles.readonlyBar}>
-        <Ionicons name="eye-outline" size={13} color="rgba(255,255,255,.75)" />
-        <Text style={styles.readonlyTxt}>Mode consultation — scan uniquement, aucune modification possible</Text>
-      </View>
+      {/* Bandeau état */}
+      {dejaLivre ? (
+        <View style={[styles.readonlyBar, { backgroundColor: COLORS.success }]}>
+          <Ionicons name="checkmark-done-circle" size={13} color="#fff" />
+          <Text style={[styles.readonlyTxt, { color: '#fff' }]}>Livraison terminée — lecture seule</Text>
+        </View>
+      ) : (
+        <View style={styles.readonlyBar}>
+          <Ionicons name="eye-outline" size={13} color="rgba(255,255,255,.75)" />
+          <Text style={styles.readonlyTxt}>Mode consultation — scan uniquement, aucune modification possible</Text>
+        </View>
+      )}
 
       {/* Progress bar */}
       <View style={styles.progressBar}>
@@ -203,44 +236,85 @@ export default function LivraisonArticlesScreen() {
           </TouchableOpacity>
         </View>
       ) : (
-        <FlatList
-          data={articles}
-          keyExtractor={a => String(a.id)}
-          renderItem={renderItem}
+        <ScrollView
           refreshControl={<RefreshControl refreshing={loading} onRefresh={load} colors={[COLORS.gold]} tintColor={COLORS.gold} />}
           contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: 130 }}
-          ListHeaderComponent={
-            phase === 'LIVRAISON' && !dejaLivre ? (
-              <View style={styles.phaseBanner}>
-                <Ionicons name="cube-outline" size={18} color={COLORS.goldDark} />
-                <Text style={styles.phaseBannerTxt}>
-                  Arrivé à destination ? Scannez chaque article livré, ou le QR du voyage pour tout valider d'un coup.
-                </Text>
-              </View>
-            ) : null
-          }
-          ListEmptyComponent={(
+        >
+          {phase === 'LIVRAISON' && !dejaLivre && (
+            <View style={styles.phaseBanner}>
+              <Ionicons name="cube-outline" size={18} color={COLORS.goldDark} />
+              <Text style={styles.phaseBannerTxt}>
+                Arrivé à destination ? Scannez chaque article livré, ou le QR du voyage pour tout valider d'un coup.
+              </Text>
+            </View>
+          )}
+
+          {/* Articles */}
+          {articles.length === 0 ? (
             <View style={styles.empty}>
               <Ionicons name="cube-outline" size={48} color={COLORS.textFaint} />
               <Text style={styles.emptyTxt}>Aucun article pour ce voyage</Text>
             </View>
+          ) : (
+            articles.map(item => <View key={String(item.id)}>{renderItem({ item })}</View>)
           )}
-        />
+
+          {/* Matières premières */}
+          {matieres.length > 0 && (
+            <View style={styles.mpSection}>
+              <View style={styles.mpHeader}>
+                <Ionicons name="cube-outline" size={16} color={COLORS.brownSoft} />
+                <Text style={styles.mpHeaderTxt}>Matières premières ({matieres.length})</Text>
+              </View>
+              {matieres.map(m => {
+                const livre = (m.statut || '').toUpperCase() === 'LIVRE';
+                return (
+                  <View key={String(m.id)} style={[styles.mpCard, livre && styles.mpCardDone]}>
+                    <View style={styles.mpCardBody}>
+                      <Text style={styles.mpDesig} numberOfLines={2}>{m.designation || m.reference || '—'}</Text>
+                      {m.reference ? <Text style={styles.mpRef}>Réf {m.reference}</Text> : null}
+                      {m.pieceFournisseur ? <Text style={styles.mpRef}>Pièce {m.pieceFournisseur}</Text> : null}
+                      <Text style={styles.mpRef}>Qté : {m.quantite ?? '—'}{m.unite ? ` ${m.unite}` : ''}</Text>
+                    </View>
+                    <View style={styles.mpRight}>
+                      <View style={[styles.mpStatusPill, { backgroundColor: livre ? COLORS.success + '22' : COLORS.warn + '22' }]}>
+                        <Text style={[styles.mpStatusTxt, { color: livre ? COLORS.success : COLORS.warn }]}>
+                          {livre ? 'Livrée ✓' : 'En attente'}
+                        </Text>
+                      </View>
+                      {!livre && !dejaLivre && (
+                        <TouchableOpacity style={styles.mpBtn} onPress={() => scannerMp(m)} activeOpacity={0.75}>
+                          <Ionicons name="qr-code-outline" size={14} color={COLORS.brown} />
+                          <Text style={styles.mpBtnTxt}>Scanner</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+        </ScrollView>
       )}
 
       {/* Barre d'action bas d'écran */}
-      {!loading && !error && total > 0 && (
+      {!loading && !error && (total > 0 || matieres.length > 0) && (
         <View style={styles.actionBar}>
-          {dejaLivre ? (
+          {dejaLivre && voyage?.etatDechargement === 'TERMINE' ? (
             <View style={[styles.actionBtn, styles.actionDone]}>
               <Ionicons name="checkmark-done-circle" size={20} color="#fff" />
-              <Text style={styles.actionTxt}>Voyage livré</Text>
+              <Text style={styles.actionTxt}>Livraison terminée</Text>
             </View>
           ) : livraisonComplete ? (
             <TouchableOpacity style={[styles.actionBtn, styles.actionGreen]} onPress={allerBL} activeOpacity={0.85}>
               <Ionicons name="document-text" size={19} color="#fff" />
               <Text style={styles.actionTxt}>Bon de livraison & terminer</Text>
             </TouchableOpacity>
+          ) : articlesTousLivres && !matieresToutesLivrees ? (
+            <View style={[styles.actionBtn, { backgroundColor: COLORS.warn }]}>
+              <Ionicons name="layers-outline" size={19} color="#fff" />
+              <Text style={styles.actionTxt}>Scannez encore les matières premières</Text>
+            </View>
           ) : (
             <TouchableOpacity style={[styles.actionBtn, styles.actionGold]} onPress={openScanLibre} activeOpacity={0.85}>
               <Ionicons name="qr-code" size={19} color={COLORS.brown} />
@@ -348,4 +422,29 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.gold, paddingHorizontal: 24, paddingVertical: 10, borderRadius: 20,
   },
   retryTxt:     { color: COLORS.brown, fontWeight: '700' },
+
+  mpSection:    { marginTop: 8, gap: 8 },
+  mpHeader:     {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: COLORS.border,
+    marginBottom: 4,
+  },
+  mpHeaderTxt:  { fontSize: 14, fontWeight: '700', color: COLORS.text },
+  mpCard:       {
+    backgroundColor: COLORS.card, borderRadius: 12, padding: 12,
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, elevation: 1,
+  },
+  mpCardDone:   { opacity: 0.7 },
+  mpCardBody:   { flex: 1, gap: 2 },
+  mpDesig:      { fontSize: 13, fontWeight: '700', color: COLORS.text },
+  mpRef:        { fontSize: 11, color: COLORS.textSub },
+  mpRight:      { alignItems: 'flex-end', gap: 6 },
+  mpStatusPill: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 20 },
+  mpStatusTxt:  { fontSize: 10, fontWeight: '700' },
+  mpBtn:        {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: COLORS.gold, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8,
+  },
+  mpBtnTxt:     { fontSize: 12, fontWeight: '700', color: COLORS.brown },
 });
