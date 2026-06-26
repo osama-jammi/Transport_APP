@@ -107,13 +107,6 @@ export default function VoyageLivraisonsScreen() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const scannerMp = (m: MatiereMp) => {
-    router.push({
-      pathname: '/(chauffeur)/scan',
-      params: { articleNom: m.designation ?? m.reference, articleQr: `DETAIL_MP:${m.id}`, phase: 'LIVRAISON' },
-    });
-  };
-
   const scannerVoyage = () => {
     // Phase : CHARGEMENT si des livraisons ne sont pas encore chargées, sinon LIVRAISON
     const toutCharge = livraisons.length > 0 && livraisons.every(v => v.etatChargement === 'TERMINE');
@@ -253,11 +246,11 @@ export default function VoyageLivraisonsScreen() {
                 </View>
               )}
 
-              {/* ── Matières premières inline seulement si PAS de livraison (MP orphelines) ── */}
+              {/* MP orphelines (sans livraison) : affichage info seulement, pas de scan ici */}
               {!g.livraison && g.matieres.length > 0 && (
                 <View style={styles.mpZone}>
                   <Text style={styles.mpZoneTitle}>
-                    {g.matieres.filter(m => (m.statut||'').toUpperCase()==='LIVRE').length}/{g.matieres.length} matière(s) livrée(s)
+                    {g.matieres.filter(m => (m.statut||'').toUpperCase()==='LIVRE').length}/{g.matieres.length} matière(s) — voir dans la livraison
                   </Text>
                   {g.matieres.map(m => {
                     const livre = (m.statut || '').toUpperCase() === 'LIVRE';
@@ -268,18 +261,10 @@ export default function VoyageLivraisonsScreen() {
                           {m.reference ? <Text style={styles.mpMeta}>Réf {m.reference}</Text> : null}
                           <Text style={styles.mpMeta}>Qté : {m.quantite ?? '—'}{m.unite ? ` ${m.unite}` : ''}</Text>
                         </View>
-                        <View style={styles.mpRight}>
-                          <View style={[styles.statusPill, { backgroundColor: livre ? COLORS.success + '22' : COLORS.warn + '22' }]}>
-                            <Text style={[styles.statusTxt, { color: livre ? COLORS.success : COLORS.warn }]}>
-                              {livre ? 'Livrée ✓' : 'En attente'}
-                            </Text>
-                          </View>
-                          {!livre && (
-                            <TouchableOpacity style={styles.mpScanBtn} onPress={() => scannerMp(m)} activeOpacity={0.75}>
-                              <Ionicons name="qr-code-outline" size={14} color={COLORS.brown} />
-                              <Text style={styles.mpScanTxt}>Scanner</Text>
-                            </TouchableOpacity>
-                          )}
+                        <View style={[styles.statusPill, { backgroundColor: livre ? COLORS.success + '22' : COLORS.warn + '22' }]}>
+                          <Text style={[styles.statusTxt, { color: livre ? COLORS.success : COLORS.warn }]}>
+                            {livre ? 'Livrée ✓' : 'En attente'}
+                          </Text>
                         </View>
                       </View>
                     );
@@ -359,9 +344,6 @@ const styles = StyleSheet.create({
   mpInfo:       { flex: 1, gap: 1 },
   mpDesig:      { fontSize: 13, fontWeight: '600', color: COLORS.text },
   mpMeta:       { fontSize: 11, color: COLORS.textSub },
-  mpRight:      { alignItems: 'flex-end', gap: 5 },
-  mpScanBtn:    { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: COLORS.gold, paddingHorizontal: 9, paddingVertical: 5, borderRadius: 7 },
-  mpScanTxt:    { fontSize: 11, fontWeight: '700', color: COLORS.brown },
   mpBadgeRow:   { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 14, paddingVertical: 7, borderTopWidth: 1, borderTopColor: COLORS.border + '60' },
   mpBadgeTxt:   { fontSize: 11, color: COLORS.textSub, fontStyle: 'italic' },
 
