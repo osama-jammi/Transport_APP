@@ -1,8 +1,10 @@
 import { Component, OnInit } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
 import { ToastrService } from 'ngx-toastr';
+import { blobQrEnPdf } from '../core/qr-pdf';
 import { forkJoin, of } from 'rxjs';
 import { catchError } from 'rxjs/operators';
-import { VoyageConteneurService } from '../services/voyage-conteneur.service';
+import { VoyageConteneurService, BonLivraisonFile } from '../services/voyage-conteneur.service';
 import { ChauffeurService } from '../services/chauffeur.service';
 import { ChantierService } from '../services/chantier.service';
 import { MatierePremiereService } from '../services/matiere-premiere.service';
@@ -45,6 +47,8 @@ interface VoyageLigne {
   filtreLignesMp: string;  // recherche dans les lignes de la commande choisie
   ofOuvert?: boolean;      // nouvelle saisie : section « Ordre de fabrication » dépliée
   mpOuvert?: boolean;      // nouvelle saisie : section « Matières premières » dépliée
+  /** MP déjà confirmées depuis d'autres commandes (accumulées entre changements de commande). */
+  mpSauvegardes: { m: MatierePremiere; cdno?: number; pieceFournisseur?: string; qte: number }[];
 }
 
 @Component({
@@ -194,13 +198,12 @@ interface VoyageLigne {
 
               <!-- Une ligne peut contenir des articles ET des matières premières -->
               <div *ngIf="lg.chantierId">
-                <!-- Ordre de fabrication : livraisons de ce chantier -->
-                <h5 class="ligne-section" [class.clic]="nouvelleSaisie"
-                    (click)="nouvelleSaisie && (lg.ofOuvert = !lg.ofOuvert)">
-                  <i *ngIf="nouvelleSaisie" class="fa-solid" [ngClass]="lg.ofOuvert ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
+                <!-- Ordre de fabrication : livraisons de ce chantier (repliable, fermé par défaut) -->
+                <h5 class="ligne-section clic" (click)="lg.ofOuvert = !lg.ofOuvert">
+                  <i class="fa-solid" [ngClass]="lg.ofOuvert ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
                   <i class="fa-solid fa-boxes-stacked"></i> Ordre de fabrication
                   <span class="muted">({{ selectedLivCount(lg) }} sélectionné(s))</span></h5>
-                <div class="art-list full" *ngIf="!nouvelleSaisie || lg.ofOuvert">
+                <div class="art-list full" *ngIf="lg.ofOuvert">
                   <div *ngIf="livraisonsDuChantier(lg).length===0" class="muted" style="font-size:12px;padding:8px">Aucune livraison pour ce chantier.</div>
                   <label class="art-item" *ngFor="let l of livraisonsDuChantier(lg)" [class.checked]="lg.selectedLiv[l.id]">
                     <input type="checkbox" [(ngModel)]="lg.selectedLiv[l.id]">
@@ -209,13 +212,12 @@ interface VoyageLigne {
                   </label>
                 </div>
 
-                <!-- Matières premières : commande de ce chantier -> lignes -->
-                <h5 class="ligne-section" [class.clic]="nouvelleSaisie"
-                    (click)="nouvelleSaisie && (lg.mpOuvert = !lg.mpOuvert)">
-                  <i *ngIf="nouvelleSaisie" class="fa-solid" [ngClass]="lg.mpOuvert ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
+                <!-- Matières premières : commande de ce chantier -> lignes (repliable, fermé par défaut) -->
+                <h5 class="ligne-section clic" (click)="lg.mpOuvert = !lg.mpOuvert">
+                  <i class="fa-solid" [ngClass]="lg.mpOuvert ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
                   <i class="fa-solid fa-cubes"></i> Matières premières
                   <span class="muted">({{ selectedMpCount(lg) }} sélectionnée(s))</span></h5>
-                <div *ngIf="!nouvelleSaisie || lg.mpOuvert">
+                <div *ngIf="lg.mpOuvert">
                   <div class="field" style="margin-bottom:8px"><label>Commande</label>
                     <ng-select *ngIf="nouvelleSaisie" [items]="lg.commandes" bindValue="cdno"
                                [(ngModel)]="lg.commandeId" (change)="chargerLignesMp(lg)"
@@ -318,6 +320,18 @@ interface VoyageLigne {
               </div>
             </div>
 
+            <!-- MP sauvegardées d'autres commandes -->
+            <div *ngIf="ligneDraft.mpSauvegardes?.length" style="margin:6px 0;padding:8px;background:#f0faf0;border-radius:8px;border:1px solid #c3e6c3">
+              <span class="muted" style="font-size:11px"><i class="fa-solid fa-circle-check" style="color:#21ba45;margin-right:4px"></i>
+                {{ ligneDraft.mpSauvegardes.length }} matière(s) conservée(s) depuis d'autres commandes :</span>
+              <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">
+                <span *ngFor="let s of ligneDraft.mpSauvegardes" class="badge badge-green" style="font-size:10px">
+                  {{ s.m.designation || s.m.reference }}
+                  <button style="background:none;border:none;cursor:pointer;color:inherit;margin-left:4px;padding:0;line-height:1"
+                          (click)="retirerMpSauvegardee(ligneDraft, s.m.reference)">×</button>
+                </span>
+              </div>
+            </div>
             <!-- ═══ Matières premières : clic sur l'entête → commande (ng-select) + table ═══ -->
             <h5 class="ligne-section clic" (click)="ligneDraft.mpOuvert = !ligneDraft.mpOuvert">
               <i class="fa-solid" [ngClass]="ligneDraft.mpOuvert ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
@@ -439,21 +453,52 @@ interface VoyageLigne {
             <div><span class="dk">Chauffeur</span><span class="dv">{{ detail.chauffeur || '—' }}</span></div>
             <div><span class="dk">Statut</span><span class="dv"><span class="badge badge-orange">{{ detail.statut || '—' }}</span></span></div>
             <div><span class="dk">Local de départ</span><span class="dv">{{ detail.localNom || '—' }}</span></div>
-            <div><span class="dk">Chargement prévu</span><span class="dv">{{ detail.chargement ? (detail.chargement | date:'dd/MM/yy HH:mm') : '—' }}</span></div>
-            <div><span class="dk">Chargement réel</span><span class="dv">{{ detail.realChargement ? (detail.realChargement | date:'dd/MM/yy HH:mm') : '—' }}</span></div>
-            <div><span class="dk">Déchargement prévu</span><span class="dv">{{ detail.dechargement ? (detail.dechargement | date:'dd/MM/yy HH:mm') : '—' }}</span></div>
-            <div><span class="dk">Déchargement réel</span><span class="dv">{{ detail.realDechargement ? (detail.realDechargement | date:'dd/MM/yy HH:mm') : '—' }}</span></div>
+          </div>
+
+          <!-- Dates du voyage : lecture + bouton Modifier -->
+          <div *ngIf="!editDates" style="margin-top:10px">
+            <div class="detail-grid">
+              <div><span class="dk">Chargement prévu</span><span class="dv">{{ detail.chargement ? (detail.chargement | date:'dd/MM/yy HH:mm') : '—' }}</span></div>
+              <div><span class="dk">Chargement réel</span><span class="dv">{{ detail.realChargement ? (detail.realChargement | date:'dd/MM/yy HH:mm') : '—' }}</span></div>
+              <div><span class="dk">Déchargement prévu</span><span class="dv">{{ detail.dechargement ? (detail.dechargement | date:'dd/MM/yy HH:mm') : '—' }}</span></div>
+              <div><span class="dk">Déchargement réel</span><span class="dv">{{ detail.realDechargement ? (detail.realDechargement | date:'dd/MM/yy HH:mm') : '—' }}</span></div>
+            </div>
+            <button class="btn btn-outline btn-sm" style="margin-top:8px" (click)="ouvrirEditDates()">
+              <i class="fa-solid fa-pen"></i> Modifier les dates</button>
+          </div>
+
+          <!-- Dates : formulaire d'édition -->
+          <div *ngIf="editDates" style="margin-top:10px;padding:12px;border:1px solid var(--border);border-radius:10px;background:#faf9fb">
+            <h5 style="margin:0 0 10px;font-size:13px;font-weight:700">Modifier les dates</h5>
+            <div class="form-grid">
+              <div class="field"><label>Chargement prévu — jour</label><input type="date" [(ngModel)]="datesForm.chJour"></div>
+              <div class="field"><label>Heure</label><input type="time" [(ngModel)]="datesForm.chHeure"></div>
+              <div class="field"><label>Déchargement prévu — jour</label><input type="date" [(ngModel)]="datesForm.deJour"></div>
+              <div class="field"><label>Heure</label><input type="time" [(ngModel)]="datesForm.deHeure"></div>
+            </div>
+            <div class="form-grid" style="margin-top:6px">
+              <div class="field"><label>Chargement réel — jour</label><input type="date" [(ngModel)]="datesForm.rChJour"></div>
+              <div class="field"><label>Heure</label><input type="time" [(ngModel)]="datesForm.rChHeure"></div>
+              <div class="field"><label>Déchargement réel — jour</label><input type="date" [(ngModel)]="datesForm.rDeJour"></div>
+              <div class="field"><label>Heure</label><input type="time" [(ngModel)]="datesForm.rDeHeure"></div>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:10px">
+              <button class="btn btn-outline btn-sm" (click)="editDates=false">Annuler</button>
+              <button class="btn btn-primary btn-sm" (click)="enregistrerDates()" [disabled]="savingDates">
+                <i class="fa-solid fa-floppy-disk"></i> Enregistrer</button>
+            </div>
           </div>
 
           <!-- QR du voyage : un seul scan vaut le scan de toutes les lignes -->
           <div style="display:flex;align-items:center;gap:14px;margin-top:12px;padding:12px;border:1px solid var(--border);border-radius:10px">
-            <img [src]="qrVoyageUrl(detail.id)" alt="QR voyage" style="width:96px;height:96px">
+            <img [src]="qrVoyageUrl(detail.id)" alt="QR voyage" style="width:96px;height:96px;cursor:zoom-in"
+                 title="Voir le QR" (click)="voirQr(qrVoyageUrl(detail.id), 'QR voyage #' + detail.id, 'qr-voyage-' + detail.id)">
             <div>
               <strong>QR du voyage</strong>
               <div class="muted" style="font-size:12px">Scanné par le chauffeur, il valide toutes les lignes du voyage en une fois.</div>
-              <a class="btn btn-outline btn-sm" style="margin-top:6px" [href]="qrVoyageUrl(detail.id)"
-                 [download]="'qr-voyage-' + detail.id + '.png'" target="_blank">
-                <i class="fa-solid fa-download"></i> Télécharger</a>
+              <button class="btn btn-outline btn-sm" style="margin-top:6px"
+                      (click)="voirQr(qrVoyageUrl(detail.id), 'QR voyage #' + detail.id, 'qr-voyage-' + detail.id)">
+                <i class="fa-solid fa-eye"></i> Voir / Télécharger</button>
             </div>
           </div>
 
@@ -470,14 +515,16 @@ interface VoyageLigne {
                 <strong>#{{ l.id }} — {{ l.projetDesignation || l.projetCode || 'Sans chantier' }}</strong>
                 <span class="badge badge-gray">{{ l.statutReception || '—' }}</span>
                 <span style="margin-left:auto;display:flex;gap:6px" (click)="$event.stopPropagation()">
-                  <img [src]="qrLivraisonUrl(l.id)" alt="QR" style="width:40px;height:40px;vertical-align:middle"
-                       title="QR de la livraison">
-                  <a class="btn btn-outline btn-sm" [href]="qrLivraisonUrl(l.id)"
-                     [download]="'qr-livraison-' + l.id + '.png'" target="_blank" title="Télécharger le QR de la livraison">
-                    <i class="fa-solid fa-qrcode"></i></a>
-                  <button *ngIf="l.hasBl" class="btn btn-outline btn-sm"
-                          (click)="telechargerBL(l)" title="Télécharger le BL">
-                    <i class="fa-solid fa-file-arrow-down"></i> BL</button>
+                  <img [src]="qrLivraisonUrl(l.id)" alt="QR" style="width:40px;height:40px;vertical-align:middle;cursor:zoom-in"
+                       title="Voir le QR" (click)="voirQr(qrLivraisonUrl(l.id), 'QR livraison #' + l.id, 'qr-livraison-' + l.id)">
+                  <button class="btn btn-outline btn-sm" title="Voir / télécharger le QR de la livraison"
+                          (click)="voirQr(qrLivraisonUrl(l.id), 'QR livraison #' + l.id, 'qr-livraison-' + l.id)">
+                    <i class="fa-solid fa-qrcode"></i></button>
+                  <button class="btn btn-outline btn-sm" (click)="chargerBls(l.id)"
+                          title="Voir les bons de livraison">
+                    <i class="fa-solid fa-file-lines"></i> BL
+                    <span *ngIf="(blsParLivraison[l.id]?.length ?? 0) > 0" class="badge badge-blue" style="margin-left:4px">{{ blsParLivraison[l.id].length }}</span>
+                  </button>
                   <button class="btn btn-danger btn-sm" (click)="detacher(l)"
                           [disabled]="estScanne(detail) || livraisonScannee(l)"
                           [title]="(estScanne(detail) || livraisonScannee(l)) ? 'Livraison scannée : modification impossible' : 'Retirer du voyage'">
@@ -504,10 +551,11 @@ interface VoyageLigne {
                         <td>{{ a.quantite ?? '—' }}</td>
                         <td><span class="badge badge-gray">{{ a.statutReception || '—' }}</span></td>
                         <td style="white-space:nowrap" (click)="$event.stopPropagation()">
-                          <img [src]="qrArticleUrl(a.id)" alt="QR" style="width:48px;height:48px;vertical-align:middle">
-                          <a class="btn btn-outline btn-sm" style="margin-left:6px"
-                             [href]="qrArticleUrl(a.id)" [download]="'qr-article-' + a.id + '.png'" target="_blank" title="Télécharger le QR">
-                            <i class="fa-solid fa-download"></i></a>
+                          <img [src]="qrArticleUrl(a.id)" alt="QR" style="width:48px;height:48px;vertical-align:middle;cursor:zoom-in"
+                               title="Voir le QR" (click)="voirQr(qrArticleUrl(a.id), 'QR article #' + a.id, 'qr-article-' + a.id)">
+                          <button class="btn btn-outline btn-sm" style="margin-left:6px" title="Voir / télécharger le QR"
+                                  (click)="voirQr(qrArticleUrl(a.id), 'QR article #' + a.id, 'qr-article-' + a.id)">
+                            <i class="fa-solid fa-eye"></i></button>
                         </td>
                       </tr>
                       <tr *ngIf="artDetailId===a.id">
@@ -523,61 +571,91 @@ interface VoyageLigne {
                 </table>
               </div>
 
-              <!-- Matières premières -->
-              <div class="table-wrap" *ngIf="contenu[l.id]?.matieres?.length" style="margin-top:8px">
-                <table>
-                  <thead><tr><th>Matière première</th><th>Réf</th><th>Qté</th><th>QR</th></tr></thead>
-                  <tbody>
-                    <tr *ngFor="let m of contenu[l.id].matieres">
-                      <td><strong>{{ m.designation || '—' }}</strong></td>
-                      <td><code>{{ m.reference || '—' }}</code></td>
-                      <td>{{ m.quantite ?? '—' }}</td>
-                      <td><img [src]="qrMatiereUrl(m.id)" alt="QR" style="width:48px;height:48px"></td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+              <!-- Matières premières liées à cette livraison (même chantier) -->
+              <ng-container *ngIf="matieresDeLivraison(l).length">
+                <h5 style="margin:10px 0 4px;font-size:13px;font-weight:700;color:var(--primary)">
+                  <i class="fa-solid fa-cubes" style="margin-right:6px;color:var(--accent-dark)"></i>
+                  Matières premières ({{ matieresDeLivraison(l).length }})
+                </h5>
+                <div class="table-wrap">
+                  <table>
+                    <thead><tr><th>Désignation</th><th>Pièce fournisseur</th><th>Affaire</th>
+                      <th>Qté cmd.</th><th>Qté livrée</th><th>Reste</th><th>Statut</th><th>QR</th><th></th></tr></thead>
+                    <tbody>
+                      <tr *ngFor="let m of matieresDeLivraison(l)" [class.row-done]="estCloturee(m)">
+                        <td><strong>{{ m.designation || '—' }}</strong>
+                          <div class="muted" style="font-size:11px">Réf {{ m.reference || '—' }}</div></td>
+                        <td><code>{{ m.pieceFournisseur || '—' }}</code></td>
+                        <td>{{ m.projet || '—' }}</td>
+                        <td>{{ m.qteCommande ?? '—' }}</td>
+                        <td>{{ qteLivree(m) }}</td>
+                        <td><strong>{{ resteALivrer(m) }}</strong></td>
+                        <td><span class="badge" [ngClass]="estCloturee(m) ? 'badge-green' : 'badge-orange'">
+                          {{ estCloturee(m) ? 'Livrée' : 'En attente' }}</span></td>
+                        <td style="white-space:nowrap">
+                          <img [src]="qrMatiereUrl(m.id)" alt="QR" style="width:48px;height:48px;vertical-align:middle;cursor:zoom-in"
+                               title="Voir le QR" (click)="voirQr(qrMatiereUrl(m.id), 'QR matière #' + m.id, 'qr-mp-' + m.id)">
+                          <button class="btn btn-outline btn-sm" style="margin-left:6px" title="Voir / télécharger le QR"
+                                  (click)="voirQr(qrMatiereUrl(m.id), 'QR matière #' + m.id, 'qr-mp-' + m.id)">
+                            <i class="fa-solid fa-eye"></i></button>
+                        </td>
+                        <td style="white-space:nowrap">
+                          <button class="btn btn-sm" [ngClass]="estCloturee(m) ? 'btn-outline' : 'btn-primary'"
+                                  (click)="basculerMatiere(m)" [disabled]="majMatiere"
+                                  [title]="estCloturee(m) ? 'Rouvrir' : 'Clôturer (marquer livrée)'">
+                            <i class="fa-solid" [ngClass]="estCloturee(m) ? 'fa-rotate-left' : 'fa-check'"></i>
+                            {{ estCloturee(m) ? 'Rouvrir' : 'Clôturer' }}</button>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </ng-container>
 
               <div *ngIf="!contenu[l.id]?.articles?.length && !contenu[l.id]?.matieres?.length"
                    class="muted" style="margin-top:6px;font-size:12px">Aucun contenu</div>
+
+              <!-- Bons de livraison -->
+              <div style="margin-top:10px">
+                <h5 style="margin:0 0 6px;font-size:13px;font-weight:700">
+                  <i class="fa-solid fa-file-lines" style="margin-right:6px;color:var(--accent-dark)"></i>
+                  Bons de livraison ({{ blsParLivraison[l.id]?.length ?? '?' }})
+                </h5>
+                <div *ngIf="!blsParLivraison[l.id]" class="muted" style="font-size:12px">
+                  Chargement…</div>
+                <div *ngIf="blsParLivraison[l.id]?.length===0" class="muted" style="font-size:12px">
+                  Aucun BL enregistré.</div>
+                <div *ngFor="let bl of (blsParLivraison[l.id] ?? [])"
+                     style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
+                  <i class="fa-solid fa-file-image" style="color:var(--accent)"></i>
+                  <span style="flex:1;font-size:13px">{{ bl.reference || ('BL #' + bl.id) }}</span>
+                  <span class="badge badge-gray" style="font-size:10px">{{ bl.contentType?.includes('pdf') ? 'PDF' : 'Image' }}</span>
+                  <a [href]="svc.blUrl(l.id, bl.id)" target="_blank" class="btn btn-outline btn-sm" title="Voir">
+                    <i class="fa-solid fa-eye"></i></a>
+                  <a [href]="svc.blUrl(l.id, bl.id)" [download]="'bl-' + l.id + '-' + bl.id" class="btn btn-outline btn-sm" title="Télécharger">
+                    <i class="fa-solid fa-download"></i></a>
+                </div>
+                <!-- Ajouter un BL -->
+                <div *ngIf="blUploadLivId !== l.id" style="margin-top:8px">
+                  <button class="btn btn-outline btn-sm" (click)="blUploadLivId=l.id;blUploadRef='';blUploadFile=null">
+                    <i class="fa-solid fa-plus"></i> Ajouter un BL</button>
+                </div>
+                <div *ngIf="blUploadLivId===l.id" style="margin-top:8px;padding:10px;background:#faf9fb;border-radius:8px;border:1px solid var(--border)">
+                  <div class="form-grid" style="margin-bottom:8px">
+                    <div class="field"><label>Référence (optionnel)</label>
+                      <input [(ngModel)]="blUploadRef" placeholder="Réf BL, numéro…"></div>
+                    <div class="field"><label>Fichier (photo / PDF)</label>
+                      <input type="file" accept="image/*,application/pdf" (change)="onBlFileChange($event)"></div>
+                  </div>
+                  <div style="display:flex;gap:8px">
+                    <button class="btn btn-outline btn-sm" (click)="blUploadLivId=null">Annuler</button>
+                    <button class="btn btn-primary btn-sm" (click)="uploaderBl(l.id)" [disabled]="blUploading||!blUploadFile">
+                      <i class="fa-solid fa-upload"></i> {{ blUploading ? 'Envoi…' : 'Envoyer' }}</button>
+                  </div>
+                </div>
+              </div>
               </div>
             </div>
-          </div>
-
-          <h4 class="art-title">Matières premières ({{ detailMatieres.length }})</h4>
-          <div *ngIf="detailMatieres.length===0" class="empty" style="padding:14px">
-            <i class="fa-solid fa-cubes"></i> Aucune matière première</div>
-          <div class="table-wrap" *ngIf="detailMatieres.length">
-            <table>
-              <thead><tr><th>Désignation</th><th>Pièce fournisseur</th><th>Affaire</th>
-                <th>Qté cmd.</th><th>Qté livrée</th><th>Reste</th><th>Statut</th><th>QR</th><th></th></tr></thead>
-              <tbody>
-                <tr *ngFor="let m of detailMatieres" [class.row-done]="estCloturee(m)">
-                  <td><strong>{{ m.designation || '—' }}</strong>
-                    <div class="muted" style="font-size:11px">Réf {{ m.reference || '—' }}</div></td>
-                  <td><code>{{ m.pieceFournisseur || '—' }}</code></td>
-                  <td>{{ m.projet || '—' }}</td>
-                  <td>{{ m.qteCommande ?? '—' }}</td>
-                  <td>{{ qteLivree(m) }}</td>
-                  <td><strong>{{ resteALivrer(m) }}</strong></td>
-                  <td><span class="badge" [ngClass]="estCloturee(m) ? 'badge-green' : 'badge-orange'">
-                    {{ estCloturee(m) ? 'Livrée' : 'En attente' }}</span></td>
-                  <td style="white-space:nowrap">
-                    <img [src]="qrMatiereUrl(m.id)" alt="QR" style="width:48px;height:48px;vertical-align:middle">
-                    <a class="btn btn-outline btn-sm" style="margin-left:6px"
-                       [href]="qrMatiereUrl(m.id)" [download]="'qr-mp-' + m.id + '.png'" target="_blank" title="Télécharger le QR">
-                      <i class="fa-solid fa-download"></i></a>
-                  </td>
-                  <td style="white-space:nowrap">
-                    <button class="btn btn-sm" [ngClass]="estCloturee(m) ? 'btn-outline' : 'btn-primary'"
-                            (click)="basculerMatiere(m)" [disabled]="majMatiere"
-                            [title]="estCloturee(m) ? 'Rouvrir' : 'Clôturer (marquer livrée)'">
-                      <i class="fa-solid" [ngClass]="estCloturee(m) ? 'fa-rotate-left' : 'fa-check'"></i>
-                      {{ estCloturee(m) ? 'Rouvrir' : 'Clôturer' }}</button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
           </div>
 
           <h4 class="art-title">Suivi GPS du chauffeur</h4>
@@ -595,6 +673,23 @@ interface VoyageLigne {
         </div>
         <div class="m-foot">
           <button class="btn btn-outline" (click)="fermerDetailModal()">Fermer</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Aperçu d'un QR : voir en grand + télécharger PNG / PDF -->
+    <div class="modal-backdrop" *ngIf="qrApercu" (click)="fermerQr()" style="z-index:1200">
+      <div class="modal" style="max-width:420px" (click)="$event.stopPropagation()">
+        <div class="m-head"><h3>{{ qrApercu.titre }}</h3>
+          <button class="x" (click)="fermerQr()">&times;</button></div>
+        <div class="m-body" style="text-align:center">
+          <img [src]="qrApercu.url" alt="QR" style="width:260px;height:260px;max-width:100%;border:1px solid var(--border);border-radius:8px;padding:8px;background:#fff">
+        </div>
+        <div class="m-foot" style="justify-content:center;gap:10px">
+          <button class="btn btn-outline" (click)="telechargerQrPng()">
+            <i class="fa-solid fa-image"></i> PNG</button>
+          <button class="btn btn-primary" (click)="telechargerQrPdf()" [disabled]="qrPdfEnCours">
+            <i class="fa-solid" [ngClass]="qrPdfEnCours ? 'fa-spinner fa-spin' : 'fa-file-pdf'"></i> PDF</button>
         </div>
       </div>
     </div>
@@ -688,14 +783,27 @@ export class VoyagesConteneursComponent implements OnInit {
   majMatiere = false;
   private trajetMap?: L.Map;
 
+  // Édition des dates dans le modal détail
+  editDates = false;
+  datesForm = { chJour: '', chHeure: '', deJour: '', deHeure: '', rChJour: '', rChHeure: '', rDeJour: '', rDeHeure: '' };
+  savingDates = false;
+
+  // BL multiples par livraison
+  blsParLivraison: Record<number, BonLivraisonFile[]> = {};
+  blUploadLivId: number | null = null;   // id de la livraison pour laquelle on uploade
+  blUploadRef = '';
+  blUploadFile: File | null = null;
+  blUploading = false;
+
   constructor(
-    private svc: VoyageConteneurService,
+    public svc: VoyageConteneurService,
     private chauffeurSvc: ChauffeurService,
     private chantierSvc: ChantierService,
     private matiereSvc: MatierePremiereService,
     private depotSvc: DepotService,
     private voyageSvc: VoyageService,
     private adminSvc: AdminService,
+    private http: HttpClient,
     private toastr: ToastrService
   ) {}
 
@@ -788,7 +896,9 @@ export class VoyagesConteneursComponent implements OnInit {
           if (lg.chantierCode) this.chargerCommandes(lg);
           this.lignes.push(lg);
         });
-        // Reconstruit les lignes « matières premières » (groupées par chantier + commande)
+        // Reconstruit les lignes « matières premières »
+        // Priorité : si une ligne livraison existe pour le même chantier et n'a pas encore de commande,
+        // on y fusionne les MP plutôt que de créer une nouvelle ligne.
         this.svc.matieres(v.id).subscribe({
           next: mps => {
             const grp = new Map<string, MatierePremiere[]>();
@@ -799,19 +909,24 @@ export class VoyagesConteneursComponent implements OnInit {
             });
             grp.forEach(items => {
               const first = items[0];
-              const lg = this.nouvelleLigne();
-              lg.type = 'MATIERE_PREMIERE';
-              lg.chantierCode = first.projet;
               const ch = chantiers.find(c => c.code === first.projet);
-              if (ch) { lg.chantierId = ch.id; lg.filtreChantier = ch.nom; } else { lg.filtreChantier = first.projet || ''; }
+              // Cherche une ligne existante (livraison) du même chantier sans commande MP
+              const existante = this.lignes.find(lg =>
+                lg.chantierCode === first.projet && !lg.commandeId);
+              const lg = existante ?? this.nouvelleLigne();
+              if (!existante) {
+                lg.type = 'MATIERE_PREMIERE';
+                lg.chantierCode = first.projet;
+                if (ch) { lg.chantierId = ch.id; lg.filtreChantier = ch.nom; } else { lg.filtreChantier = first.projet || ''; }
+                const split = (iso?: string) => iso ? { j: iso.slice(0, 10), h: iso.slice(11, 16) } : { j: undefined, h: undefined };
+                const c = split(first.dateChargement); const d = split(first.dateDechargement);
+                lg.chargementJour = c.j; lg.chargementHeure = c.h; lg.dechargementJour = d.j; lg.dechargementHeure = d.h;
+                this.lignes.push(lg);
+              }
               lg.commandeId = first.cdno;
-              const split = (iso?: string) => iso ? { j: iso.slice(0, 10), h: iso.slice(11, 16) } : { j: undefined, h: undefined };
-              const c = split(first.dateChargement); const d = split(first.dateDechargement);
-              lg.chargementJour = c.j; lg.chargementHeure = c.h; lg.dechargementJour = d.j; lg.dechargementHeure = d.h;
               lg.lignesMp = items;
               items.forEach(m => { const r = m.reference || ''; lg.selectedMp[r] = true; lg.qteMp[r] = m.quantite || 1; });
-              if (first.cdno) this.matiereSvc.getCommandes(first.projet).subscribe({ next: cmds => lg.commandes = cmds, error: () => {} });
-              this.lignes.push(lg);
+              if (first.cdno || first.projet) this.matiereSvc.getCommandes(first.projet).subscribe({ next: cmds => lg.commandes = cmds, error: () => {} });
             });
           },
           error: () => {}
@@ -835,7 +950,7 @@ export class VoyagesConteneursComponent implements OnInit {
     return {
       filtreChantier: '', comboOpen: false, type: 'ARTICLE',
       selectedLiv: {}, livrDispo: [], selLivIds: [], commandes: [], lignesMp: [], loadingMp: false,
-      selectedMp: {}, qteMp: {}, filtreContenu: '', filtreLignesMp: ''
+      selectedMp: {}, qteMp: {}, filtreContenu: '', filtreLignesMp: '', mpSauvegardes: []
     };
   }
   ajouterLigne(): void { this.lignes.push(this.nouvelleLigne()); }
@@ -954,11 +1069,14 @@ export class VoyagesConteneursComponent implements OnInit {
   }
   /** Nb de matières premières sélectionnées dans une ligne. */
   selectedMpCount(lg: VoyageLigne): number {
-    return lg.lignesMp.filter(m => lg.selectedMp[m.reference || '']).length;
+    const courantes = lg.lignesMp.filter(m => lg.selectedMp[m.reference || '']).length;
+    return courantes + (lg.mpSauvegardes?.length ?? 0);
   }
-  /** Lignes MP sélectionnées (pour le récapitulatif). */
+  /** Lignes MP sélectionnées (pour le récapitulatif) — inclut les sauvegardées. */
   selectedMpLignes(lg: VoyageLigne): MatierePremiere[] {
-    return lg.lignesMp.filter(m => lg.selectedMp[m.reference || '']);
+    const courantes = lg.lignesMp.filter(m => lg.selectedMp[m.reference || '']);
+    const sauvegardees = (lg.mpSauvegardes ?? []).map(s => s.m);
+    return [...sauvegardees, ...courantes.filter(m => !sauvegardees.find(s => s.reference === m.reference))];
   }
   fermerComboLigne(lg: VoyageLigne): void { setTimeout(() => lg.comboOpen = false, 150); }
 
@@ -1001,12 +1119,33 @@ export class VoyagesConteneursComponent implements OnInit {
   }
   chargerLignesMp(lg: VoyageLigne): void {
     if (!lg.commandeId) return;
+    // Avant de charger la nouvelle commande, sauvegarder les MP déjà cochées
+    const cmd = lg.commandes.find(c => c.cdno === lg.commandeId);
+    const selActuelles = lg.lignesMp.filter(m => lg.selectedMp[m.reference || '']);
+    if (selActuelles.length) {
+      const nouvelles = selActuelles.map(m => ({
+        m, cdno: lg.commandeId,
+        pieceFournisseur: cmd?.pieceFournisseur ?? m.pieceFournisseur,
+        qte: lg.qteMp[m.reference || ''] > 0 ? lg.qteMp[m.reference || ''] : (m.quantite ?? 1),
+      }));
+      // Remplace les éventuels doublons par référence
+      lg.mpSauvegardes = [
+        ...lg.mpSauvegardes.filter(s => !nouvelles.find(n => n.m.reference === s.m.reference)),
+        ...nouvelles,
+      ];
+    }
+    // Réinitialise la sélection de la commande en cours
+    lg.selectedMp = {}; lg.qteMp = {};
     lg.loadingMp = true; lg.lignesMp = [];
     this.matiereSvc.getLignes(lg.commandeId).subscribe({
       next: d => { lg.lignesMp = d; lg.loadingMp = false; },
       error: () => { lg.loadingMp = false; this.toastr.error('Lignes indisponibles (Divalto).'); }
     });
   }
+  retirerMpSauvegardee(lg: VoyageLigne, reference?: string): void {
+    lg.mpSauvegardes = (lg.mpSauvegardes ?? []).filter(s => s.m.reference !== reference);
+  }
+
   onToggleMp(lg: VoyageLigne, m: MatierePremiere): void {
     const k = m.reference || '';
     if (lg.selectedMp[k] && (lg.qteMp[k] == null || lg.qteMp[k] <= 0)) lg.qteMp[k] = 1;
@@ -1036,6 +1175,7 @@ export class VoyagesConteneursComponent implements OnInit {
         livraisonDates.push({ id: +k, chargement: ch, dechargement: de });
       });
       const cmd = lg.commandes.find(c => c.cdno === lg.commandeId);
+      // MP de la commande courante
       lg.lignesMp.filter(m => lg.selectedMp[m.reference || '']).forEach(m => {
         const ref = m.reference || '';
         matieres.push({
@@ -1044,6 +1184,18 @@ export class VoyagesConteneursComponent implements OnInit {
           pieceFournisseur: cmd?.pieceFournisseur ?? m.pieceFournisseur,
           qteCommande: m.qteCommande ?? m.quantite,
           quantite: lg.qteMp[ref] && lg.qteMp[ref] > 0 ? lg.qteMp[ref] : 1,
+          dateChargement: ch, dateDechargement: de
+        });
+      });
+      // MP sauvegardées (d'autres commandes)
+      (lg.mpSauvegardes ?? []).forEach(s => {
+        const ref = s.m.reference || '';
+        matieres.push({
+          projet: lg.chantierCode, cdno: s.cdno, ref,
+          designation: s.m.designation, of: s.m.of, unite: s.m.unite,
+          pieceFournisseur: s.pieceFournisseur ?? s.m.pieceFournisseur,
+          qteCommande: s.m.qteCommande ?? s.m.quantite,
+          quantite: s.qte > 0 ? s.qte : 1,
           dateChargement: ch, dateDechargement: de
         });
       });
@@ -1066,12 +1218,82 @@ export class VoyagesConteneursComponent implements OnInit {
     }
   }
 
+  /* ─────────── Édition des dates du voyage ─────────── */
+  ouvrirEditDates(): void {
+    if (!this.detail) return;
+    const d = this.detail;
+    const split = (dt?: string) => dt ? { jour: dt.substring(0, 10), heure: dt.substring(11, 16) } : { jour: '', heure: '' };
+    const ch  = split(d.chargement);    const de  = split(d.dechargement);
+    const rCh = split(d.realChargement); const rDe = split(d.realDechargement);
+    this.datesForm = { chJour: ch.jour, chHeure: ch.heure, deJour: de.jour, deHeure: de.heure,
+                       rChJour: rCh.jour, rChHeure: rCh.heure, rDeJour: rDe.jour, rDeHeure: rDe.heure };
+    this.editDates = true;
+  }
+
+  enregistrerDates(): void {
+    if (!this.detail) return;
+    this.savingDates = true;
+    const f = this.datesForm;
+    this.svc.mettreAJourDates(this.detail.id, {
+      chargementJour: f.chJour, chargementHeure: f.chHeure,
+      dechargementJour: f.deJour, dechargementHeure: f.deHeure,
+      realChargementJour: f.rChJour, realChargementHeure: f.rChHeure,
+      realDechargementJour: f.rDeJour, realDechargementHeure: f.rDeHeure,
+    }).subscribe({
+      next: () => {
+        this.savingDates = false; this.editDates = false;
+        // Remplacer la référence pour déclencher la détection de changements Angular
+        if (this.detail) {
+          this.detail = {
+            ...this.detail,
+            chargement:     f.chJour  ? `${f.chJour}T${f.chHeure  || '00:00'}:00` : undefined,
+            dechargement:   f.deJour  ? `${f.deJour}T${f.deHeure  || '00:00'}:00` : undefined,
+            realChargement: f.rChJour ? `${f.rChJour}T${f.rChHeure || '00:00'}:00` : undefined,
+            realDechargement: f.rDeJour ? `${f.rDeJour}T${f.rDeHeure || '00:00'}:00` : undefined,
+          };
+        }
+        this.toastr.success('Dates enregistrées.');
+      },
+      error: () => { this.savingDates = false; this.toastr.error('Échec de la mise à jour des dates.'); }
+    });
+  }
+
+  /* ─────────── Bons de livraison multiples ─────────── */
+  chargerBls(livraisonId: number): void {
+    if (this.blsParLivraison[livraisonId]) return; // déjà chargé
+    this.svc.listerBls(livraisonId).subscribe({
+      next: bls => this.blsParLivraison[livraisonId] = bls,
+      error: () => this.blsParLivraison[livraisonId] = [],
+    });
+  }
+
+  onBlFileChange(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    this.blUploadFile = input.files?.[0] ?? null;
+  }
+
+  uploaderBl(livraisonId: number): void {
+    if (!this.blUploadFile || this.blUploading) return;
+    this.blUploading = true;
+    this.svc.ajouterBl(livraisonId, this.blUploadFile, this.blUploadRef || undefined).subscribe({
+      next: () => {
+        this.blUploading = false; this.blUploadLivId = null;
+        delete this.blsParLivraison[livraisonId]; // forcer rechargement
+        this.chargerBls(livraisonId);
+        this.toastr.success('BL ajouté.');
+      },
+      error: () => { this.blUploading = false; this.toastr.error("Échec de l'upload du BL."); }
+    });
+  }
+
   /* ─────────── Consultation du détail ─────────── */
   consulter(v: VoyageConteneur): void {
     this.detail = v;
     this.detailLivraisons = [];
     this.contenu = {};
     this.detailMatieres = [];
+    this.blsParLivraison = {};
+    this.editDates = false;
     this.svc.matieres(v.id).subscribe({ next: m => this.detailMatieres = m, error: () => {} });
     this.detailLoading = true;
     this.detruireCarte();
@@ -1082,11 +1304,11 @@ export class VoyagesConteneursComponent implements OnInit {
       next: livs => {
         this.detailLivraisons = livs;
         this.detailLoading = false;
-        // Charge le contenu (articles + matières premières) de chaque livraison
         livs.forEach(l => {
           this.contenu[l.id] = { articles: [], matieres: [] };
           this.voyageSvc.articles(l.id).subscribe({ next: a => this.contenu[l.id].articles = a, error: () => {} });
           this.voyageSvc.matieres(l.id).subscribe({ next: m => this.contenu[l.id].matieres = m, error: () => {} });
+          this.chargerBls(l.id);
         });
       },
       error: () => { this.detailLoading = false; this.toastr.error('Livraisons indisponibles.'); }
@@ -1126,6 +1348,51 @@ export class VoyagesConteneursComponent implements OnInit {
   qrVoyageUrl(voyageId: number): string { return `${environment.apiUrl}/voyages-conteneurs/${voyageId}/qrcode`; }
   qrLivraisonUrl(livId: number): string { return `${environment.apiUrl}/voyages-conteneurs/livraisons/${livId}/qrcode`; }
 
+  /* ─────────── Aperçu d'un QR : voir en grand + télécharger PNG / PDF ─────────── */
+  qrApercu: { url: string; titre: string; fichier: string } | null = null;
+  qrPdfEnCours = false;
+
+  /** Ouvre la fenêtre d'aperçu du QR. */
+  voirQr(url: string, titre: string, fichier: string): void {
+    this.qrApercu = { url, titre, fichier };
+  }
+  fermerQr(): void { this.qrApercu = null; }
+
+  /** Télécharge le QR affiché au format PNG. */
+  telechargerQrPng(): void {
+    if (!this.qrApercu) return;
+    const a = document.createElement('a');
+    a.href = this.qrApercu.url;
+    a.download = this.qrApercu.fichier + '.png';
+    a.target = '_blank';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  }
+
+  /** Télécharge le QR affiché au format PDF (généré côté navigateur). */
+  telechargerQrPdf(): void {
+    if (!this.qrApercu || this.qrPdfEnCours) return;
+    const { url, titre, fichier } = this.qrApercu;
+    this.qrPdfEnCours = true;
+    // Récupère l'image via HttpClient (même origine) puis construit le PDF.
+    this.http.get(url, { responseType: 'blob' }).subscribe({
+      next: async blob => {
+        try {
+          const pdf = await blobQrEnPdf(blob, titre);
+          const objUrl = URL.createObjectURL(pdf);
+          const a = document.createElement('a');
+          a.href = objUrl; a.download = fichier + '.pdf';
+          document.body.appendChild(a); a.click(); document.body.removeChild(a);
+          setTimeout(() => URL.revokeObjectURL(objUrl), 2000);
+        } catch {
+          this.toastr.error('Génération du PDF impossible.');
+        } finally {
+          this.qrPdfEnCours = false;
+        }
+      },
+      error: () => { this.qrPdfEnCours = false; this.toastr.error('QR indisponible.'); }
+    });
+  }
+
   /** Détache une livraison du voyage affiché (sans la supprimer de GAP). */
   detacher(l: GapVoyage): void {
     if (this.livraisonScannee(l)) { this.toastr.warning('Livraison scannée : modification impossible.'); return; }
@@ -1141,6 +1408,12 @@ export class VoyagesConteneursComponent implements OnInit {
   }
 
   /* ─────────── Matières premières : clôture (statut local, sans impact ERP) ─────────── */
+  /** Retourne les MP du voyage qui appartiennent à cette livraison (même chantier). */
+  matieresDeLivraison(l: GapVoyage): MatierePremiere[] {
+    if (!l.projetCode) return this.detailMatieres.filter(m => !m.projet);
+    return this.detailMatieres.filter(m => m.projet === l.projetCode);
+  }
+
   estCloturee(m: MatierePremiere): boolean { return (m.statut || '').toUpperCase() === 'LIVRE'; }
   /** Qté livrée = qté de la ligne une fois clôturée, sinon 0. */
   qteLivree(m: MatierePremiere): number { return this.estCloturee(m) ? (m.quantite ?? 0) : 0; }
