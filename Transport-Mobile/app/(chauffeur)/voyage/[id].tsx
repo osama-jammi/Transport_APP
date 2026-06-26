@@ -115,7 +115,10 @@ export default function VoyageLivraisonsScreen() {
   };
 
   const scannerVoyage = () => {
-    router.push({ pathname: '/(chauffeur)/scan', params: { voyageId: String(voyageId), phase: 'LIVRAISON' } });
+    // Phase : CHARGEMENT si des livraisons ne sont pas encore chargées, sinon LIVRAISON
+    const toutCharge = livraisons.length > 0 && livraisons.every(v => v.etatChargement === 'TERMINE');
+    const phase = toutCharge ? 'LIVRAISON' : 'CHARGEMENT';
+    router.push({ pathname: '/(chauffeur)/scan', params: { voyageId: String(voyageId), phase } });
   };
 
   const ouvrirLivraison = (liv: Voyage) => {

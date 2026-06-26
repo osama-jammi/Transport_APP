@@ -62,7 +62,9 @@ export default function LivraisonArticlesScreen() {
       params: {
         articleNom: m.designation ?? m.reference,
         articleQr:  `DETAIL_MP:${m.id}`,
-        phase: 'LIVRAISON',
+        phase,       // utilise la phase courante de la livraison
+        vcId:        vcId ?? '',
+        projetCode:  projetCode ?? '',
       },
     });
   };
@@ -74,14 +76,19 @@ export default function LivraisonArticlesScreen() {
   const charges    = articles.filter(a => a.statutScan !== 'NON_SCANNE').length;
   const livres     = articles.filter(a => a.statutScan === 'SCANNE_LIVRAISON').length;
 
-  // Phase : tant que tout n'est pas chargé → CHARGEMENT ; sinon → LIVRAISON (à destination).
+  // Phase : tant que tout n'est pas chargé → CHARGEMENT (au dépôt) ; sinon → LIVRAISON (au chantier).
   const chargementComplet = total > 0 && articles.every(a => a.statutScan !== 'NON_SCANNE');
-  const articlesTousLivres  = total === 0 || articles.every(a => a.statutScan === 'SCANNE_LIVRAISON');
-  const matieresToutesLivrees = matieres.every(m => (m.statut || '').toUpperCase() === 'LIVRE');
-  // Livraison complète = tous les articles livrés ET toutes les MP clôturées
-  const livraisonComplete = (total > 0 || matieres.length > 0) && articlesTousLivres && matieresToutesLivrees;
-  const dejaLivre = voyage?.etatDechargement === 'TERMINE' || livraisonComplete;
   const phase: 'CHARGEMENT' | 'LIVRAISON' = chargementComplet ? 'LIVRAISON' : 'CHARGEMENT';
+
+  // En CHARGEMENT : seuls les articles comptent. En LIVRAISON : articles + MP.
+  const articlesTousLivres    = total === 0 || articles.every(a => a.statutScan === 'SCANNE_LIVRAISON');
+  const matieresToutesLivrees = matieres.every(m => (m.statut || '').toUpperCase() === 'LIVRE');
+  const livraisonComplete =
+    phase === 'LIVRAISON' &&
+    (total > 0 || matieres.length > 0) &&
+    articlesTousLivres &&
+    matieresToutesLivrees;
+  const dejaLivre = voyage?.etatDechargement === 'TERMINE' || livraisonComplete;
 
   // Progression affichée selon la phase
   const fait = phase === 'LIVRAISON' ? livres : charges;
@@ -287,7 +294,8 @@ export default function LivraisonArticlesScreen() {
                           {livre ? 'Livrée ✓' : 'En attente'}
                         </Text>
                       </View>
-                      {!livre && !dejaLivre && (
+                      {/* Bouton Scanner MP seulement en phase LIVRAISON (au chantier) */}
+                      {!livre && !dejaLivre && phase === 'LIVRAISON' && (
                         <TouchableOpacity style={styles.mpBtn} onPress={() => scannerMp(m)} activeOpacity={0.75}>
                           <Ionicons name="qr-code-outline" size={14} color={COLORS.brown} />
                           <Text style={styles.mpBtnTxt}>Scanner</Text>
@@ -315,10 +323,11 @@ export default function LivraisonArticlesScreen() {
               <Ionicons name="document-text" size={19} color="#fff" />
               <Text style={styles.actionTxt}>Bon de livraison & terminer</Text>
             </TouchableOpacity>
-          ) : articlesTousLivres && !matieresToutesLivrees ? (
+          ) : phase === 'LIVRAISON' && articlesTousLivres && !matieresToutesLivrees ? (
+            /* En LIVRAISON : articles faits mais MP restantes → scanner les MP */
             <View style={[styles.actionBtn, { backgroundColor: COLORS.warn }]}>
               <Ionicons name="layers-outline" size={19} color="#fff" />
-              <Text style={styles.actionTxt}>Scannez encore les matières premières</Text>
+              <Text style={styles.actionTxt}>Scannez les matières premières</Text>
             </View>
           ) : (
             <TouchableOpacity style={[styles.actionBtn, styles.actionGold]} onPress={openScanLibre} activeOpacity={0.85}>
