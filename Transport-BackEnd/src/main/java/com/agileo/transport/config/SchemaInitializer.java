@@ -272,6 +272,17 @@ public class SchemaInitializer {
                         " creer_le datetime2 NULL)",
                 "table detail_livraison_mp");
 
+        exec(gapJdbcTemplate,
+                "IF OBJECT_ID('livraison_bl_files','U') IS NULL " +
+                        "CREATE TABLE livraison_bl_files (" +
+                        " id BIGINT IDENTITY(1,1) PRIMARY KEY," +
+                        " livraison_id BIGINT NOT NULL," +
+                        " reference VARCHAR(255) NULL," +
+                        " fichier VARCHAR(255) NULL," +
+                        " content_type VARCHAR(100) NULL," +
+                        " creer_le datetime2 NULL)",
+                "table livraison_bl_files");
+
         // Géolocalisation des chantiers (table projet)
         exec(gapJdbcTemplate,
                 "IF COL_LENGTH('projet','latitude') IS NULL " +
