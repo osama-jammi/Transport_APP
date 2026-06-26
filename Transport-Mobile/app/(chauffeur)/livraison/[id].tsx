@@ -83,9 +83,9 @@ export default function LivraisonArticlesScreen() {
   const chargementComplet  = (total > 0 || matieres.length > 0) && articlesCharges && matieresToutesLivrees;
   const phase: 'CHARGEMENT' | 'LIVRAISON' = chargementComplet ? 'LIVRAISON' : 'CHARGEMENT';
 
-  // LIVRAISON complète = articles livrés (MP déjà faites au chargement)
+  // LIVRAISON complète = articles livrés ET MP toutes LIVRE
   const articlesTousLivres = total === 0 || articles.every(a => a.statutScan === 'SCANNE_LIVRAISON');
-  const livraisonComplete  = phase === 'LIVRAISON' && (total > 0 || matieres.length > 0) && articlesTousLivres;
+  const livraisonComplete  = phase === 'LIVRAISON' && (total > 0 || matieres.length > 0) && articlesTousLivres && matieresToutesLivrees;
   const dejaLivre          = voyage?.etatDechargement === 'TERMINE' || livraisonComplete;
 
   // Progression affichée selon la phase
