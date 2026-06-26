@@ -9,7 +9,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
 import * as Notifications from 'expo-notifications';
 import type { RootState } from '@/store';
-import { scanArticle, getArticlesByVoyage } from '@/services/livraisonService';
+import { scanArticle, getArticlesByVoyage, getMatieresDuVoyageConteneur } from '@/services/livraisonService';
 import { addArticleScanned } from '@/store/livraisonSlice';
 import { sendCurrentPosition } from '@/services/gpsService';
 import { COLORS } from '@/constants/theme';
@@ -87,23 +87,38 @@ export default function ScanArticleScreen() {
     else router.replace('/(chauffeur)');
   };
 
-  // Apres un scan reussi : s'il reste des articles a traiter, on revient a la liste
-  // (qui se rafraichit). Si c'etait le dernier :
-  //  - CHARGEMENT : on passe a la navigation (direction le chantier).
-  //  - LIVRAISON  : on passe a la saisie du bon de livraison (terminer).
+  // Apres un scan reussi : vérifie s'il reste des articles OU des MP à traiter.
+  // Redirige uniquement quand TOUT est fait (articles + MP).
   const apresScanReussi = async () => {
     if (!voyageId) { goBack(); return; }
     try {
+      // Charger les articles de la livraison
       const arts = await getArticlesByVoyage(Number(voyageId));
-      const reste = livraison
+      const resteArts = livraison
         ? arts.filter(a => a.statutScan !== 'SCANNE_LIVRAISON').length
         : arts.filter(a => a.statutScan === 'NON_SCANNE').length;
-      if (reste === 0) {
+
+      // Charger les MP du voyage conteneur si vcId disponible
+      let resteMp = 0;
+      if (vcId && Number(vcId)) {
+        const allMp = await getMatieresDuVoyageConteneur(Number(vcId));
+        const code = projetCode || null;
+        const mpLivraison = code
+          ? allMp.filter(m => (m.projet ?? null) === code)
+          : allMp;
+        // En phase CHARGEMENT : toutes les MP doivent être LIVRE pour considérer terminé
+        // En phase LIVRAISON  : idem (clôture via QR DETAIL_MP ou VOYAGE)
+        resteMp = mpLivraison.filter(m => (m.statut || '').toUpperCase() !== 'LIVRE').length;
+      }
+
+      const toutFait = resteArts === 0 && resteMp === 0;
+
+      if (toutFait) {
         if (livraison) {
-          // Phase LIVRAISON terminée → BL
+          // Phase LIVRAISON : tout livré → BL
           router.replace({ pathname: '/(chauffeur)/bl', params: { voyageId: String(voyageId) } });
         } else {
-          // Phase CHARGEMENT terminée → navigation/arrivée avec vcId+projetCode
+          // Phase CHARGEMENT : tout chargé → navigation/arrivée
           router.replace({
             pathname: '/(chauffeur)/navigation',
             params: { voyageId: String(voyageId), vcId: vcId ?? '', projetCode: projetCode ?? '' },
@@ -112,7 +127,7 @@ export default function ScanArticleScreen() {
         return;
       }
     } catch {
-      // en cas d'echec de verification, on retombe sur le retour liste
+      // en cas d'erreur réseau, retour simple à la liste
     }
     goBack();
   };
