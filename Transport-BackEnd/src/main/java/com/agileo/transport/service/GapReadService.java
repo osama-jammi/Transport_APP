@@ -469,6 +469,76 @@ public class GapReadService {
                 Timestamp.valueOf(LocalDateTime.now()), Timestamp.valueOf(LocalDateTime.now()), livraisonId);
     }
 
+    /** Ajoute un fichier BL à la table livraison_bl_files (plusieurs BL par livraison). */
+    public Long addBlFile(Long livraisonId, String reference, String fichier, String contentType) {
+        KeyHolder kh = new GeneratedKeyHolder();
+        gapJdbcTemplate.update(con -> {
+            PreparedStatement ps = con.prepareStatement(
+                    "INSERT INTO livraison_bl_files (livraison_id, reference, fichier, content_type, creer_le) VALUES (?,?,?,?,?)",
+                    Statement.RETURN_GENERATED_KEYS);
+            ps.setLong(1, livraisonId);
+            ps.setString(2, reference);
+            ps.setString(3, fichier);
+            ps.setString(4, contentType);
+            ps.setTimestamp(5, Timestamp.valueOf(LocalDateTime.now()));
+            return ps;
+        }, kh);
+        // Marquer la livraison comme livrée (même comportement que saveBl)
+        gapJdbcTemplate.update(
+                "UPDATE livraisons SET statut_reception = 'LIVRE', " +
+                        "arrivee_dechargement = COALESCE(arrivee_dechargement, ?), modifier_le = ? WHERE id = ?",
+                Timestamp.valueOf(LocalDateTime.now()), Timestamp.valueOf(LocalDateTime.now()), livraisonId);
+        Number key = kh.getKey();
+        return key != null ? key.longValue() : null;
+    }
+
+    /** Liste tous les BL d'une livraison (table livraison_bl_files). */
+    public List<com.agileo.transport.Dtos.response.BonLivraisonFileDTO> listBlFiles(Long livraisonId) {
+        return gapJdbcTemplate.query(
+                "SELECT id, reference, fichier, content_type FROM livraison_bl_files WHERE livraison_id = ? ORDER BY id",
+                (rs, i) -> {
+                    com.agileo.transport.Dtos.response.BonLivraisonFileDTO d = new com.agileo.transport.Dtos.response.BonLivraisonFileDTO();
+                    d.setId(rs.getLong("id"));
+                    d.setReference(rs.getString("reference"));
+                    d.setFichier(rs.getString("fichier"));
+                    d.setContentType(rs.getString("content_type"));
+                    return d;
+                }, livraisonId);
+    }
+
+    /** Retrouve un BL par son id (pour téléchargement). */
+    public com.agileo.transport.Dtos.response.BonLivraisonFileDTO getBlFileById(Long blId) {
+        List<com.agileo.transport.Dtos.response.BonLivraisonFileDTO> list = gapJdbcTemplate.query(
+                "SELECT id, reference, fichier, content_type FROM livraison_bl_files WHERE id = ?",
+                (rs, i) -> {
+                    com.agileo.transport.Dtos.response.BonLivraisonFileDTO d = new com.agileo.transport.Dtos.response.BonLivraisonFileDTO();
+                    d.setId(rs.getLong("id"));
+                    d.setReference(rs.getString("reference"));
+                    d.setFichier(rs.getString("fichier"));
+                    d.setContentType(rs.getString("content_type"));
+                    return d;
+                }, blId);
+        return list.isEmpty() ? null : list.get(0);
+    }
+
+    /** Met à jour uniquement les dates chargement/déchargement prévu du voyage conteneur. */
+    public void updateVoyageDatesPrevues(Long voyageId, LocalDateTime chargement, LocalDateTime dechargement) {
+        gapJdbcTemplate.update(
+                "UPDATE voyage SET date_chargement = ?, date_dechargement = ?, modifier_le = ? WHERE id = ?",
+                chargement != null ? Timestamp.valueOf(chargement) : null,
+                dechargement != null ? Timestamp.valueOf(dechargement) : null,
+                Timestamp.valueOf(LocalDateTime.now()), voyageId);
+    }
+
+    /** Met à jour les dates réelles chargement/déchargement du voyage conteneur. */
+    public void updateVoyageDatesReelles(Long voyageId, LocalDateTime realChargement, LocalDateTime realDechargement) {
+        gapJdbcTemplate.update(
+                "UPDATE voyage SET real_chargement = ?, real_dechargement = ?, modifier_le = ? WHERE id = ?",
+                realChargement != null ? Timestamp.valueOf(realChargement) : null,
+                realDechargement != null ? Timestamp.valueOf(realDechargement) : null,
+                Timestamp.valueOf(LocalDateTime.now()), voyageId);
+    }
+
     /** Enregistre l'heure d'arrivée effective au déchargement d'un voyage. */
     public void updateArrivee(Long livraisonId, LocalDateTime arrivee) {
         gapJdbcTemplate.update(
@@ -880,6 +950,10 @@ public class GapReadService {
             gapJdbcTemplate.update(
                     "UPDATE voyage SET real_chargement = COALESCE(real_chargement, ?) WHERE id = ?", now, voyageId);
         } else {
+            // Clôturer toutes les matières premières du voyage (livraison = tout validé)
+            gapJdbcTemplate.update(
+                    "UPDATE voyage_matiere SET statut = 'LIVRE', modifier_le = ? WHERE voyage_id = ?",
+                    now, voyageId);
             // Heure réelle de déchargement (première fois seulement)
             gapJdbcTemplate.update(
                     "UPDATE voyage SET real_dechargement = COALESCE(real_dechargement, ?) WHERE id = ?", now, voyageId);
