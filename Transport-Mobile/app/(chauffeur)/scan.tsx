@@ -98,10 +98,11 @@ export default function ScanArticleScreen() {
         ? arts.filter(a => a.statutScan !== 'SCANNE_LIVRAISON').length
         : arts.filter(a => a.statutScan === 'NON_SCANNE').length;
 
-      // MP : vérifiées seulement en phase LIVRAISON (au chantier, après arrivée).
-      // En CHARGEMENT (au dépôt), on ne requiert pas la validation des MP.
+      // MP vérifiées dans les DEUX phases :
+      // - CHARGEMENT : scanner les MP confirme qu'elles sont bien chargées (→ navigation)
+      // - LIVRAISON  : MP doivent aussi être LIVRE pour accéder au BL
       let resteMp = 0;
-      if (livraison && vcId && Number(vcId)) {
+      if (vcId && Number(vcId)) {
         const allMp = await getMatieresDuVoyageConteneur(Number(vcId));
         const code = projetCode || null;
         const mpLivraison = code
