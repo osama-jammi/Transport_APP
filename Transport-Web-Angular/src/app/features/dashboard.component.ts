@@ -126,7 +126,7 @@ interface BarItem { label: string; value: number; color: string; }
                 <td><strong>{{ v.client || '—' }}</strong></td>
                 <td>{{ v.chauffeur || '—' }}</td>
                 <td><span class="badge badge-gray">{{ v.nbArticles ?? 0 }}</span></td>
-                <td><span class="badge badge-blue">{{ v.statut }}</span></td>
+                <td><span [ngClass]="v.statut | statutBadge">{{ v.statut }}</span></td>
               </tr>
             </tbody>
           </table>

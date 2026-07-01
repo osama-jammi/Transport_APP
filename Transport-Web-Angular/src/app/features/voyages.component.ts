@@ -168,7 +168,7 @@ import * as L from 'leaflet';
                   <td><strong>{{ a.designation || '—' }}</strong></td>
                   <td><code>{{ a.numPrix || '—' }}</code></td>
                   <td>{{ a.quantite ?? '—' }}</td>
-                  <td><span class="badge badge-gray">{{ a.statutReception || '—' }}</span></td>
+                  <td><span [ngClass]="a.statutReception | statutBadge">{{ a.statutReception || '—' }}</span></td>
                   <td>{{ a.heureScan ? (a.heureScan | date:'dd/MM/yy HH:mm:ss') : '—' }}</td>
                   <td style="white-space:nowrap">
                     <img [src]="qrDetailUrl(a.id)" alt="QR" style="width:56px;height:56px;vertical-align:middle">
@@ -580,6 +580,7 @@ export class VoyagesComponent implements OnInit {
 
   /** Statut global affiché : Livré > Chargé > statut brut */
   statutVoyage(v: Voyage): { label: string; cls: string } {
+    if (v.statut === 'ANNULE') return { label: 'Annulé', cls: 'badge-red' };
     if (v.etatDechargement === 'TERMINE') return { label: 'Livré', cls: 'badge-green' };
     if (v.etatChargement === 'TERMINE') return { label: 'Chargé', cls: 'badge-blue' };
     if (v.statut === 'ARCHIVE') return { label: 'Archivé', cls: 'badge-gray' };

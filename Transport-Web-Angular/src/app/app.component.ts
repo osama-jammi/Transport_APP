@@ -77,6 +77,7 @@ export class AppComponent implements OnInit {
     { path: '/chantiers',  label: 'Chantiers',  icon: 'fa-helmet-safety' },
     { path: '/articles',   label: 'Ordre de fabrication', icon: 'fa-boxes-stacked' },
     { path: '/matieres-premieres', label: 'Matières premières', icon: 'fa-cubes' },
+    { path: '/stock',      label: 'Stock',      icon: 'fa-boxes-packing' },
     { path: '/depots',     label: 'Dépôt',      icon: 'fa-warehouse' },
     { path: '/administration', label: 'Administration', icon: 'fa-sliders' }
   ];
