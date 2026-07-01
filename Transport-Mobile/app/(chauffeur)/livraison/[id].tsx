@@ -6,7 +6,7 @@ import {
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import {
-  getArticlesByVoyage, getMatieresDuVoyageConteneur, getLivraisonsDuVoyage,
+  getArticlesByVoyage, getMatieresDuVoyageConteneur, getLivraisonsDuVoyage, getArriveeChantier,
   mpEstChargee, mpEstLivree,
   type ArticleScan, type MatiereMp, type Voyage,
 } from '@/services/livraisonService';
@@ -35,6 +35,9 @@ export default function LivraisonArticlesScreen() {
   const [matieres,  setMatieres]  = useState<MatiereMp[]>([]);
   const [loading,   setLoading]   = useState(true);
   const [error,     setError]     = useState<string | null>(null);
+  // Arrivée niveau (voyage conteneur, chantier) — sert aux lignes SANS OF (MP/stock seuls),
+  // qui n'ont pas de livraison GAP pour porter arrivee_dechargement.
+  const [arriveeChantier, setArriveeChantier] = useState<string | null>(null);
 
   const primaryOfId   = ofs[0]?.id ?? Number(id);
   const chantierLabel = ofs[0]?.client ?? '';
@@ -63,6 +66,14 @@ export default function LivraisonArticlesScreen() {
       // MP affectées à CE chantier uniquement (comparaison normalisée comme le web).
       const norm = (s?: string | null) => (s || '').trim();
       setMatieres(code ? allMp.filter(m => norm(m.projet) === norm(code)) : allMp);
+
+      // Arrivée (voyage conteneur, chantier) — pour les lignes sans OF (MP/stock seuls).
+      if (voyageConteneurId && code) {
+        try { setArriveeChantier(await getArriveeChantier(voyageConteneurId, code)); }
+        catch { setArriveeChantier(null); }
+      } else {
+        setArriveeChantier(null);
+      }
     } catch {
       setError('Impossible de charger la ligne.');
     } finally {
@@ -96,12 +107,14 @@ export default function LivraisonArticlesScreen() {
                                             : (matieres.length > 0 && matieresToutesLivrees);
   const dejaLivre          = ligneTerminee;
 
-  // Arrivée confirmée au chantier (geofence « Je suis sur place » ou code de forçage),
-  // propagée à tous les OF du chantier par l'écran Navigation.
-  const arriveeConfirmee   = ofs.some(o => o.arriveeConfirmee);
-  // En phase LIVRAISON, le 2ᵉ scan est INTERDIT tant que l'arrivée n'est pas confirmée.
-  // (Les lignes sans OF — MP seules — ne sont pas concernées : pas de point de confirmation.)
-  const arriveeRequise     = phase === 'LIVRAISON' && !dejaLivre && ofs.length > 0 && !arriveeConfirmee;
+  // Arrivée confirmée au chantier : soit via une livraison (geofence « Je suis sur place »
+  // / code de forçage, propagée à tous les OF du chantier), soit via le couple
+  // (voyage conteneur, chantier) pour les lignes SANS OF (MP/stock seuls).
+  const arriveeConfirmee   = ofs.some(o => o.arriveeConfirmee) || !!arriveeChantier;
+  // En phase LIVRAISON, le 2ᵉ scan est INTERDIT tant que l'arrivée n'est pas confirmée —
+  // que la ligne ait des OF ou soit composée uniquement de matières/stock.
+  const arriveeRequise     = phase === 'LIVRAISON' && !dejaLivre
+                              && (ofs.length > 0 || matieres.length > 0) && !arriveeConfirmee;
 
   // Progression / pastilles : combinent articles ET matières premières.
   const itemsACharger = articles.filter(a => a.statutScan === 'NON_SCANNE').length
@@ -114,11 +127,15 @@ export default function LivraisonArticlesScreen() {
   const faitItems     = phase === 'LIVRAISON' ? itemsLivres : (itemsCharges + itemsLivres);
   const pctItems      = itemsTotal ? Math.round((faitItems / itemsTotal) * 100) : 0;
 
+  // En phase LIVRAISON, tant que l'arrivée n'est pas confirmée, aucune carte n'est
+  // scannable : pas de bouton/QR affiché (l'utilisateur doit d'abord confirmer sa
+  // localisation via l'écran Navigation).
+  const arriveeOk = phase !== 'LIVRAISON' || arriveeConfirmee;
   const articleScannable = (a: ArticleScan) =>
-    !dejaLivre && (phase === 'CHARGEMENT' ? a.statutScan === 'NON_SCANNE' : a.statutScan === 'SCANNE_CHARGEMENT');
+    !dejaLivre && arriveeOk && (phase === 'CHARGEMENT' ? a.statutScan === 'NON_SCANNE' : a.statutScan === 'SCANNE_CHARGEMENT');
   // MP scannable : au chargement si pas encore chargée ; à la livraison si chargée mais pas livrée.
   const mpScannable = (m: MatiereMp) =>
-    !dejaLivre && (phase === 'CHARGEMENT' ? !mpEstChargee(m.statut) : (mpEstChargee(m.statut) && !mpEstLivree(m.statut)));
+    !dejaLivre && arriveeOk && (phase === 'CHARGEMENT' ? !mpEstChargee(m.statut) : (mpEstChargee(m.statut) && !mpEstLivree(m.statut)));
 
   // Paramètres communs passés au scanner (contexte chantier).
   const baseParams = { voyageId: String(primaryOfId), phase, vcId: vcId ?? '', projetCode: projetCode ?? '' };
