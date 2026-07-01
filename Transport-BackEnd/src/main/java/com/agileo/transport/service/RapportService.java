@@ -15,4 +15,7 @@ public interface RapportService {
      * Filtrable par chantier et chauffeur ; sans plage de dates → aujourd'hui.
      */
     byte[] exportComplet(LocalDate debut, LocalDate fin, Long chantierId, Long chauffeurId);
+
+    /** Export Excel de la liste des voyages conteneurs (en cours / archivés / tous). */
+    byte[] exportVoyagesConteneurs(boolean archives, boolean tout);
 }

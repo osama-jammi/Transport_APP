@@ -7,6 +7,8 @@ import com.agileo.transport.Dtos.response.TrajetVoyageResponseDTO;
 import com.agileo.transport.service.ArticleService;
 import com.agileo.transport.service.GapReadService;
 import com.agileo.transport.service.GpsService;
+import com.agileo.transport.service.RapportService;
+import org.springframework.http.HttpHeaders;
 import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.http.MediaType;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -30,12 +32,14 @@ public class VoyageConteneurController {
     private final GapReadService gapReadService;
     private final GpsService gpsService;
     private final ArticleService articleService;
+    private final RapportService rapportService;
 
     public VoyageConteneurController(GapReadService gapReadService, GpsService gpsService,
-                                     ArticleService articleService) {
+                                     ArticleService articleService, RapportService rapportService) {
         this.gapReadService = gapReadService;
         this.gpsService = gpsService;
         this.articleService = articleService;
+        this.rapportService = rapportService;
     }
 
     @GetMapping
@@ -44,6 +48,18 @@ public class VoyageConteneurController {
             @org.springframework.web.bind.annotation.RequestParam(required = false) Long chauffeurId,
             @org.springframework.web.bind.annotation.RequestParam(defaultValue = "false") boolean tout) {
         return ResponseEntity.ok(gapReadService.getVoyagesConteneurs(archives, chauffeurId, tout));
+    }
+
+    @GetMapping("/export")
+    @Operation(summary = "Exporter la liste des voyages au format Excel (.xlsx)")
+    public ResponseEntity<byte[]> exportExcel(
+            @org.springframework.web.bind.annotation.RequestParam(defaultValue = "false") boolean archives,
+            @org.springframework.web.bind.annotation.RequestParam(defaultValue = "false") boolean tout) {
+        byte[] data = rapportService.exportVoyagesConteneurs(archives, tout);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"voyages.xlsx\"")
+                .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(data);
     }
 
     @org.springframework.web.bind.annotation.PatchMapping("/{id}/archiver")
@@ -74,6 +90,10 @@ public class VoyageConteneurController {
     @Operation(summary = "Modifier un voyage conteneur (chauffeur + heures + livraisons rattachées)")
     public ResponseEntity<Void> update(@PathVariable Long id,
                                        @RequestBody VoyageConteneurRequestDTO dto) {
+        if (gapReadService.isVoyageConteneurAnnule(id)) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.CONFLICT, "Voyage annulé : modification impossible.");
+        }
         LocalDateTime chargement = combiner(dto.getChargementJour(), dto.getChargementHeure());
         LocalDateTime dechargement = combiner(dto.getDechargementJour(), dto.getDechargementHeure());
         gapReadService.updateVoyageConteneur(id, dto.getChauffeurId(), chargement, dechargement, "transport-app");
@@ -104,10 +124,28 @@ public class VoyageConteneurController {
         return ResponseEntity.ok(gapReadService.getLivraisonsAssignables(id));
     }
 
+    @GetMapping("/livraisons-libres")
+    @Operation(summary = "Livraisons libres (non assignées à un voyage)")
+    public ResponseEntity<List<GapVoyageDTO>> livraisonsLibres() {
+        return ResponseEntity.ok(gapReadService.getLivraisonsLibres());
+    }
+
     @GetMapping("/{id}/livraisons")
     @Operation(summary = "Livraisons rattachées à ce voyage")
     public ResponseEntity<List<GapVoyageDTO>> livraisons(@PathVariable Long id) {
         return ResponseEntity.ok(gapReadService.getLivraisonsDuVoyage(id));
+    }
+
+    @PatchMapping("/{id}/force-code")
+    @Operation(summary = "Générer le code de forçage du voyage conteneur (commun à toutes ses lignes, MP incluses)")
+    public ResponseEntity<java.util.Map<String, String>> regenererForceCode(@PathVariable Long id) {
+        if (gapReadService.isVoyageConteneurAnnule(id)) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.CONFLICT, "Voyage annulé : opération impossible.");
+        }
+        String code = String.format("%06d", new java.security.SecureRandom().nextInt(1_000_000));
+        gapReadService.updateForceCodeConteneur(id, code);
+        return ResponseEntity.ok(java.util.Map.of("forceCode", code));
     }
 
     @GetMapping("/{id}/trajet")
@@ -146,6 +184,11 @@ public class VoyageConteneurController {
                     org.springframework.http.HttpStatus.CONFLICT,
                     "Livraison déjà scannée : modification impossible.");
         }
+        if (gapReadService.isLivraisonAnnulee(livId)) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.CONFLICT,
+                    "Livraison annulée : modification impossible.");
+        }
         gapReadService.detacherLivraison(livId);
         return ResponseEntity.noContent().build();
     }
@@ -162,6 +205,10 @@ public class VoyageConteneurController {
             @RequestParam(required = false) String realChargementHeure,
             @RequestParam(required = false) String realDechargementJour,
             @RequestParam(required = false) String realDechargementHeure) {
+        if (gapReadService.isVoyageConteneurAnnule(id)) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.CONFLICT, "Voyage annulé : modification impossible.");
+        }
         java.time.LocalDateTime chargement = combinerStr(chargementJour, chargementHeure);
         java.time.LocalDateTime dechargement = combinerStr(dechargementJour, dechargementHeure);
         java.time.LocalDateTime realChargement = combinerStr(realChargementJour, realChargementHeure);
@@ -183,6 +230,30 @@ public class VoyageConteneurController {
     public ResponseEntity<Void> statutMatiere(@PathVariable Long mpId,
                                               @org.springframework.web.bind.annotation.RequestParam String statut) {
         gapReadService.updateVoyageMatiereStatut(mpId, statut);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/{id}/annuler")
+    @Operation(summary = "Annuler un voyage conteneur (impossible si déjà archivé ou annulé)")
+    public ResponseEntity<Void> annulerVoyage(@PathVariable Long id) {
+        try {
+            gapReadService.annulerVoyageConteneur(id);
+        } catch (IllegalStateException | IllegalArgumentException e) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.CONFLICT, e.getMessage());
+        }
+        return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/livraisons/{livraisonId}/annuler")
+    @Operation(summary = "Annuler une livraison GAP (impossible si déjà scannée)")
+    public ResponseEntity<Void> annulerLivraison(@PathVariable Long livraisonId) {
+        try {
+            gapReadService.annulerLivraison(livraisonId);
+        } catch (IllegalStateException e) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.CONFLICT, e.getMessage());
+        }
         return ResponseEntity.noContent().build();
     }
 }

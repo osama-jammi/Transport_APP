@@ -71,8 +71,8 @@ public class VoyageController {
     }
 
     private static String genererForceCode() {
-        return java.util.UUID.randomUUID().toString().replace("-", "")
-                .substring(0, 6).toUpperCase();
+        // Code numérique à 6 chiffres (000000–999999), facile à saisir.
+        return String.format("%06d", new java.security.SecureRandom().nextInt(1_000_000));
     }
 
     @GetMapping("/en-cours")
@@ -121,6 +121,10 @@ public class VoyageController {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Livraison déjà scannée : modification impossible.");
         }
+        if (gapReadService.isLivraisonAnnulee(id)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Livraison annulée : modification impossible.");
+        }
         LocalDateTime chargement = combiner(dto.getChargementJour(), dto.getChargementHeure());
         LocalDateTime dechargement = combiner(dto.getDechargementJour(), dto.getDechargementHeure());
         gapReadService.updateLivraison(id, chargement, dechargement,
@@ -160,13 +164,31 @@ public class VoyageController {
 
         GapVoyageDTO v = gapReadService.getVoyageById(id);
         if (v == null) {
+            // Voyage conteneur SANS livraison (matières premières seules) : pas de chantier
+            // géolocalisé rattaché à une livraison → on confirme l'arrivée au niveau du
+            // conteneur, validée par son code de forçage (ou le code admin global).
+            if (gapReadService.isVoyageConteneur(id)) {
+                String saisiMp = forceCode != null ? forceCode.trim() : "";
+                boolean codeOkMp = force && !saisiMp.isEmpty()
+                        && (saisiMp.equalsIgnoreCase(forceCodeAdmin)
+                            || gapReadService.isForceCodeConteneur(id, saisiMp));
+                if (codeOkMp) {
+                    return ResponseEntity.ok(new ArriveeResponseDTO(true, null, null, false,
+                            "Arrivée validée par code."));
+                }
+                return ResponseEntity.ok(new ArriveeResponseDTO(false, null, null, true,
+                        "Voyage de matières premières : saisissez le code de forçage de l'administration."));
+            }
             return ResponseEntity.ok(new ArriveeResponseDTO(false, null, null, true, "Voyage introuvable."));
         }
 
         String saisi = forceCode != null ? forceCode.trim() : "";
+        // Le code de forçage est commun à TOUT le voyage conteneur : on accepte le code
+        // admin global OU le code de n'importe quelle livraison du même voyage. Sinon le
+        // code affiché (celui de la 1re ligne) ne validerait que cette ligne-là.
         boolean codeOk = force && !saisi.isEmpty()
                 && (saisi.equalsIgnoreCase(forceCodeAdmin)
-                    || (v.getForceCode() != null && saisi.equalsIgnoreCase(v.getForceCode())));
+                    || gapReadService.isForceCodeValidPourVoyage(id, saisi));
 
         boolean geolocalise = v.getDestinationLat() != null && v.getDestinationLng() != null;
         int rayon = v.getDestinationRayon() != null ? v.getDestinationRayon() : 100;
@@ -263,8 +285,9 @@ public class VoyageController {
     }
 
     @GetMapping("/{id}/bls/{blId}")
-    @Operation(summary = "Télécharger un bon de livraison spécifique")
-    public ResponseEntity<byte[]> telechargerBlById(@PathVariable Long id, @PathVariable Long blId) {
+    @Operation(summary = "Télécharger / afficher un bon de livraison spécifique")
+    public ResponseEntity<byte[]> telechargerBlById(@PathVariable Long id, @PathVariable Long blId,
+            @RequestParam(value = "dl", defaultValue = "false") boolean dl) {
         com.agileo.transport.Dtos.response.BonLivraisonFileDTO bl = gapReadService.getBlFileById(blId);
         if (bl == null || bl.getFichier() == null) {
             throw new jakarta.persistence.EntityNotFoundException("Bon de livraison introuvable : " + blId);
@@ -272,14 +295,30 @@ public class VoyageController {
         try {
             byte[] data = java.nio.file.Files.readAllBytes(
                     java.nio.file.Paths.get(uploadDir, "bl", bl.getFichier()));
-            String ct = bl.getContentType() != null ? bl.getContentType() : "application/octet-stream";
+            // Extension réelle (le fichier stocké garde .jpg/.png/.pdf) → type MIME fiable.
+            String fichier = bl.getFichier();
+            String ext = fichier.contains(".") ? fichier.substring(fichier.lastIndexOf('.')) : "";
+            String ct = deduireContentTypeBl(bl.getContentType(), ext);
+            String disposition = dl ? "attachment" : "inline";
             return ResponseEntity.ok()
-                    .header("Content-Disposition", "inline; filename=\"bl-" + blId + "\"")
+                    .header("Content-Disposition", disposition + "; filename=\"bl-" + blId + ext + "\"")
                     .contentType(org.springframework.http.MediaType.parseMediaType(ct))
                     .body(data);
         } catch (java.io.IOException e) {
             throw new RuntimeException("Fichier BL introuvable", e);
         }
+    }
+
+    /** Type MIME du BL : valeur stockée si fiable, sinon déduite de l'extension du fichier. */
+    private static String deduireContentTypeBl(String stored, String ext) {
+        if (stored != null && !stored.isBlank() && !stored.equalsIgnoreCase("application/octet-stream")) {
+            return stored;
+        }
+        String e = ext.toLowerCase();
+        if (e.equals(".pdf")) return "application/pdf";
+        if (e.equals(".png")) return "image/png";
+        if (e.equals(".jpg") || e.equals(".jpeg")) return "image/jpeg";
+        return "application/octet-stream";
     }
 
     @GetMapping("/{id}/bl")
@@ -317,6 +356,16 @@ public class VoyageController {
     public ResponseEntity<GapVoyageDTO> regenererForceCode(@PathVariable Long id) {
         gapReadService.updateForceCode(id, genererForceCode());
         return ResponseEntity.ok(enrichirCamion(gapReadService.getVoyageById(id)));
+    }
+
+    @PostMapping("/{voyageId}/bl-manuel")
+    @Operation(summary = "Enregistrer une livraison sans scan (BL saisi manuellement) → livré")
+    public ResponseEntity<GapVoyageDTO> blManuel(
+            @PathVariable Long voyageId,
+            @RequestParam(value = "reference", required = false) String reference) {
+        String ref = (reference != null && !reference.isBlank()) ? reference.trim() : null;
+        gapReadService.saveBl(voyageId, ref, null, null);
+        return ResponseEntity.ok(enrichirCamion(gapReadService.getVoyageById(voyageId)));
     }
 
     @PatchMapping("/{id}/archiver")

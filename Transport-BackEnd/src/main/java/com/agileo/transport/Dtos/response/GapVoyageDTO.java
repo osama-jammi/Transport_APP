@@ -38,4 +38,7 @@ public class GapVoyageDTO {
     private String camionImmatriculation;
     // Voyage conteneur auquel cette livraison est rattachée (null si aucune)
     private Long voyageId;
+    // Heure d'arrivée confirmée au chantier (geofence « Je suis sur place » ou code de forçage).
+    // Non nulle = l'arrivée a été validée → le scan de livraison est autorisé.
+    private LocalDateTime arriveeDechargement;
 }
