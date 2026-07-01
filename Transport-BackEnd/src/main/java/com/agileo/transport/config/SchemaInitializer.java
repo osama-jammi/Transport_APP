@@ -265,6 +265,20 @@ public class SchemaInitializer {
         exec(gapJdbcTemplate, "IF COL_LENGTH('voyage_matiere','depot') IS NULL " +
                 "ALTER TABLE voyage_matiere ADD depot VARCHAR(20) NULL", "voyage_matiere.depot");
 
+        // Arrivée au niveau (voyage conteneur, chantier) — sert aux lignes SANS OF
+        // (matières premières / stock seuls) qui n'ont pas de livraison GAP pour porter
+        // arrivee_dechargement. Géofence validée par chantier (table GAP projet, via code).
+        exec(gapJdbcTemplate,
+                "IF OBJECT_ID('voyage_arrivee_chantier','U') IS NULL " +
+                        "CREATE TABLE voyage_arrivee_chantier (" +
+                        " id BIGINT IDENTITY(1,1) PRIMARY KEY," +
+                        " voyage_id BIGINT NOT NULL," +
+                        " projet VARCHAR(50) NOT NULL," +
+                        " arrivee datetime2 NULL," +
+                        " creer_le datetime2 NULL," +
+                        " CONSTRAINT UQ_voyage_arrivee_chantier UNIQUE (voyage_id, projet))",
+                "table voyage_arrivee_chantier");
+
         // Lignes de matières premières (issues de Divalto) rattachées à une livraison.
         // Table dédiée car les MP n'ont pas d'id_article GAP (detail_livraison est article-only).
         exec(gapJdbcTemplate,

@@ -262,6 +262,43 @@ public class GapReadService {
         return list.isEmpty() ? null : list.get(0);
     }
 
+    /** Un chantier (projet) GAP par son code (ex. CHxxxx). */
+    public GapChantierDTO getChantierByCode(String code) {
+        if (code == null || code.isBlank()) return null;
+        List<GapChantierDTO> list = gapJdbcTemplate.query(
+                "SELECT id, code, designation, status, latitude, longitude, rayon_metres, archive " +
+                        "FROM projet WHERE code = ?", CHANTIER_MAPPER, code.trim());
+        return list.isEmpty() ? null : list.get(0);
+    }
+
+    // ─────────────── ARRIVÉE (voyage conteneur, chantier) — lignes sans OF (MP/stock) ───────────────
+
+    /**
+     * Arrivée confirmée pour un couple (voyage conteneur, chantier), utilisée par les
+     * lignes SANS OF (matières premières / stock seuls) qui n'ont pas de livraison GAP
+     * pour porter arrivee_dechargement. Null si pas encore confirmée.
+     */
+    public LocalDateTime getArriveeChantier(Long voyageId, String projet) {
+        List<LocalDateTime> list = gapJdbcTemplate.query(
+                "SELECT arrivee FROM voyage_arrivee_chantier WHERE voyage_id = ? AND projet = ?",
+                (rs, i) -> { Timestamp t = rs.getTimestamp("arrivee"); return t != null ? t.toLocalDateTime() : null; },
+                voyageId, projet);
+        return list.isEmpty() ? null : list.get(0);
+    }
+
+    /** Enregistre l'arrivée pour (voyage conteneur, chantier) — upsert, idempotent. */
+    public void setArriveeChantier(Long voyageId, String projet, LocalDateTime arrivee) {
+        Timestamp ts = Timestamp.valueOf(arrivee);
+        int n = gapJdbcTemplate.update(
+                "UPDATE voyage_arrivee_chantier SET arrivee = COALESCE(arrivee, ?) WHERE voyage_id = ? AND projet = ?",
+                ts, voyageId, projet);
+        if (n == 0) {
+            gapJdbcTemplate.update(
+                    "INSERT INTO voyage_arrivee_chantier (voyage_id, projet, arrivee, creer_le) VALUES (?, ?, ?, ?)",
+                    voyageId, projet, ts, ts);
+        }
+    }
+
     /** Tous les voyages (livraisons) depuis GAP, avec chauffeur / projet / atelier. */
     public List<GapVoyageDTO> getVoyages() {
         String sql = "SELECT l.id, l.date_livraison, l.date_chargement, l.date_dechargement, l.id_chauffeur, " +
