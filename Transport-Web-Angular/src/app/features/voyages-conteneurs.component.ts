@@ -8,13 +8,14 @@ import { VoyageConteneurService, BonLivraisonFile } from '../services/voyage-con
 import { ChauffeurService } from '../services/chauffeur.service';
 import { ChantierService } from '../services/chantier.service';
 import { MatierePremiereService } from '../services/matiere-premiere.service';
+import { StockService } from '../services/stock.service';
 import { DepotService } from '../services/depot.service';
 import { VoyageService } from '../services/voyage.service';
 import { AdminService } from '../services/admin.service';
 import { environment } from '../../environments/environment';
 import {
   VoyageConteneur, VoyageConteneurRequest, GapVoyage, GapChauffeur, Chantier,
-  CommandeMp, GapVoyageArticle, MatierePremiere, TrajetVoyage, Depot
+  CommandeMp, GapVoyageArticle, MatierePremiere, TrajetVoyage, Depot, ArticleStock
 } from '../core/models';
 import { SortState } from '../shared/sort.pipe';
 import { matchesSearch, matchesFilters, ColumnFilters } from '../shared/column-filter';
@@ -49,6 +50,17 @@ interface VoyageLigne {
   mpOuvert?: boolean;      // nouvelle saisie : section « Matières premières » dépliée
   /** MP déjà confirmées depuis d'autres commandes (accumulées entre changements de commande). */
   mpSauvegardes: { m: MatierePremiere; cdno?: number; pieceFournisseur?: string; qte: number }[];
+  // ── Stock (vue Article_en_stock DivNet, lecture seule) ──
+  stockOuvert?: boolean;            // section « Stock » dépliée
+  depotStock?: string;              // dépôt choisi (code DEPO, ex. RB1)
+  articlesStock?: ArticleStock[];     // articles disponibles du dépôt (liste complète)
+  articlesStockFiltered?: ArticleStock[]; // liste filtrée complète (après recherche)
+  articlesStockView?: ArticleStock[]; // page courante affichée (ne JAMAIS calculer dans le *ngFor)
+  stockPage?: number;                 // index de page (0-based)
+  loadingStock?: boolean;
+  selectedStock?: Record<string, boolean>;  // clé = référence article
+  qteStock?: Record<string, number>;
+  filtreStock?: string;             // recherche dans les articles disponibles
 }
 
 @Component({
@@ -65,6 +77,12 @@ interface VoyageLigne {
       <button class="btn" [ngClass]="filtresUI ? 'btn-primary' : 'btn-outline'" (click)="basculerFiltres()"
               title="Filtrer par colonne">
         <i class="fa-solid fa-filter"></i> Filtres</button>
+      <button class="btn btn-outline" (click)="exporterExcel()" [disabled]="exporting"
+              title="Exporter la liste en Excel">
+        <i class="fa-solid fa-file-excel"></i> Excel</button>
+      <button class="btn btn-outline" (click)="exporterPdf()"
+              title="Exporter / imprimer la liste en PDF">
+        <i class="fa-solid fa-file-pdf"></i> PDF</button>
       <button class="btn btn-primary right" (click)="ouvrir()">
         <i class="fa-solid fa-plus"></i> Nouveau voyage
       </button>
@@ -96,7 +114,7 @@ interface VoyageLigne {
               <td>{{ v.chauffeur || '—' }}</td>
               <td><span class="badge badge-gray">{{ v.nbLivraisons ?? 0 }}</span></td>
               <td><span class="badge badge-blue">{{ v.nbMatieres ?? 0 }}</span></td>
-              <td><span class="badge badge-orange">{{ v.statut || '—' }}</span></td>
+              <td><span [ngClass]="v.statut | statutBadge">{{ v.statut || '—' }}</span></td>
               <td class="flex">
                 <button class="btn btn-outline btn-sm" (click)="consulter(v)" title="Consulter le détail">
                   <i class="fa-solid fa-eye"></i> Détails</button>
@@ -246,6 +264,40 @@ interface VoyageLigne {
                     </div>
                   </div>
                 </div>
+
+                <!-- Stock : dépôt -> articles disponibles (lecture seule, repliable) -->
+                <h5 class="ligne-section clic" (click)="lg.stockOuvert = !lg.stockOuvert">
+                  <i class="fa-solid" [ngClass]="lg.stockOuvert ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
+                  <i class="fa-solid fa-warehouse"></i> Stock
+                  <span class="muted">({{ selectedStockCount(lg) }} sélectionné(s))</span></h5>
+                <div *ngIf="lg.stockOuvert">
+                  <div class="field" style="margin-bottom:8px"><label>Dépôt</label>
+                    <select [(ngModel)]="lg.depotStock" (change)="chargerArticlesStock(lg)">
+                      <option [ngValue]="undefined" disabled>— Choisir un dépôt —</option>
+                      <option *ngFor="let d of depotsStock" [ngValue]="d">{{ d }}</option>
+                    </select>
+                  </div>
+                  <input *ngIf="lg.depotStock && !lg.loadingStock" class="filtre-input" [(ngModel)]="lg.filtreStock"
+                         (ngModelChange)="majArticlesStockView(lg)" placeholder="🔍 Chercher un article…" style="margin-bottom:6px">
+                  <div *ngIf="lg.loadingStock" class="spinner" style="margin:12px auto"></div>
+                  <div *ngIf="lg.depotStock && !lg.loadingStock" class="muted" style="font-size:12px;padding:0 0 4px">
+                    Articles disponibles (avec stock) — {{ lg.articlesStockFiltered?.length || 0 }} article(s)</div>
+                  <div class="art-list full" *ngIf="lg.depotStock && !lg.loadingStock">
+                    <div *ngIf="(lg.articlesStockFiltered?.length || 0)===0" class="muted" style="font-size:12px;padding:8px">Aucun article en stock.</div>
+                    <div class="art-item" *ngFor="let a of lg.articlesStockView; trackBy: trackStock" [class.checked]="lg.selectedStock?.[a.reference||'']">
+                      <input type="checkbox" [(ngModel)]="lg.selectedStock![a.reference||'']" (change)="onToggleStock(lg, a)">
+                      <div class="art-info"><strong>{{ a.designation || a.reference }}</strong>
+                        <span class="muted">{{ a.reference }} · {{ a.unite || '' }} · stock {{ a.stockDisponible ?? '—' }}</span></div>
+                      <input *ngIf="lg.selectedStock?.[a.reference||'']" type="number" min="1" step="any" class="qte-input"
+                             [(ngModel)]="lg.qteStock![a.reference||'']" placeholder="Qté">
+                    </div>
+                  </div>
+                  <div *ngIf="stockNbPages(lg) > 1" style="display:flex;align-items:center;gap:10px;justify-content:center;margin-top:6px">
+                    <button type="button" class="btn btn-outline" [disabled]="(lg.stockPage || 0) === 0" (click)="stockPagePrecedente(lg)">‹</button>
+                    <span class="muted" style="font-size:12px">Page {{ (lg.stockPage || 0) + 1 }} / {{ stockNbPages(lg) }}</span>
+                    <button type="button" class="btn btn-outline" [disabled]="(lg.stockPage || 0) >= stockNbPages(lg) - 1" (click)="stockPageSuivante(lg)">›</button>
+                  </div>
+                </div>
               </div>
               </ng-container>
             </div>
@@ -295,14 +347,14 @@ interface VoyageLigne {
               <ng-select [items]="ligneDraft.livrDispo || []" bindValue="id" [multiple]="true"
                          [closeOnSelect]="false" [searchFn]="rechercheLivraison"
                          [ngModel]="ligneDraft.selLivIds || []" (ngModelChange)="onSelLivChange(ligneDraft, $event)"
-                         placeholder="Sélectionner un ou plusieurs ordres de fabrication"
-                         notFoundText="Aucun ordre de fabrication" clearAllText="Effacer" style="margin-bottom:8px">
+                         placeholder="Sélectionner une ou plusieurs livraisons"
+                         notFoundText="Aucune livraison" clearAllText="Effacer" style="margin-bottom:8px">
                 <ng-template ng-label-tmp let-item="item">#{{ item.id }}</ng-template>
                 <ng-template ng-option-tmp let-item="item">
                   #{{ item.id }} — {{ item.nbArticles }} article(s)<span class="muted"> · {{ item.statutReception || '—' }}</span></ng-template>
               </ng-select>
               <div *ngIf="!(ligneDraft.livrDispo?.length)" class="muted" style="font-size:12px;padding:8px">
-                Aucun ordre de fabrication pour ce chantier.</div>
+                Aucune livraison pour ce chantier.</div>
               <div class="table-wrap pick-table" *ngIf="ligneDraft.livrDispo?.length">
                 <table>
                   <thead><tr><th style="width:38px"></th><th>N° OF</th><th>Articles</th><th>Statut</th></tr></thead>
@@ -313,7 +365,7 @@ interface VoyageLigne {
                           [checked]="!!ligneDraft.selectedLiv[l.id]" (change)="toggleLiv(ligneDraft, l.id)"></td>
                       <td><code>#{{ l.id }}</code></td>
                       <td>{{ l.nbArticles }}</td>
-                      <td><span class="badge badge-gray">{{ l.statutReception || '—' }}</span></td>
+                      <td><span [ngClass]="l.statutReception | statutBadge">{{ l.statutReception || '—' }}</span></td>
                     </tr>
                   </tbody>
                 </table>
@@ -369,6 +421,51 @@ interface VoyageLigne {
               <div *ngIf="ligneDraft.commandeId && !ligneDraft.loadingMp && lignesMpFiltrees(ligneDraft).length===0"
                    class="muted" style="font-size:12px;padding:8px">Aucune ligne.</div>
             </div>
+
+            <!-- ═══ Stock : clic sur l'entête → dépôt + articles disponibles (lecture seule) ═══ -->
+            <h5 class="ligne-section clic" (click)="ligneDraft.stockOuvert = !ligneDraft.stockOuvert">
+              <i class="fa-solid" [ngClass]="ligneDraft.stockOuvert ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
+              <i class="fa-solid fa-warehouse"></i> Stock
+              <span class="muted">({{ selectedStockCount(ligneDraft) }} sélectionné(s))</span></h5>
+            <div *ngIf="ligneDraft.stockOuvert">
+              <div class="field" style="margin-bottom:8px"><label>Dépôt</label>
+                <select [(ngModel)]="ligneDraft.depotStock" (change)="chargerArticlesStock(ligneDraft)">
+                  <option [ngValue]="undefined" disabled>— Choisir un dépôt —</option>
+                  <option *ngFor="let d of depotsStock" [ngValue]="d">{{ d }}</option>
+                </select>
+                <div *ngIf="depotsStock.length===0" class="muted" style="font-size:11px;margin-top:4px">
+                  Aucun dépôt de stock disponible.</div>
+              </div>
+              <input *ngIf="ligneDraft.depotStock && !ligneDraft.loadingStock" class="filtre-input"
+                     [(ngModel)]="ligneDraft.filtreStock" (ngModelChange)="majArticlesStockView(ligneDraft)"
+                     placeholder="🔍 Chercher un article (désignation, réf)…">
+              <div *ngIf="ligneDraft.loadingStock" class="spinner" style="margin:12px auto"></div>
+              <div *ngIf="ligneDraft.depotStock && !ligneDraft.loadingStock" class="muted" style="font-size:12px;margin:4px 0">
+                Articles disponibles (avec stock) — {{ ligneDraft.articlesStockFiltered?.length || 0 }} article(s)</div>
+              <div class="table-wrap pick-table" *ngIf="ligneDraft.depotStock && !ligneDraft.loadingStock && (ligneDraft.articlesStockView?.length || 0)">
+                <table>
+                  <thead><tr><th style="width:38px"></th><th>Référence</th><th>Désignation</th><th>Unité</th><th>Stock disponible</th><th style="width:90px">Quantité</th></tr></thead>
+                  <tbody>
+                    <tr *ngFor="let a of ligneDraft.articlesStockView; trackBy: trackStock" [class.row-active]="ligneDraft.selectedStock?.[a.reference||'']">
+                      <td><input type="checkbox" [(ngModel)]="ligneDraft.selectedStock![a.reference||'']" (change)="onToggleStock(ligneDraft, a)"></td>
+                      <td><code>{{ a.reference }}</code></td>
+                      <td><strong>{{ a.designation || a.reference }}</strong></td>
+                      <td>{{ a.unite || '—' }}</td>
+                      <td>{{ a.stockDisponible ?? '—' }}</td>
+                      <td><input *ngIf="ligneDraft.selectedStock?.[a.reference||'']" type="number" min="1" step="any" class="qte-input"
+                                 [(ngModel)]="ligneDraft.qteStock![a.reference||'']" placeholder="Qté"></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div *ngIf="stockNbPages(ligneDraft) > 1" style="display:flex;align-items:center;gap:10px;justify-content:center;margin-top:6px">
+                <button type="button" class="btn btn-outline" [disabled]="(ligneDraft.stockPage || 0) === 0" (click)="stockPagePrecedente(ligneDraft)">‹</button>
+                <span class="muted" style="font-size:12px">Page {{ (ligneDraft.stockPage || 0) + 1 }} / {{ stockNbPages(ligneDraft) }}</span>
+                <button type="button" class="btn btn-outline" [disabled]="(ligneDraft.stockPage || 0) >= stockNbPages(ligneDraft) - 1" (click)="stockPageSuivante(ligneDraft)">›</button>
+              </div>
+              <div *ngIf="ligneDraft.depotStock && !ligneDraft.loadingStock && (ligneDraft.articlesStockFiltered?.length || 0)===0"
+                   class="muted" style="font-size:12px;padding:8px">Aucun article en stock pour ce dépôt.</div>
+            </div>
           </div>
         </div>
         <div class="m-foot">
@@ -408,7 +505,7 @@ interface VoyageLigne {
               </div>
 
               <div *ngIf="selectedLivCount(lg)" style="margin-bottom:8px">
-                <span class="dk">Ordres de fabrication ({{ selectedLivCount(lg) }})</span>
+                <span class="dk">Livraisons ({{ selectedLivCount(lg) }})</span>
                 <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">
                   <span class="badge badge-gray" *ngFor="let id of selectedLivArray(lg)">#{{ id }}</span>
                 </div>
@@ -430,8 +527,25 @@ interface VoyageLigne {
                 </div>
               </div>
 
-              <div *ngIf="!selectedLivCount(lg) && !selectedMpCount(lg)" class="muted" style="font-size:12px">
-                Aucun ordre de fabrication ni matière première sélectionné.</div>
+              <div *ngIf="selectedStockCount(lg)">
+                <span class="dk">Stock — dépôt {{ lg.depotStock }} ({{ selectedStockCount(lg) }})</span>
+                <div class="table-wrap" style="margin-top:4px">
+                  <table>
+                    <thead><tr><th>Désignation</th><th>Référence</th><th>Unité</th><th>Qté</th></tr></thead>
+                    <tbody>
+                      <tr *ngFor="let a of selectedStockLignes(lg)">
+                        <td><strong>{{ a.designation || a.reference }}</strong></td>
+                        <td><code>{{ a.reference }}</code></td>
+                        <td>{{ a.unite || '—' }}</td>
+                        <td>{{ lg.qteStock?.[a.reference || ''] || 1 }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div *ngIf="!selectedLivCount(lg) && !selectedMpCount(lg) && !selectedStockCount(lg)" class="muted" style="font-size:12px">
+                Aucun ordre de fabrication, matière première ni article de stock sélectionné.</div>
             </div>
           </div>
         </div>
@@ -451,16 +565,16 @@ interface VoyageLigne {
         <div class="m-body">
           <div class="detail-grid">
             <div><span class="dk">Chauffeur</span><span class="dv">{{ detail.chauffeur || '—' }}</span></div>
-            <div><span class="dk">Statut</span><span class="dv"><span class="badge badge-orange">{{ detail.statut || '—' }}</span></span></div>
+            <div><span class="dk">Statut</span><span class="dv"><span [ngClass]="detail.statut | statutBadge">{{ detail.statut || '—' }}</span></span></div>
             <div><span class="dk">Local de départ</span><span class="dv">{{ detail.localNom || '—' }}</span></div>
           </div>
 
           <!-- Dates du voyage : lecture + bouton Modifier -->
           <div *ngIf="!editDates" style="margin-top:10px">
             <div class="detail-grid">
-              <div><span class="dk">Chargement prévu</span><span class="dv">{{ detail.chargement ? (detail.chargement | date:'dd/MM/yy HH:mm') : '—' }}</span></div>
+              <div><span class="dk">Chargement prévu</span><span class="dv">{{ chargementPrevu() ? (chargementPrevu() | date:'dd/MM/yy HH:mm') : '—' }}</span></div>
               <div><span class="dk">Chargement réel</span><span class="dv">{{ detail.realChargement ? (detail.realChargement | date:'dd/MM/yy HH:mm') : '—' }}</span></div>
-              <div><span class="dk">Déchargement prévu</span><span class="dv">{{ detail.dechargement ? (detail.dechargement | date:'dd/MM/yy HH:mm') : '—' }}</span></div>
+              <div><span class="dk">Déchargement prévu</span><span class="dv">{{ dechargementPrevu() ? (dechargementPrevu() | date:'dd/MM/yy HH:mm') : '—' }}</span></div>
               <div><span class="dk">Déchargement réel</span><span class="dv">{{ detail.realDechargement ? (detail.realDechargement | date:'dd/MM/yy HH:mm') : '—' }}</span></div>
             </div>
             <button class="btn btn-outline btn-sm" style="margin-top:8px" (click)="ouvrirEditDates()">
@@ -493,12 +607,20 @@ interface VoyageLigne {
           <div style="display:flex;align-items:center;gap:14px;margin-top:12px;padding:12px;border:1px solid var(--border);border-radius:10px">
             <img [src]="qrVoyageUrl(detail.id)" alt="QR voyage" style="width:96px;height:96px;cursor:zoom-in"
                  title="Voir le QR" (click)="voirQr(qrVoyageUrl(detail.id), 'QR voyage #' + detail.id, 'qr-voyage-' + detail.id)">
-            <div>
+            <div style="flex:1">
               <strong>QR du voyage</strong>
               <div class="muted" style="font-size:12px">Scanné par le chauffeur, il valide toutes les lignes du voyage en une fois.</div>
               <button class="btn btn-outline btn-sm" style="margin-top:6px"
                       (click)="voirQr(qrVoyageUrl(detail.id), 'QR voyage #' + detail.id, 'qr-voyage-' + detail.id)">
                 <i class="fa-solid fa-eye"></i> Voir / Télécharger</button>
+            </div>
+            <!-- Code de forçage d'arrivée (au niveau du voyage conteneur) -->
+            <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
+              <span class="dk" style="font-size:11px">Code de forçage</span>
+              <strong style="font-size:14px">{{ (detail.forceCode || '—') }}</strong>
+              <button class="btn btn-outline btn-sm"
+                      (click)="regenererForce()" [disabled]="regenForce || detail.statut === 'ANNULE'">
+                <i class="fa-solid fa-rotate"></i> Régénérer</button>
             </div>
           </div>
 
@@ -516,7 +638,15 @@ interface VoyageLigne {
               <i class="fa-solid fa-location-dot" style="color:var(--accent-dark)"></i>
               <strong style="flex:1">{{ grp.label }}</strong>
               <span class="badge badge-gray">{{ grp.livraisons.length }} OF</span>
-              <span *ngIf="grp.matieres.length" class="badge badge-blue">{{ grp.matieres.length }} MP</span>
+              <span *ngIf="mpDe(grp.matieres).length" class="badge badge-blue">{{ mpDe(grp.matieres).length }} MP</span>
+              <span *ngIf="stockDe(grp.matieres).length" class="badge badge-green">{{ stockDe(grp.matieres).length }} Stock</span>
+              <!-- QR code de la ligne complète (groupe) -->
+              <img *ngIf="grp.livraisons.length > 0" [src]="qrLivraisonUrl(grp.livraisons[0].id)" alt="QR ligne"
+                   style="width:36px;height:36px;vertical-align:middle;cursor:zoom-in"
+                   (click)="voirQr(qrLivraisonUrl(grp.livraisons[0].id), 'QR ligne ' + grp.label, 'qr-ligne-' + grp.code)">
+              <button class="btn btn-outline btn-sm" *ngIf="grp.livraisons.length > 0"
+                      (click)="voirQr(qrLivraisonUrl(grp.livraisons[0].id), 'QR ligne ' + grp.label, 'qr-ligne-' + grp.code)">
+                <i class="fa-solid fa-qrcode"></i></button>
             </div>
 
             <!-- Livraisons du groupe -->
@@ -525,17 +655,18 @@ interface VoyageLigne {
                    style="display:flex;align-items:center;gap:8px;padding:12px 14px">
                 <i class="fa-solid" [ngClass]="openLivId===l.id ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
                 <strong>#{{ l.id }}</strong>
-                <span class="badge badge-gray">{{ l.statutReception || '—' }}</span>
+                <span [ngClass]="l.statutReception | statutBadge">{{ l.statutReception || '—' }}</span>
                 <span style="margin-left:auto;display:flex;gap:6px" (click)="$event.stopPropagation()">
-                  <img [src]="qrLivraisonUrl(l.id)" alt="QR" style="width:36px;height:36px;vertical-align:middle;cursor:zoom-in"
-                       (click)="voirQr(qrLivraisonUrl(l.id), 'QR livraison #' + l.id, 'qr-livraison-' + l.id)">
-                  <button class="btn btn-outline btn-sm"
-                          (click)="voirQr(qrLivraisonUrl(l.id), 'QR livraison #' + l.id, 'qr-livraison-' + l.id)">
-                    <i class="fa-solid fa-qrcode"></i></button>
-                  <button class="btn btn-outline btn-sm" (click)="chargerBls(l.id)" title="BL">
+                  <button *ngIf="(blsParLivraison[l.id]?.length ?? 0) > 0" class="btn btn-outline btn-sm"
+                          (click)="openLivId = l.id" title="Voir les bons de livraison">
                     <i class="fa-solid fa-file-lines"></i> BL
-                    <span *ngIf="(blsParLivraison[l.id]?.length ?? 0) > 0" class="badge badge-blue" style="margin-left:4px">{{ blsParLivraison[l.id].length }}</span>
+                    <span class="badge badge-blue" style="margin-left:4px">{{ blsParLivraison[l.id].length }}</span>
                   </button>
+                  <button class="btn btn-outline btn-sm" (click)="annulerLigneWeb(l)"
+                          [disabled]="estScanne(detail) || l.statutReception === 'ANNULE'"
+                          [ngClass]="l.statutReception === 'ANNULE' ? 'btn-gray' : ''"
+                          [title]="l.statutReception === 'ANNULE' ? 'Livraison annulée' : 'Annuler la livraison'">
+                    <i class="fa-solid fa-ban"></i> {{ l.statutReception === 'ANNULE' ? 'Annulée' : 'Annuler' }}</button>
                   <button class="btn btn-danger btn-sm" (click)="detacher(l)"
                           [disabled]="estScanne(detail) || livraisonScannee(l)"
                           [title]="(estScanne(detail) || livraisonScannee(l)) ? 'Scannée : modification impossible' : 'Retirer du voyage'">
@@ -544,13 +675,6 @@ interface VoyageLigne {
               </div>
 
               <div *ngIf="openLivId===l.id" style="padding:0 14px 12px">
-                <div style="display:flex;align-items:center;gap:10px;margin:8px 0;padding:8px;background:#faf9fb;border-radius:8px">
-                  <span class="dk">Code de forçage d'arrivée</span>
-                  <strong>{{ l.forceCode || '— non généré —' }}</strong>
-                  <button class="btn btn-outline btn-sm" style="margin-left:auto"
-                          (click)="regenererForce(l)" [disabled]="regenForce">
-                    <i class="fa-solid fa-rotate"></i> Régénérer</button>
-                </div>
                 <!-- Articles -->
                 <div class="table-wrap" *ngIf="contenu[l.id]?.articles?.length" style="margin-top:8px">
                   <table>
@@ -560,7 +684,7 @@ interface VoyageLigne {
                         <tr class="row-link" (click)="artDetailId = artDetailId===a.id ? null : a.id">
                           <td><strong>{{ a.designation || '—' }}</strong></td>
                           <td>{{ a.quantite ?? '—' }}</td>
-                          <td><span class="badge badge-gray">{{ a.statutReception || '—' }}</span></td>
+                          <td><span [ngClass]="a.statutReception | statutBadge">{{ a.statutReception || '—' }}</span></td>
                           <td style="white-space:nowrap" (click)="$event.stopPropagation()">
                             <img [src]="qrArticleUrl(a.id)" alt="QR" style="width:48px;height:48px;vertical-align:middle;cursor:zoom-in"
                                  (click)="voirQr(qrArticleUrl(a.id), 'QR article #' + a.id, 'qr-article-' + a.id)">
@@ -594,8 +718,8 @@ interface VoyageLigne {
                     <i class="fa-solid fa-file-image" style="color:var(--accent)"></i>
                     <span style="flex:1;font-size:13px">{{ bl.reference || ('BL #' + bl.id) }}</span>
                     <span class="badge badge-gray" style="font-size:10px">{{ bl.contentType?.includes('pdf') ? 'PDF' : 'Image' }}</span>
-                    <a [href]="svc.blUrl(l.id, bl.id)" target="_blank" class="btn btn-outline btn-sm"><i class="fa-solid fa-eye"></i></a>
-                    <a [href]="svc.blUrl(l.id, bl.id)" [download]="'bl-' + l.id + '-' + bl.id" class="btn btn-outline btn-sm"><i class="fa-solid fa-download"></i></a>
+                    <a [href]="svc.blUrl(l.id, bl.id)" target="_blank" rel="noopener" class="btn btn-outline btn-sm" title="Afficher"><i class="fa-solid fa-eye"></i></a>
+                    <a [href]="svc.blUrl(l.id, bl.id, true)" class="btn btn-outline btn-sm" title="Télécharger"><i class="fa-solid fa-download"></i></a>
                   </div>
                   <div *ngIf="blUploadLivId !== l.id" style="margin-top:8px">
                     <button class="btn btn-outline btn-sm" (click)="blUploadLivId=l.id;blUploadRef='';blUploadFile=null">
@@ -616,18 +740,20 @@ interface VoyageLigne {
               </div>
             </div>
 
-            <!-- Matières premières du groupe — affichées UNE SEULE FOIS -->
-            <ng-container *ngIf="grp.matieres.length">
-              <div style="padding:10px 14px;background:#fdf8ff;border-top:1px solid var(--border)">
-                <h5 style="margin:0 0 8px;font-size:13px;font-weight:700">
-                  <i class="fa-solid fa-cubes" style="margin-right:6px;color:var(--accent-dark)"></i>
-                  Matières premières ({{ grp.matieres.length }})</h5>
-                <div class="table-wrap">
+            <!-- Matières premières du groupe — affichées UNE SEULE FOIS, repliables ; statut piloté par le scan -->
+            <ng-container *ngIf="mpDe(grp.matieres).length">
+              <div style="border-top:1px solid var(--border)">
+                <h5 class="ligne-section clic" style="margin:0;padding:10px 14px;background:#fdf8ff"
+                    (click)="toggleMpGroup(grp.code)">
+                  <i class="fa-solid" [ngClass]="mpGroupOpen(grp.code) ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
+                  <i class="fa-solid fa-cubes"></i> Matières premières ({{ mpDe(grp.matieres).length }})
+                  <span class="muted">· {{ mpLivrees(mpDe(grp.matieres)) }}/{{ mpDe(grp.matieres).length }} livrée(s)</span></h5>
+                <div class="table-wrap" *ngIf="mpGroupOpen(grp.code)" style="padding:0 14px 12px;background:#fdf8ff">
                   <table>
                     <thead><tr><th>Désignation</th><th>Pièce fournisseur</th><th>Affaire</th>
-                      <th>Qté cmd.</th><th>Qté livrée</th><th>Reste</th><th>Statut</th><th>QR</th><th></th></tr></thead>
+                      <th>Qté cmd.</th><th>Qté livrée</th><th>Reste</th><th>Statut</th><th>QR</th></tr></thead>
                     <tbody>
-                      <tr *ngFor="let m of grp.matieres" [class.row-done]="estCloturee(m)">
+                      <tr *ngFor="let m of mpDe(grp.matieres)" [class.row-done]="estLivree(m)">
                         <td><strong>{{ m.designation || '—' }}</strong>
                           <div class="muted" style="font-size:11px">Réf {{ m.reference || '—' }}</div></td>
                         <td><code>{{ m.pieceFournisseur || '—' }}</code></td>
@@ -635,8 +761,7 @@ interface VoyageLigne {
                         <td>{{ m.qteCommande ?? '—' }}</td>
                         <td>{{ qteLivree(m) }}</td>
                         <td><strong>{{ resteALivrer(m) }}</strong></td>
-                        <td><span class="badge" [ngClass]="estCloturee(m) ? 'badge-green' : 'badge-orange'">
-                          {{ estCloturee(m) ? 'Livrée' : 'En attente' }}</span></td>
+                        <td><span class="badge" [ngClass]="statutMpClass(m)">{{ statutMpLabel(m) }}</span></td>
                         <td style="white-space:nowrap">
                           <img [src]="qrMatiereUrl(m.id)" alt="QR" style="width:48px;height:48px;vertical-align:middle;cursor:zoom-in"
                                (click)="voirQr(qrMatiereUrl(m.id), 'QR matière #' + m.id, 'qr-mp-' + m.id)">
@@ -644,11 +769,39 @@ interface VoyageLigne {
                                   (click)="voirQr(qrMatiereUrl(m.id), 'QR matière #' + m.id, 'qr-mp-' + m.id)">
                             <i class="fa-solid fa-eye"></i></button>
                         </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </ng-container>
+
+            <!-- Stock du groupe — section DÉDIÉE (séparée des matières premières) -->
+            <ng-container *ngIf="stockDe(grp.matieres).length">
+              <div style="border-top:1px solid var(--border)">
+                <h5 class="ligne-section clic" style="margin:0;padding:10px 14px;background:#f0fbf4"
+                    (click)="toggleStockGroup(grp.code)">
+                  <i class="fa-solid" [ngClass]="stockGroupOpen(grp.code) ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
+                  <i class="fa-solid fa-warehouse"></i> Stock ({{ stockDe(grp.matieres).length }})
+                  <span class="muted">· {{ mpLivrees(stockDe(grp.matieres)) }}/{{ stockDe(grp.matieres).length }} livré(s)</span></h5>
+                <div class="table-wrap" *ngIf="stockGroupOpen(grp.code)" style="padding:0 14px 12px;background:#f0fbf4">
+                  <table>
+                    <thead><tr><th>Désignation</th><th>Référence</th><th>Dépôt</th><th>Affaire</th>
+                      <th>Qté</th><th>Statut</th><th>QR</th></tr></thead>
+                    <tbody>
+                      <tr *ngFor="let m of stockDe(grp.matieres)" [class.row-done]="estLivree(m)">
+                        <td><strong>{{ m.designation || '—' }}</strong></td>
+                        <td><code>{{ m.reference || '—' }}</code></td>
+                        <td><span class="badge badge-green">{{ m.depot || '—' }}</span></td>
+                        <td>{{ m.projet || '—' }}</td>
+                        <td>{{ m.quantite ?? '—' }}</td>
+                        <td><span class="badge" [ngClass]="statutMpClass(m)">{{ statutMpLabel(m) }}</span></td>
                         <td style="white-space:nowrap">
-                          <button class="btn btn-sm" [ngClass]="estCloturee(m) ? 'btn-outline' : 'btn-primary'"
-                                  (click)="basculerMatiere(m)" [disabled]="majMatiere">
-                            <i class="fa-solid" [ngClass]="estCloturee(m) ? 'fa-rotate-left' : 'fa-check'"></i>
-                            {{ estCloturee(m) ? 'Rouvrir' : 'Clôturer' }}</button>
+                          <img [src]="qrMatiereUrl(m.id)" alt="QR" style="width:48px;height:48px;vertical-align:middle;cursor:zoom-in"
+                               (click)="voirQr(qrMatiereUrl(m.id), 'QR stock #' + m.id, 'qr-stock-' + m.id)">
+                          <button class="btn btn-outline btn-sm" style="margin-left:6px"
+                                  (click)="voirQr(qrMatiereUrl(m.id), 'QR stock #' + m.id, 'qr-stock-' + m.id)">
+                            <i class="fa-solid fa-eye"></i></button>
                         </td>
                       </tr>
                     </tbody>
@@ -731,6 +884,7 @@ export class VoyagesConteneursComponent implements OnInit {
     { key: 'statut', label: 'Statut', icon: 'fa-flag', placeholder: 'Statut' },
   ];
   modal = false; saving = false;
+  exporting = false;
   editId: number | null = null;
 
   chauffeurs: GapChauffeur[] = [];
@@ -780,8 +934,9 @@ export class VoyagesConteneursComponent implements OnInit {
   trajetLoading = false;
   artDetailId: number | null = null;
   openLivId: number | null = null;
+  openMpGroups = new Set<string>();   // sections MP dépliées, par code chantier
+  openStockGroups = new Set<string>(); // sections Stock dépliées, par code chantier
   regenForce = false;
-  majMatiere = false;
   private trajetMap?: L.Map;
 
   // Édition des dates dans le modal détail
@@ -796,11 +951,15 @@ export class VoyagesConteneursComponent implements OnInit {
   blUploadFile: File | null = null;
   blUploading = false;
 
+  /** Dépôts de stock disponibles (codes DEPO, ex. RB1..RB5) — chargés à la demande. */
+  depotsStock: string[] = [];
+
   constructor(
     public svc: VoyageConteneurService,
     private chauffeurSvc: ChauffeurService,
     private chantierSvc: ChantierService,
     private matiereSvc: MatierePremiereService,
+    private stockSvc: StockService,
     private depotSvc: DepotService,
     private voyageSvc: VoyageService,
     private adminSvc: AdminService,
@@ -815,6 +974,8 @@ export class VoyagesConteneursComponent implements OnInit {
       next: fs => { const f = fs.find(x => x.cle === 'voyage-nouvelle-saisie'); this.nouvelleSaisie = f ? f.actif : true; },
       error: () => { this.nouvelleSaisie = true; }
     });
+    // Dépôts de stock (RB1..RB5) — silencieux si le stock DivNet est injoignable.
+    this.stockSvc.getDepots().subscribe({ next: d => this.depotsStock = d, error: () => { this.depotsStock = []; } });
   }
 
   /** Voyages filtrés par la recherche globale ET les filtres par colonne. */
@@ -835,6 +996,52 @@ export class VoyagesConteneursComponent implements OnInit {
       next: d => { this.voyages = d; this.loading = false; },
       error: () => { this.voyages = []; this.loading = false; this.toastr.error('Impossible de charger les voyages.'); }
     });
+  }
+
+  /** Exporte la liste des voyages (vue courante) au format Excel. */
+  exporterExcel(): void {
+    this.exporting = true;
+    this.svc.exportExcel(this.vue).subscribe({
+      next: blob => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = `voyages-${this.vue}.xlsx`;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+        this.exporting = false;
+      },
+      error: () => { this.exporting = false; this.toastr.error('Échec de l’export Excel.'); }
+    });
+  }
+
+  /** Exporte la liste filtrée en PDF via une fenêtre d'impression (sans dépendance). */
+  exporterPdf(): void {
+    const lignes = this.voyagesFiltres();
+    const dt = (v?: string | null) => v ? new Date(v).toLocaleString('fr-FR') : '—';
+    const rows = lignes.map(v => `<tr>
+      <td>#${v.id}</td><td>${dt(v.dateVoyage)}</td><td>${v.chauffeur || '—'}</td>
+      <td style="text-align:center">${v.nbLivraisons ?? 0}</td>
+      <td style="text-align:center">${v.nbMatieres ?? 0}</td>
+      <td>${v.statut || '—'}</td></tr>`).join('');
+    const html = `<html><head><meta charset="utf-8"><title>Voyages</title><style>
+      body{font-family:Arial,Helvetica,sans-serif;padding:20px;color:#222}
+      h2{margin:0 0 12px;font-size:18px}
+      .sub{color:#666;font-size:12px;margin-bottom:14px}
+      table{border-collapse:collapse;width:100%;font-size:12px}
+      th,td{border:1px solid #d0d0d0;padding:6px 8px;text-align:left}
+      th{background:#f2f2f2}
+    </style></head><body>
+      <h2>Voyages — ${this.vue}</h2>
+      <div class="sub">${lignes.length} voyage(s) · édité le ${new Date().toLocaleString('fr-FR')}</div>
+      <table><thead><tr><th>ID</th><th>Date</th><th>Chauffeur</th><th>Livraisons</th><th>Mat. premières</th><th>Statut</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="6">Aucun voyage</td></tr>'}</tbody></table>
+    </body></html>`;
+    const w = window.open('', '_blank');
+    if (!w) { this.toastr.error('Autorisez les pop-ups pour exporter en PDF.'); return; }
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    setTimeout(() => w.print(), 350);
   }
 
   /** Voyage scanné = chargement réel enregistré → plus de modification/suppression. */
@@ -867,12 +1074,13 @@ export class VoyagesConteneursComponent implements OnInit {
     };
     this.depotId = undefined;
     this.modal = true;
-    const vid = v ? v.id : 0;
+    // Pour un nouveau voyage, récupérer les livraisons libres ; pour une édition, les livraisons assignables
+    const livraisonsObs = v ? this.svc.livraisonsAssignables(v.id) : this.svc.livraisonsLibres();
     forkJoin({
       chauffeurs: this.chauffeurSvc.getFromGap().pipe(catchError(() => of([] as GapChauffeur[]))),
       chantiers:  this.chantierSvc.getFromGap().pipe(catchError(() => of([] as Chantier[]))),
       depots:     this.depotSvc.getAll().pipe(catchError(() => of([] as Depot[]))),
-      livraisons: this.svc.livraisonsAssignables(vid).pipe(catchError(() => of([] as GapVoyage[])))
+      livraisons: livraisonsObs.pipe(catchError(() => of([] as GapVoyage[])))
     }).subscribe(({ chauffeurs, chantiers, depots, livraisons }) => {
       this.chauffeurs = chauffeurs;
       this.chantiers = chantiers;
@@ -902,8 +1110,11 @@ export class VoyagesConteneursComponent implements OnInit {
         // on y fusionne les MP plutôt que de créer une nouvelle ligne.
         this.svc.matieres(v.id).subscribe({
           next: mps => {
+            // Sépare les lignes de stock (source=STOCK) des matières premières Divalto.
+            const mpItems = mps.filter(m => (m.source || 'MATIERE') !== 'STOCK');
+            const stockItems = mps.filter(m => m.source === 'STOCK');
             const grp = new Map<string, MatierePremiere[]>();
-            mps.forEach(m => {
+            mpItems.forEach(m => {
               const k = `${m.projet || ''}|${m.cdno || ''}`;
               if (!grp.has(k)) grp.set(k, []);
               grp.get(k)!.push(m);
@@ -938,6 +1149,41 @@ export class VoyagesConteneursComponent implements OnInit {
               const codeChantier = lg.chantierCode || first.projet;
               if (codeChantier) this.matiereSvc.getCommandes(codeChantier).subscribe({ next: cmds => lg.commandes = cmds, error: () => {} });
             });
+            // Reconstruit les lignes « stock » (groupées par chantier + dépôt).
+            const norm = (s?: string | null) => (s || '').trim();
+            const grpStock = new Map<string, MatierePremiere[]>();
+            stockItems.forEach(m => {
+              const k = `${norm(m.projet)}|${norm(m.depot)}`;
+              if (!grpStock.has(k)) grpStock.set(k, []);
+              grpStock.get(k)!.push(m);
+            });
+            grpStock.forEach(items => {
+              const first = items[0];
+              const ch = chantiers.find(c => norm(c.code) === norm(first.projet));
+              const existante = ch
+                ? this.lignes.find(lg => lg.chantierId === ch.id && !lg.depotStock)
+                : this.lignes.find(lg => norm(lg.chantierCode) === norm(first.projet) && !lg.depotStock);
+              const lg = existante ?? this.nouvelleLigne();
+              if (!existante) {
+                lg.chantierCode = ch?.code ?? first.projet;
+                if (ch) { lg.chantierId = ch.id; lg.filtreChantier = ch.nom; } else { lg.filtreChantier = first.projet || ''; }
+                const split = (iso?: string) => iso ? { j: iso.slice(0, 10), h: iso.slice(11, 16) } : { j: undefined, h: undefined };
+                const c = split(first.dateChargement); const d = split(first.dateDechargement);
+                lg.chargementJour = c.j; lg.chargementHeure = c.h; lg.dechargementJour = d.j; lg.dechargementHeure = d.h;
+                this.lignes.push(lg);
+              }
+              lg.depotStock = first.depot || undefined;
+              lg.stockOuvert = true;
+              // Reconstitue la liste cochée à partir des lignes enregistrées (sans réinterroger le stock).
+              lg.articlesStock = items.map(m => ({
+                reference: m.reference, designation: m.designation, unite: m.unite,
+                stockDisponible: m.qteCommande, depot: m.depot
+              }));
+              lg.filtreStock = '';
+              this.majArticlesStockView(lg);
+              lg.selectedStock = {}; lg.qteStock = {};
+              items.forEach(m => { const r = m.reference || ''; lg.selectedStock![r] = true; lg.qteStock![r] = m.quantite || 1; });
+            });
           },
           error: () => {}
         });
@@ -960,7 +1206,8 @@ export class VoyagesConteneursComponent implements OnInit {
     return {
       filtreChantier: '', comboOpen: false, type: 'ARTICLE',
       selectedLiv: {}, livrDispo: [], selLivIds: [], commandes: [], lignesMp: [], loadingMp: false,
-      selectedMp: {}, qteMp: {}, filtreContenu: '', filtreLignesMp: '', mpSauvegardes: []
+      selectedMp: {}, qteMp: {}, filtreContenu: '', filtreLignesMp: '', mpSauvegardes: [],
+      articlesStock: [], loadingStock: false, selectedStock: {}, qteStock: {}, filtreStock: ''
     };
   }
   ajouterLigne(): void { this.lignes.push(this.nouvelleLigne()); }
@@ -977,6 +1224,8 @@ export class VoyagesConteneursComponent implements OnInit {
     // Déplie d'emblée les sections qui contiennent déjà une sélection.
     this.ligneDraft.ofOuvert = this.ligneDraft.ofOuvert || this.selectedLivCount(this.ligneDraft) > 0;
     this.ligneDraft.mpOuvert = this.ligneDraft.mpOuvert || this.selectedMpCount(this.ligneDraft) > 0;
+    this.ligneDraft.stockOuvert = this.ligneDraft.stockOuvert || this.selectedStockCount(this.ligneDraft) > 0;
+    this.majArticlesStockView(this.ligneDraft);
     this.ligneEditIndex = i;
     this.ligneModal = true;
   }
@@ -988,6 +1237,8 @@ export class VoyagesConteneursComponent implements OnInit {
     const ch = this.chantiers.find(c => c.id === lg.chantierId);
     if (ch) { lg.chantierCode = ch.code; lg.filtreChantier = ch.nom + (ch.ville ? ` — ${ch.ville}` : ''); }
     lg.selectedLiv = {}; lg.selLivIds = []; lg.commandes = []; lg.commandeId = undefined; lg.lignesMp = []; lg.selectedMp = {}; lg.qteMp = {};
+    // Le stock est indépendant du chantier (on choisit un dépôt) : on garde le dépôt mais on réinitialise la sélection.
+    lg.selectedStock = {}; lg.qteStock = {};
     this.majLivrDispo(lg);
     if (lg.chantierId) this.chargerCommandes(lg);
   }
@@ -1051,7 +1302,7 @@ export class VoyagesConteneursComponent implements OnInit {
   selectedLivCount(lg: VoyageLigne): number {
     return Object.keys(lg.selectedLiv).filter(k => lg.selectedLiv[+k]).length;
   }
-  /** Ids des ordres de fabrication sélectionnés (pour le récapitulatif). */
+  /** Ids des livraisons sélectionnées (pour le récapitulatif). */
   selectedLivArray(lg: VoyageLigne): number[] {
     return Object.keys(lg.selectedLiv).filter(k => lg.selectedLiv[+k]).map(k => +k);
   }
@@ -1087,6 +1338,66 @@ export class VoyagesConteneursComponent implements OnInit {
     const courantes = lg.lignesMp.filter(m => lg.selectedMp[m.reference || '']);
     const sauvegardees = (lg.mpSauvegardes ?? []).map(s => s.m);
     return [...sauvegardees, ...courantes.filter(m => !sauvegardees.find(s => s.reference === m.reference))];
+  }
+
+  /* ─────────── Lignes : stock (lecture seule, vue Article_en_stock DivNet) ─────────── */
+  /** Charge les articles disponibles du dépôt choisi (stock > 0). Lecture seule. */
+  /** Nombre d'articles de stock affichés par page (limite le DOM → fluidité). */
+  readonly stockPageSize = 50;
+
+  chargerArticlesStock(lg: VoyageLigne): void {
+    if (!lg.depotStock) { lg.articlesStock = []; lg.articlesStockFiltered = []; lg.articlesStockView = []; return; }
+    lg.loadingStock = true; lg.articlesStock = []; lg.articlesStockFiltered = []; lg.articlesStockView = [];
+    this.stockSvc.getArticles(lg.depotStock).subscribe({
+      next: d => { lg.articlesStock = d; lg.loadingStock = false; this.majArticlesStockView(lg); },
+      error: () => { lg.loadingStock = false; this.toastr.error('Stock indisponible (DivNet).'); }
+    });
+  }
+  /**
+   * Recalcule la liste filtrée puis la PAGE affichée.
+   * IMPORTANT : ne JAMAIS filtrer/découper dans le *ngFor (381 articles → recalcul à
+   * chaque détection de changement = navigateur qui rame). On ne garde dans le DOM que
+   * {@link stockPageSize} lignes à la fois.
+   */
+  majArticlesStockView(lg: VoyageLigne): void {
+    const t = (lg.filtreStock || '').toLowerCase().trim();
+    const arts = lg.articlesStock ?? [];
+    lg.articlesStockFiltered = !t
+      ? arts
+      : arts.filter(a => `${a.designation || ''} ${a.reference || ''}`.toLowerCase().includes(t));
+    lg.stockPage = 0;
+    this.sliceStock(lg);
+  }
+  /** Découpe la page courante depuis la liste filtrée. */
+  private sliceStock(lg: VoyageLigne): void {
+    const all = lg.articlesStockFiltered ?? [];
+    const page = lg.stockPage ?? 0;
+    lg.articlesStockView = all.slice(page * this.stockPageSize, (page + 1) * this.stockPageSize);
+  }
+  stockNbPages(lg: VoyageLigne): number {
+    return Math.max(1, Math.ceil((lg.articlesStockFiltered?.length ?? 0) / this.stockPageSize));
+  }
+  stockPageSuivante(lg: VoyageLigne): void {
+    if ((lg.stockPage ?? 0) < this.stockNbPages(lg) - 1) { lg.stockPage = (lg.stockPage ?? 0) + 1; this.sliceStock(lg); }
+  }
+  stockPagePrecedente(lg: VoyageLigne): void {
+    if ((lg.stockPage ?? 0) > 0) { lg.stockPage = (lg.stockPage ?? 0) - 1; this.sliceStock(lg); }
+  }
+  /** trackBy : évite à Angular de reconstruire les lignes à chaque clic. */
+  trackStock(_i: number, a: ArticleStock): string { return a.reference || ''; }
+  /** Coche/décoche un article de stock : quantité par défaut = 1 (jamais > stock disponible). */
+  onToggleStock(lg: VoyageLigne, a: ArticleStock): void {
+    const k = a.reference || '';
+    if (!lg.selectedStock) lg.selectedStock = {};
+    if (!lg.qteStock) lg.qteStock = {};
+    if (lg.selectedStock[k] && (lg.qteStock[k] == null || lg.qteStock[k] <= 0)) lg.qteStock[k] = 1;
+  }
+  selectedStockCount(lg: VoyageLigne): number {
+    return (lg.articlesStock ?? []).filter(a => lg.selectedStock?.[a.reference || '']).length;
+  }
+  /** Articles de stock sélectionnés (pour le récapitulatif). */
+  selectedStockLignes(lg: VoyageLigne): ArticleStock[] {
+    return (lg.articlesStock ?? []).filter(a => lg.selectedStock?.[a.reference || '']);
   }
   fermerComboLigne(lg: VoyageLigne): void { setTimeout(() => lg.comboOpen = false, 150); }
 
@@ -1211,6 +1522,19 @@ export class VoyagesConteneursComponent implements OnInit {
           dateChargement: ch, dateDechargement: de
         });
       });
+      // Stock : articles sélectionnés (source=STOCK). Lecture seule : la quantité est
+      // traitée comme une matière première, le stock DivNet n'est jamais modifié.
+      (lg.articlesStock ?? []).filter(a => lg.selectedStock?.[a.reference || '']).forEach(a => {
+        const ref = a.reference || '';
+        matieres.push({
+          projet: lg.chantierCode, ref,
+          designation: a.designation, unite: a.unite,
+          quantite: lg.qteStock?.[ref] && lg.qteStock[ref] > 0 ? lg.qteStock[ref] : 1,
+          qteCommande: a.stockDisponible,
+          source: 'STOCK', depot: lg.depotStock,
+          dateChargement: ch, dateDechargement: de
+        });
+      });
     }
     const req: VoyageConteneurRequest = {
       chauffeurId: this.chauffeurId, livraisonIds, livraisonDates, matieres,
@@ -1332,11 +1656,18 @@ export class VoyagesConteneursComponent implements OnInit {
     });
   }
 
-  /** Régénère le code de forçage d'une livraison (ligne de voyage). */
-  regenererForce(l: GapVoyage): void {
+  /** Régénère le code de forçage du voyage conteneur (commun à toutes ses lignes, MP incluses). */
+  regenererForce(): void {
+    if (!this.detail) return;
     this.regenForce = true;
-    this.voyageSvc.regenererForceCode(l.id).subscribe({
-      next: maj => { l.forceCode = maj.forceCode; this.regenForce = false; this.toastr.success('Nouveau code : ' + maj.forceCode); },
+    this.svc.regenererForceCode(this.detail.id).subscribe({
+      next: maj => {
+        const code = maj.forceCode;
+        if (this.detail) this.detail.forceCode = code;
+        this.detailLivraisons.forEach(d => d.forceCode = code);
+        this.regenForce = false;
+        this.toastr.success('Nouveau code : ' + code);
+      },
       error: () => { this.regenForce = false; this.toastr.error('Échec de la régénération.'); }
     });
   }
@@ -1405,6 +1736,19 @@ export class VoyagesConteneursComponent implements OnInit {
     });
   }
 
+  /** Annule une livraison (change son statut à ANNULE). */
+  annulerLigneWeb(l: GapVoyage): void {
+    if (l.statutReception === 'ANNULE') { this.toastr.info('Livraison déjà annulée.'); return; }
+    if (!confirm(`Annuler la livraison #${l.id} ? Cela changera son statut à "Annulée".`)) return;
+    this.http.patch(`${environment.apiUrl}/voyages-conteneurs/livraisons/${l.id}/annuler`, null).subscribe({
+      next: () => {
+        l.statutReception = 'ANNULE';
+        this.toastr.success('Livraison annulée.');
+      },
+      error: () => this.toastr.error('Erreur lors de l\'annulation.')
+    });
+  }
+
   /** Détache une livraison du voyage affiché (sans la supprimer de GAP). */
   detacher(l: GapVoyage): void {
     if (this.livraisonScannee(l)) { this.toastr.warning('Livraison scannée : modification impossible.'); return; }
@@ -1419,12 +1763,16 @@ export class VoyagesConteneursComponent implements OnInit {
     });
   }
 
-  /* ─────────── Matières premières : clôture (statut local, sans impact ERP) ─────────── */
+  /* ─────────── Matières premières : statut piloté par le scan chauffeur (À charger → Chargé → Livré) ─────────── */
   /** Regroupe les livraisons par chantier et y associe les MP (une seule fois par groupe). */
   livraisonsGroupees(): { code: string; label: string; livraisons: GapVoyage[]; matieres: MatierePremiere[] }[] {
     const norm = (s?: string | null) => (s || '').trim();
+    // Trier par id ASC = ordre de création
+    const livTriees = [...this.detailLivraisons].sort((a, b) => (a.id ?? 0) - (b.id ?? 0));
+    const mpsTriees = [...this.detailMatieres].sort((a, b) => (a.id ?? 0) - (b.id ?? 0));
+
     const map = new Map<string, GapVoyage[]>();
-    for (const l of this.detailLivraisons) {
+    for (const l of livTriees) {
       const k = norm(l.projetCode);
       if (!map.has(k)) map.set(k, []);
       map.get(k)!.push(l);
@@ -1433,13 +1781,13 @@ export class VoyagesConteneursComponent implements OnInit {
     const mpUtilisees = new Set<number>();
     map.forEach((livs, code) => {
       const mps = code
-        ? this.detailMatieres.filter(m => norm(m.projet) === code)
-        : this.detailMatieres.filter(m => !m.projet);
+        ? mpsTriees.filter(m => norm(m.projet) === code)
+        : mpsTriees.filter(m => !m.projet);
       mps.forEach(m => mpUtilisees.add(m.id));
       result.push({ code, label: livs[0].projetDesignation || livs[0].projetCode || 'Sans chantier', livraisons: livs, matieres: mps });
     });
     // MP sans chantier correspondant → groupe orphelin
-    const orphelines = this.detailMatieres.filter(m => !mpUtilisees.has(m.id));
+    const orphelines = mpsTriees.filter(m => !mpUtilisees.has(m.id));
     if (orphelines.length) {
       result.push({ code: '', label: '—', livraisons: [], matieres: orphelines });
     }
@@ -1451,22 +1799,65 @@ export class VoyagesConteneursComponent implements OnInit {
     return this.livraisonsGroupees().find(g => g.livraisons.some(x => x.id === l.id))?.matieres ?? [];
   }
 
-  estCloturee(m: MatierePremiere): boolean { return (m.statut || '').toUpperCase() === 'LIVRE'; }
-  /** Qté livrée = qté de la ligne une fois clôturée, sinon 0. */
-  qteLivree(m: MatierePremiere): number { return this.estCloturee(m) ? (m.quantite ?? 0) : 0; }
+  /** MP livrée = statut LIVRE (2e scan). */
+  estLivree(m: MatierePremiere): boolean { return (m.statut || '').toUpperCase() === 'LIVRE'; }
+  /** MP chargée = statut CHARGE (1er scan, pas encore livrée). */
+  estChargee(m: MatierePremiere): boolean { return (m.statut || '').toUpperCase() === 'CHARGE'; }
+  /** Libellé statut MP aligné sur les articles : À charger / Chargé / Livré. */
+  statutMpLabel(m: MatierePremiere): string {
+    return this.estLivree(m) ? 'Livré' : this.estChargee(m) ? 'Chargé' : 'À charger';
+  }
+  /** Classe de badge associée au statut MP (alignée sur le code couleur global). */
+  statutMpClass(m: MatierePremiere): string {
+    return this.estLivree(m) ? 'badge-green' : this.estChargee(m) ? 'badge-blue' : 'badge-gray';
+  }
+  /** Nombre de MP livrées dans un groupe. */
+  mpLivrees(ms: MatierePremiere[]): number { return ms.filter(m => this.estLivree(m)).length; }
+  /** Qté livrée = qté de la ligne une fois livrée, sinon 0. */
+  qteLivree(m: MatierePremiere): number { return this.estLivree(m) ? (m.quantite ?? 0) : 0; }
   /** Reste à livrer = qté commandée − qté livrée. */
   resteALivrer(m: MatierePremiere): number {
     const cmd = m.qteCommande ?? m.quantite ?? 0;
     return Math.max(0, cmd - this.qteLivree(m));
   }
-  basculerMatiere(m: MatierePremiere): void {
-    const nouveau = this.estCloturee(m) ? 'EN_ATTENTE' : 'LIVRE';
-    this.majMatiere = true;
-    this.svc.statutMatiere(m.id, nouveau).subscribe({
-      next: () => { m.statut = nouveau; this.majMatiere = false;
-        this.toastr.success(nouveau === 'LIVRE' ? 'Matière clôturée.' : 'Matière rouverte.'); },
-      error: () => { this.majMatiere = false; this.toastr.error('Échec de la mise à jour du statut.'); }
-    });
+  /** Repliage de la section MP, par chantier (fermé par défaut). */
+  toggleMpGroup(code: string): void {
+    this.openMpGroups.has(code) ? this.openMpGroups.delete(code) : this.openMpGroups.add(code);
+  }
+  mpGroupOpen(code: string): boolean { return this.openMpGroups.has(code); }
+  /** Repliage de la section Stock, par chantier (fermé par défaut). */
+  toggleStockGroup(code: string): void {
+    this.openStockGroups.has(code) ? this.openStockGroups.delete(code) : this.openStockGroups.add(code);
+  }
+  stockGroupOpen(code: string): boolean { return this.openStockGroups.has(code); }
+
+  /** Lignes « matières premières » d'un groupe (source ≠ STOCK). */
+  mpDe(ms: MatierePremiere[]): MatierePremiere[] { return (ms || []).filter(m => (m.source || 'MATIERE') !== 'STOCK'); }
+  /** Lignes « stock » d'un groupe (source = STOCK), affichées séparément. */
+  stockDe(ms: MatierePremiere[]): MatierePremiere[] { return (ms || []).filter(m => m.source === 'STOCK'); }
+
+  /** Renvoie la date min (ou max) parmi une liste de dates ISO valides (ignore vides/invalides). */
+  private extremeDate(vals: (string | null | undefined)[], mode: 'min' | 'max'): string | undefined {
+    const dates = vals.filter((d): d is string => !!d && !isNaN(Date.parse(d))).sort();
+    return mode === 'min' ? dates[0] : dates[dates.length - 1];
+  }
+  /** Chargement prévu : date explicite (voyage/lignes/MP) ; à défaut la date de livraison GAP. */
+  chargementPrevu(): string | undefined {
+    return this.extremeDate([
+      this.detail?.chargement,
+      ...this.detailLivraisons.map(l => l.chargement),
+      ...this.detailMatieres.map(m => m.dateChargement),
+    ], 'min')
+      ?? this.extremeDate(this.detailLivraisons.map(l => l.dateLivraison), 'min');
+  }
+  /** Déchargement prévu : date explicite (voyage/lignes/MP) ; à défaut la date de livraison GAP. */
+  dechargementPrevu(): string | undefined {
+    return this.extremeDate([
+      this.detail?.dechargement,
+      ...this.detailLivraisons.map(l => l.dechargement),
+      ...this.detailMatieres.map(m => m.dateDechargement),
+    ], 'max')
+      ?? this.extremeDate(this.detailLivraisons.map(l => l.dateLivraison), 'max');
   }
 
   dureeLabel(min?: number | null): string {
