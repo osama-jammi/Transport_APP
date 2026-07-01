@@ -147,6 +147,8 @@ public class GapReadService {
         dto.setDestinationRayon(rs.wasNull() ? null : rayon);
         long vId = rs.getLong("voyage_id");
         dto.setVoyageId(rs.wasNull() ? null : vId);
+        Timestamp arr = rs.getTimestamp("arrivee_dechargement");
+        dto.setArriveeDechargement(arr != null ? arr.toLocalDateTime() : null);
         return dto;
     };
 
@@ -160,7 +162,6 @@ public class GapReadService {
         String nom = rs.getString("ch_nom");
         String prenom = rs.getString("ch_prenom");
         dto.setChauffeur(((prenom != null ? prenom : "") + " " + (nom != null ? nom : "")).trim());
-        dto.setStatut(rs.getString("statut"));
         dto.setForceCode(rs.getString("force_code"));
         dto.setNbLivraisons(rs.getInt("nb_livraisons"));
         dto.setNbMatieres(rs.getInt("nb_matieres"));
@@ -172,6 +173,21 @@ public class GapReadService {
         dto.setRealChargement(rc != null ? rc.toLocalDateTime() : null);
         Timestamp rd = rs.getTimestamp("real_dechargement");
         dto.setRealDechargement(rd != null ? rd.toLocalDateTime() : null);
+        // Statut AFFICHÉ, dérivé de l'avancement réel (inclut articles, MP ET stock via
+        // real_chargement / real_dechargement) : Annulé/Archivé prioritaires, sinon
+        // Livré (déchargé) > Chargé > En cours. Le filtre en-cours/archives reste sur la colonne brute.
+        String statutBrut = rs.getString("statut");
+        String statutAffiche;
+        if ("ANNULE".equalsIgnoreCase(statutBrut) || "ARCHIVE".equalsIgnoreCase(statutBrut)) {
+            statutAffiche = statutBrut;
+        } else if (rd != null) {
+            statutAffiche = "LIVRE";
+        } else if (rc != null) {
+            statutAffiche = "CHARGE";
+        } else {
+            statutAffiche = statutBrut != null ? statutBrut : "EN_COURS";
+        }
+        dto.setStatut(statutAffiche);
         dto.setLocalNom(rs.getString("local_nom"));
         double llat = rs.getDouble("local_lat"); dto.setLocalLat(rs.wasNull() ? null : llat);
         double llng = rs.getDouble("local_lng"); dto.setLocalLng(rs.wasNull() ? null : llng);
@@ -254,6 +270,7 @@ public class GapReadService {
                 "l.id_atelier, ate.designation AS atelier_designation, " +
                 "l.statut_reception, l.imprime, l.force_code, l.bl, l.bl_fichier, l.bl_content_type, " +
                 "p.latitude AS dest_lat, p.longitude AS dest_lng, p.rayon_metres AS dest_rayon, l.voyage_id, " +
+                "l.arrivee_dechargement, " +
                 "(SELECT COUNT(*) FROM detail_livraison dl WHERE dl.id_livraison = l.id) AS nb_articles " +
                 "FROM livraisons l " +
                 "LEFT JOIN chauffeur ch  ON l.id_chauffeur = ch.id " +
@@ -271,6 +288,7 @@ public class GapReadService {
                 "l.id_atelier, ate.designation AS atelier_designation, " +
                 "l.statut_reception, l.imprime, l.force_code, l.bl, l.bl_fichier, l.bl_content_type, " +
                 "p.latitude AS dest_lat, p.longitude AS dest_lng, p.rayon_metres AS dest_rayon, l.voyage_id, " +
+                "l.arrivee_dechargement, " +
                 "(SELECT COUNT(*) FROM detail_livraison dl WHERE dl.id_livraison = l.id) AS nb_articles " +
                 "FROM livraisons l " +
                 "LEFT JOIN chauffeur ch  ON l.id_chauffeur = ch.id " +
@@ -289,6 +307,7 @@ public class GapReadService {
                 "l.id_atelier, ate.designation AS atelier_designation, " +
                 "l.statut_reception, l.imprime, l.force_code, l.bl, l.bl_fichier, l.bl_content_type, " +
                 "p.latitude AS dest_lat, p.longitude AS dest_lng, p.rayon_metres AS dest_rayon, l.voyage_id, " +
+                "l.arrivee_dechargement, " +
                 "(SELECT COUNT(*) FROM detail_livraison dl WHERE dl.id_livraison = l.id) AS nb_articles " +
                 "FROM livraisons l " +
                 "LEFT JOIN chauffeur ch  ON l.id_chauffeur = ch.id " +
@@ -309,6 +328,107 @@ public class GapReadService {
                 "LEFT JOIN projet     p ON l.id_projet     = p.id " +
                 "WHERE dl.id_livraison = ? ORDER BY dl.id";
         return gapJdbcTemplate.query(sql, VOYAGE_ARTICLE_MAPPER, livraisonId);
+    }
+
+    // ─────────────── BON DE LIVRAISON : données « façon GAP » ───────────────
+
+    /**
+     * Infos BL par ligne (detail_livraison.id) façon GAP. Pour chaque ligne :
+     *  [0] ID OF = {@code "OF " + ordre_fabrication.compteur + "-" + MM(of.date) + initiale(creer_par)} (ex. OF 193-06S) ;
+     *  [1] emplacement (detail_livraison.emplacement) ;
+     *  [2] observation (detail_livraison.observation).
+     * Lecture seule, tolérante : renvoie une map vide si le schéma diffère.
+     */
+    public Map<Long, String[]> getBlInfosParLigne(Long livraisonId) {
+        Map<Long, String[]> map = new java.util.HashMap<>();
+        try {
+            java.text.SimpleDateFormat mm = new java.text.SimpleDateFormat("MM");
+            gapJdbcTemplate.query(
+                    "SELECT d.id AS detail_id, d.emplacement AS emplacement, d.observation AS observation, " +
+                            "o.compteur AS compteur, o.date AS of_date, o.creer_par AS creer_par " +
+                            "FROM detail_livraison d " +
+                            "LEFT JOIN ordre_fabrication o ON o.id = d.idof " +
+                            "WHERE d.id_livraison = ?",
+                    rs -> {
+                        long detailId = rs.getLong("detail_id");
+                        String emplacement = rs.getString("emplacement");
+                        String observation = rs.getString("observation");
+                        int compteur = rs.getInt("compteur");
+                        String ofLabel = "";
+                        if (!rs.wasNull()) { // ligne avec OF
+                            java.sql.Timestamp ofDate = rs.getTimestamp("of_date");
+                            String creerPar = rs.getString("creer_par");
+                            String initiale = (creerPar != null && !creerPar.isEmpty())
+                                    ? creerPar.substring(0, 1).toUpperCase() : "";
+                            String mois = ofDate != null ? mm.format(ofDate) : "";
+                            ofLabel = "OF " + compteur + "-" + mois + initiale;
+                        }
+                        map.put(detailId, new String[]{ofLabel,
+                                emplacement != null ? emplacement : "",
+                                observation != null ? observation : ""});
+                    }, livraisonId);
+        } catch (Exception e) {
+            System.err.println("BL : infos lignes (ID OF / emplacement / observation) indisponibles (schéma GAP ?) : " + e.getMessage());
+        }
+        return map;
+    }
+
+    /**
+     * Agents du BL pour une livraison, comme GAP :
+     *  [0] agent de livraison  = utilisateur ayant saisi le BL (login.creer_par), sinon Agent_Livraison de l'atelier ;
+     *  [1] agent contrôle qualité = Agent_Controle_Livraison de l'atelier.
+     * Tolérant : chaque valeur est "" si introuvable / schéma différent.
+     */
+    public String[] getBlAgents(Long livraisonId) {
+        String agentLivraison = "";
+        String agentControle = "";
+        Long atelierId = null;
+        String creerPar = null;
+        try {
+            Map<String, Object> liv = gapJdbcTemplate.queryForMap(
+                    "SELECT id_atelier, creer_par FROM livraisons WHERE id = ?", livraisonId);
+            Object a = liv.get("id_atelier");
+            if (a != null) atelierId = ((Number) a).longValue();
+            creerPar = (String) liv.get("creer_par");
+        } catch (Exception e) {
+            System.err.println("BL : lecture livraison (atelier/creer_par) impossible : " + e.getMessage());
+        }
+        // 1) Agent de livraison = utilisateur (login) ayant saisi le BL
+        if (creerPar != null && !creerPar.equalsIgnoreCase("system") && !creerPar.isBlank()) {
+            agentLivraison = nomComplet(
+                    "SELECT nom, prenom FROM login WHERE username = ?", creerPar);
+        }
+        // repli : Agent_Livraison de l'atelier
+        if (agentLivraison.isEmpty() && atelierId != null) {
+            agentLivraison = nomComplet(
+                    "SELECT TOP 1 nom, prenom FROM Agent_Livraison WHERE atelier_id = ?", atelierId);
+        }
+        // 2) Agent contrôle qualité = Agent_Controle_Livraison de l'atelier
+        if (atelierId != null) {
+            agentControle = nomComplet(
+                    "SELECT TOP 1 nom, prenom FROM Agent_Controle_Livraison WHERE atelier_id = ?", atelierId);
+        }
+        return new String[]{agentLivraison.toUpperCase(), agentControle};
+    }
+
+    /** Exécute une requête (nom, prenom) et renvoie "NOM PRENOM" trimé, ou "" si rien/erreur. */
+    private String nomComplet(String sql, Object param) {
+        try {
+            return gapJdbcTemplate.query(sql, rs -> {
+                if (!rs.next()) return "";
+                String nom = rs.getString("nom");
+                String prenom = rs.getString("prenom");
+                // GAP : si "nom nom" dupliqué, on garde un seul mot
+                if (nom != null) {
+                    String[] parts = nom.trim().split("\\s+");
+                    if (parts.length > 1 && parts[0].equalsIgnoreCase(parts[1])) nom = parts[0];
+                }
+                return ((nom != null ? nom : "") + " " + (prenom != null ? prenom : "")).trim();
+            }, param);
+        } catch (Exception e) {
+            System.err.println("BL : agent introuvable (" + sql + ") : " + e.getMessage());
+            return "";
+        }
     }
 
     // ─────────────── ÉCRITURE (livraisons + detail_livraison) ───────────────
@@ -404,10 +524,16 @@ public class GapReadService {
 
     /** Met à jour le statut de réception d'une ligne (scan chauffeur). */
     public void updateDetailStatut(Long detailId, String statut) {
+        if (isDetailDeLivraisonAnnulee(detailId)) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.CONFLICT, "Livraison annulée : scan impossible.");
+        }
         gapJdbcTemplate.update(
                 "UPDATE detail_livraison SET statut_reception = ?, modifier_le = ? WHERE id = ?",
                 statut, Timestamp.valueOf(LocalDateTime.now()), detailId);
         majStatutLivraison(detailId);
+        // 1er scan de chargement d'un article → démarre le chargement du voyage (et son trajet).
+        if ("SCANNE_CHARGEMENT".equals(statut)) marquerRealChargementParDetail(detailId);
     }
 
     /**
@@ -451,6 +577,62 @@ public class GapReadService {
         return entete != null && entete > 0;
     }
 
+    // ── Garde-fous « annulé » : un voyage / une livraison annulé(e) ne peut plus
+    //    être scanné(e) ni modifié(e). ───────────────────────────────────────────
+
+    /** Vrai si le voyage conteneur est annulé. */
+    public boolean isVoyageConteneurAnnule(Long voyageId) {
+        Integer n = gapJdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM voyage WHERE id = ? AND statut = 'ANNULE'",
+                Integer.class, voyageId);
+        return n != null && n > 0;
+    }
+
+    /** Vrai si la livraison est annulée, OU si son voyage conteneur est annulé. */
+    public boolean isLivraisonAnnulee(Long livraisonId) {
+        Integer n = gapJdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM livraisons l WHERE l.id = ? AND (l.statut_reception = 'ANNULE' " +
+                        "OR EXISTS (SELECT 1 FROM voyage v WHERE v.id = l.voyage_id AND v.statut = 'ANNULE'))",
+                Integer.class, livraisonId);
+        return n != null && n > 0;
+    }
+
+    /** Vrai si la ligne d'articles appartient à une livraison/voyage annulé(e). */
+    public boolean isDetailDeLivraisonAnnulee(Long detailId) {
+        Integer n = gapJdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM detail_livraison dl JOIN livraisons l ON dl.id_livraison = l.id " +
+                        "WHERE dl.id = ? AND (l.statut_reception = 'ANNULE' " +
+                        "OR EXISTS (SELECT 1 FROM voyage v WHERE v.id = l.voyage_id AND v.statut = 'ANNULE'))",
+                Integer.class, detailId);
+        return n != null && n > 0;
+    }
+
+    /** Vrai si la ligne de matière première appartient à un voyage conteneur annulé. */
+    public boolean isMatiereDeVoyageAnnule(Long matiereId) {
+        Integer n = gapJdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM voyage_matiere vm JOIN voyage v ON vm.voyage_id = v.id " +
+                        "WHERE vm.id = ? AND v.statut = 'ANNULE'",
+                Integer.class, matiereId);
+        return n != null && n > 0;
+    }
+
+    /** Vrai si l'id correspond à un voyage conteneur (table voyage), pas à une livraison. */
+    public boolean isVoyageConteneur(Long voyageId) {
+        Integer n = gapJdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM voyage WHERE id = ?", Integer.class, voyageId);
+        return n != null && n > 0;
+    }
+
+    /** Vrai si le code correspond au code de forçage du voyage conteneur lui-même. */
+    public boolean isForceCodeConteneur(Long voyageId, String code) {
+        if (code == null || code.isBlank()) return false;
+        String saisi = code.trim();
+        List<String> codes = gapJdbcTemplate.queryForList(
+                "SELECT force_code FROM voyage WHERE id = ? AND force_code IS NOT NULL",
+                String.class, voyageId);
+        return codes.stream().anyMatch(fc -> fc != null && fc.trim().equalsIgnoreCase(saisi));
+    }
+
     /** Enregistre le code de forçage d'arrivée d'un voyage. */
     public void updateForceCode(Long livraisonId, String code) {
         gapJdbcTemplate.update(
@@ -458,7 +640,41 @@ public class GapReadService {
                 code, Timestamp.valueOf(LocalDateTime.now()), livraisonId);
     }
 
-    /** Enregistre le bon de livraison d'un voyage (fichier + référence) → voyage livré. */
+    /**
+     * Applique le code de forçage au VOYAGE CONTENEUR lui-même ET à toutes ses
+     * livraisons. Le code est ainsi commun à tout le voyage et existe même pour un
+     * voyage qui n'a QUE des matières premières (aucune livraison/OF).
+     */
+    public void updateForceCodeConteneur(Long voyageId, String code) {
+        Timestamp now = Timestamp.valueOf(LocalDateTime.now());
+        gapJdbcTemplate.update(
+                "UPDATE voyage SET force_code = ?, modifier_le = ? WHERE id = ?", code, now, voyageId);
+        gapJdbcTemplate.update(
+                "UPDATE livraisons SET force_code = ?, modifier_le = ? WHERE voyage_id = ?", code, now, voyageId);
+    }
+
+    /**
+     * Vrai si {@code code} correspond au code de forçage de la livraison elle-même
+     * OU d'une autre livraison du même voyage conteneur. Le code de forçage est ainsi
+     * commun à TOUTES les lignes du voyage (et pas seulement à celle qui l'a généré /
+     * à celle affichée dans l'interface).
+     */
+    public boolean isForceCodeValidPourVoyage(Long livraisonId, String code) {
+        if (code == null || code.isBlank()) return false;
+        String saisi = code.trim();
+        List<String> codes = gapJdbcTemplate.queryForList(
+                "SELECT force_code FROM livraisons " +
+                        "WHERE force_code IS NOT NULL " +
+                        "AND (id = ? OR (voyage_id IS NOT NULL " +
+                        "     AND voyage_id = (SELECT voyage_id FROM livraisons WHERE id = ?))) " +
+                "UNION SELECT force_code FROM voyage " +
+                        "WHERE force_code IS NOT NULL " +
+                        "AND id = (SELECT voyage_id FROM livraisons WHERE id = ?)",
+                String.class, livraisonId, livraisonId, livraisonId);
+        return codes.stream().anyMatch(fc -> fc != null && fc.trim().equalsIgnoreCase(saisi));
+    }
+
+    /** Enregistre le bon de livraison d'une ligne (fichier + référence) → ligne livrée. */
     public void saveBl(Long livraisonId, String reference, String fichier, String contentType) {
         gapJdbcTemplate.update(
                 "UPDATE livraisons SET bl = ?, bl_fichier = ?, bl_content_type = ?, " +
@@ -467,6 +683,49 @@ public class GapReadService {
                         "WHERE id = ?",
                 reference, fichier, contentType,
                 Timestamp.valueOf(LocalDateTime.now()), Timestamp.valueOf(LocalDateTime.now()), livraisonId);
+        majDechargementVoyageSiComplet(livraisonId);
+    }
+
+    /**
+     * Marque le voyage comme livré (real_dechargement) UNIQUEMENT lorsque toutes ses
+     * lignes sont livrées (BL fourni) — les lignes annulées ne bloquent pas.
+     */
+    private void majDechargementVoyageSiComplet(Long livraisonId) {
+        List<Long> vids = gapJdbcTemplate.queryForList(
+                "SELECT voyage_id FROM livraisons WHERE id = ? AND voyage_id IS NOT NULL", Long.class, livraisonId);
+        if (vids.isEmpty()) return;
+        majDechargementVoyageConteneur(vids.get(0));
+    }
+
+    /**
+     * Marque le voyage conteneur livré (real_dechargement) UNIQUEMENT quand TOUT son
+     * contenu est livré : les livraisons (BL fourni → statut LIVRE) ET toutes les lignes
+     * voyage_matiere (matières premières ET stock) au statut LIVRE. Les lignes annulées
+     * ne bloquent pas. Sans contenu, aucun changement.
+     */
+    public void majDechargementVoyageConteneur(Long voyageId) {
+        if (voyageId == null) return;
+        Integer total = gapJdbcTemplate.queryForObject(
+                "SELECT (SELECT COUNT(*) FROM livraisons WHERE voyage_id = ?) " +
+                        "+ (SELECT COUNT(*) FROM voyage_matiere WHERE voyage_id = ?)",
+                Integer.class, voyageId, voyageId);
+        if (total == null || total == 0) return;
+        Integer livRestantes = gapJdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM livraisons WHERE voyage_id = ? " +
+                        "AND (statut_reception IS NULL OR statut_reception NOT IN ('LIVRE','ANNULE'))",
+                Integer.class, voyageId);
+        Integer mpRestantes = gapJdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM voyage_matiere WHERE voyage_id = ? " +
+                        "AND (statut IS NULL OR statut <> 'LIVRE')",
+                Integer.class, voyageId);
+        boolean tout = (livRestantes == null || livRestantes == 0)
+                && (mpRestantes == null || mpRestantes == 0);
+        if (tout) {
+            Timestamp now = Timestamp.valueOf(LocalDateTime.now());
+            gapJdbcTemplate.update(
+                    "UPDATE voyage SET real_dechargement = COALESCE(real_dechargement, ?), modifier_le = ? WHERE id = ?",
+                    now, now, voyageId);
+        }
     }
 
     /** Ajoute un fichier BL à la table livraison_bl_files (plusieurs BL par livraison). */
@@ -488,6 +747,7 @@ public class GapReadService {
                 "UPDATE livraisons SET statut_reception = 'LIVRE', " +
                         "arrivee_dechargement = COALESCE(arrivee_dechargement, ?), modifier_le = ? WHERE id = ?",
                 Timestamp.valueOf(LocalDateTime.now()), Timestamp.valueOf(LocalDateTime.now()), livraisonId);
+        majDechargementVoyageSiComplet(livraisonId);
         Number key = kh.getKey();
         return key != null ? key.longValue() : null;
     }
@@ -537,6 +797,36 @@ public class GapReadService {
                 realChargement != null ? Timestamp.valueOf(realChargement) : null,
                 realDechargement != null ? Timestamp.valueOf(realDechargement) : null,
                 Timestamp.valueOf(LocalDateTime.now()), voyageId);
+    }
+
+    // ── Heure réelle de chargement du voyage conteneur ───────────────────────
+    // Posée la 1ʳᵉ fois qu'une de ses lignes est scannée au chargement (article, MP ou
+    // voyage entier). Sert au statut « En route » du chauffeur ET au démarrage du suivi
+    // de trajet du voyage (le trajet ne commence qu'au chargement, pas à la connexion).
+
+    /** Marque l'heure réelle de chargement du conteneur (1ʳᵉ fois) à partir d'une de ses livraisons. */
+    private void marquerRealChargementParLivraison(Long livraisonId) {
+        gapJdbcTemplate.update(
+                "UPDATE voyage SET real_chargement = COALESCE(real_chargement, ?) " +
+                        "WHERE id = (SELECT voyage_id FROM livraisons WHERE id = ?)",
+                Timestamp.valueOf(LocalDateTime.now()), livraisonId);
+    }
+
+    /** Idem à partir d'une ligne detail_livraison. */
+    private void marquerRealChargementParDetail(Long detailId) {
+        gapJdbcTemplate.update(
+                "UPDATE voyage SET real_chargement = COALESCE(real_chargement, ?) " +
+                        "WHERE id IN (SELECT l.voyage_id FROM livraisons l " +
+                        "JOIN detail_livraison dl ON dl.id_livraison = l.id WHERE dl.id = ?)",
+                Timestamp.valueOf(LocalDateTime.now()), detailId);
+    }
+
+    /** Idem à partir d'une ligne de matière première (voyage_matiere). */
+    private void marquerRealChargementParMatiere(Long matiereId) {
+        gapJdbcTemplate.update(
+                "UPDATE voyage SET real_chargement = COALESCE(real_chargement, ?) " +
+                        "WHERE id = (SELECT voyage_id FROM voyage_matiere WHERE id = ?)",
+                Timestamp.valueOf(LocalDateTime.now()), matiereId);
     }
 
     /** Enregistre l'heure d'arrivée effective au déchargement d'un voyage. */
@@ -674,6 +964,38 @@ public class GapReadService {
                 Timestamp.valueOf(LocalDateTime.now()), voyageId);
     }
 
+    /**
+     * Annule un voyage conteneur. Lance une IllegalStateException si le voyage est
+     * déjà archivé ou annulé (le contrôleur convertit en 409 CONFLICT).
+     */
+    public void annulerVoyageConteneur(Long voyageId) {
+        List<Map<String, Object>> rows = gapJdbcTemplate.queryForList(
+                "SELECT statut FROM voyage WHERE id = ?", voyageId);
+        if (rows.isEmpty()) {
+            throw new IllegalArgumentException("Voyage conteneur introuvable : " + voyageId);
+        }
+        String statut = (String) rows.get(0).get("statut");
+        if ("ARCHIVE".equals(statut) || "ANNULE".equals(statut)) {
+            throw new IllegalStateException("Le voyage ne peut pas être annulé (statut actuel : " + statut + ").");
+        }
+        gapJdbcTemplate.update(
+                "UPDATE voyage SET statut = 'ANNULE', modifier_le = ? WHERE id = ?",
+                Timestamp.valueOf(LocalDateTime.now()), voyageId);
+    }
+
+    /**
+     * Annule une livraison GAP (detail_livraison → statut ANNULE sur l'en-tête).
+     * Lance une IllegalStateException si la livraison est déjà scannée.
+     */
+    public void annulerLivraison(Long livraisonId) {
+        if (isLivraisonScannee(livraisonId)) {
+            throw new IllegalStateException("Livraison déjà scannée : annulation impossible.");
+        }
+        gapJdbcTemplate.update(
+                "UPDATE livraisons SET statut_reception = 'ANNULE', modifier_le = ? WHERE id = ?",
+                Timestamp.valueOf(LocalDateTime.now()), livraisonId);
+    }
+
     /** Archive automatiquement les voyages déchargés depuis plus de 24 h. Renvoie le nb archivés. */
     public int archiverVoyagesLivresAuto() {
         return gapJdbcTemplate.update(
@@ -716,6 +1038,9 @@ public class GapReadService {
      * (le chauffeur se gère au niveau du voyage, pas de la livraison GAP).
      */
     public void setLivraisonsDuVoyage(Long voyageId, List<Long> livraisonIds, Long chauffeurId) {
+        // Livraisons déjà rattachées à CE voyage avant modification : on préserve leur scan.
+        List<Long> dejaRattachees = gapJdbcTemplate.queryForList(
+                "SELECT id FROM livraisons WHERE voyage_id = ?", Long.class, voyageId);
         gapJdbcTemplate.update("UPDATE livraisons SET voyage_id = NULL WHERE voyage_id = ?", voyageId);
         if (livraisonIds != null) {
             Timestamp now = Timestamp.valueOf(LocalDateTime.now());
@@ -728,8 +1053,22 @@ public class GapReadService {
                     gapJdbcTemplate.update(
                             "UPDATE livraisons SET voyage_id = ?, modifier_le = ? WHERE id = ?", voyageId, now, id);
                 }
+                // Une livraison nouvellement rattachée a pu être scannée dans un AUTRE voyage :
+                // on repart d'un statut de scan vierge pour ce voyage (sans toucher au contenu).
+                if (!dejaRattachees.contains(id)) {
+                    reinitialiserScanLivraison(id, now);
+                }
             }
         }
+    }
+
+    /** Remet à zéro le statut de scan d'une livraison (en-tête + lignes detail_livraison). */
+    private void reinitialiserScanLivraison(Long livraisonId, Timestamp now) {
+        gapJdbcTemplate.update(
+                "UPDATE livraisons SET statut_reception = NULL, modifier_le = ? WHERE id = ?", now, livraisonId);
+        gapJdbcTemplate.update(
+                "UPDATE detail_livraison SET statut_reception = NULL, modifier_le = ? WHERE id_livraison = ?",
+                now, livraisonId);
     }
 
     /** Détache une livraison de son voyage (voyage_id = NULL). La livraison n'est pas supprimée. */
@@ -750,6 +1089,7 @@ public class GapReadService {
                 "l.id_atelier, ate.designation AS atelier_designation, " +
                 "l.statut_reception, l.imprime, l.force_code, l.bl, l.bl_fichier, l.bl_content_type, " +
                 "p.latitude AS dest_lat, p.longitude AS dest_lng, p.rayon_metres AS dest_rayon, l.voyage_id, " +
+                "l.arrivee_dechargement, " +
                 "(SELECT COUNT(*) FROM detail_livraison dl WHERE dl.id_livraison = l.id) AS nb_articles " +
                 "FROM livraisons l " +
                 "LEFT JOIN chauffeur ch  ON l.id_chauffeur = ch.id " +
@@ -760,6 +1100,31 @@ public class GapReadService {
         return gapJdbcTemplate.query(sql, VOYAGE_MAPPER, voyageId);
     }
 
+    /**
+     * Livraisons libres : non encore rattachées à un voyage (voyage_id IS NULL)
+     * et dont le statut n'est pas LIVRE, CHARGE ou ARCHIVE.
+     * Utilisé lors de la création d'un nouveau voyage (id = 0).
+     */
+    public List<GapVoyageDTO> getLivraisonsLibres() {
+        String sql = "SELECT l.id, l.date_livraison, l.date_chargement, l.date_dechargement, l.id_chauffeur, " +
+                "ch.nom AS ch_nom, ch.prenom AS ch_prenom, " +
+                "l.id_projet, p.code AS projet_code, p.designation AS projet_designation, " +
+                "l.id_atelier, ate.designation AS atelier_designation, " +
+                "l.statut_reception, l.imprime, l.force_code, l.bl, l.bl_fichier, l.bl_content_type, " +
+                "p.latitude AS dest_lat, p.longitude AS dest_lng, p.rayon_metres AS dest_rayon, l.voyage_id, " +
+                "l.arrivee_dechargement, " +
+                "(SELECT COUNT(*) FROM detail_livraison dl WHERE dl.id_livraison = l.id) AS nb_articles " +
+                "FROM livraisons l " +
+                "LEFT JOIN chauffeur ch  ON l.id_chauffeur = ch.id " +
+                "LEFT JOIN projet    p   ON l.id_projet    = p.id " +
+                "LEFT JOIN ateliers  ate ON l.id_atelier   = ate.id " +
+                "WHERE l.voyage_id IS NULL " +
+                "AND (l.statut_reception IS NULL " +
+                "     OR l.statut_reception NOT IN ('LIVRE', 'CHARGE', 'ARCHIVE')) " +
+                "ORDER BY l.id ASC";
+        return gapJdbcTemplate.query(sql, VOYAGE_MAPPER);
+    }
+
     /** Livraisons rattachées à un voyage conteneur. */
     public List<GapVoyageDTO> getLivraisonsDuVoyage(Long voyageId) {
         String sql = "SELECT l.id, l.date_livraison, l.date_chargement, l.date_dechargement, l.id_chauffeur, " +
@@ -768,6 +1133,7 @@ public class GapReadService {
                 "l.id_atelier, ate.designation AS atelier_designation, " +
                 "l.statut_reception, l.imprime, l.force_code, l.bl, l.bl_fichier, l.bl_content_type, " +
                 "p.latitude AS dest_lat, p.longitude AS dest_lng, p.rayon_metres AS dest_rayon, l.voyage_id, " +
+                "l.arrivee_dechargement, " +
                 "(SELECT COUNT(*) FROM detail_livraison dl WHERE dl.id_livraison = l.id) AS nb_articles " +
                 "FROM livraisons l " +
                 "LEFT JOIN chauffeur ch  ON l.id_chauffeur = ch.id " +
@@ -783,26 +1149,40 @@ public class GapReadService {
         if (matieres == null || matieres.isEmpty()) return;
         String sql = "INSERT INTO voyage_matiere " +
                 "(voyage_id, projet, cdno, ref, designation, of_no, quantite, unite, " +
-                "piece_fournisseur, qte_commande, statut, " +
+                "piece_fournisseur, qte_commande, statut, source, depot, " +
                 "date_livraison, date_chargement, date_dechargement, creer_par, creer_le) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'EN_ATTENTE', ?, ?, ?, ?, ?)";
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'EN_ATTENTE', ?, ?, ?, ?, ?, ?, ?)";
         Timestamp now = Timestamp.valueOf(LocalDateTime.now());
         for (VoyageMatiereLigneDTO m : matieres) {
             double q = (m.getQuantite() != null && m.getQuantite() > 0) ? m.getQuantite() : 1.0;
             Timestamp dl = m.getDateLivraison() != null ? Timestamp.valueOf(m.getDateLivraison().atStartOfDay()) : null;
             Timestamp dc = m.getDateChargement() != null ? Timestamp.valueOf(m.getDateChargement()) : null;
             Timestamp dd = m.getDateDechargement() != null ? Timestamp.valueOf(m.getDateDechargement()) : null;
+            // Origine de la ligne : STOCK (vue Article_en_stock, lecture seule) ou MATIERE (Divalto) par défaut.
+            String source = (m.getSource() != null && !m.getSource().isBlank()) ? m.getSource().trim() : "MATIERE";
             gapJdbcTemplate.update(sql, voyageId, m.getProjet(), m.getCdno(), m.getRef(),
                     m.getDesignation(), m.getOf(), q, m.getUnite(),
-                    m.getPieceFournisseur(), m.getQteCommande(), dl, dc, dd, user, now);
+                    m.getPieceFournisseur(), m.getQteCommande(), source, m.getDepot(), dl, dc, dd, user, now);
         }
     }
 
     /** Clôture / rouvre une ligne de matière première (statut stocké localement, sans impact ERP). */
     public void updateVoyageMatiereStatut(Long matiereId, String statut) {
+        if (isMatiereDeVoyageAnnule(matiereId)) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.CONFLICT, "Voyage annulé : opération impossible.");
+        }
         gapJdbcTemplate.update(
                 "UPDATE voyage_matiere SET statut = ?, modifier_le = ? WHERE id = ?",
                 statut, Timestamp.valueOf(LocalDateTime.now()), matiereId);
+        // 1er scan de chargement d'une MP → démarre le chargement du voyage (et son trajet).
+        if ("CHARGE".equals(statut)) marquerRealChargementParMatiere(matiereId);
+        // Livraison d'une MP/stock → si tout le voyage est livré, marque le déchargement réel.
+        if ("LIVRE".equals(statut)) {
+            List<Long> vids = gapJdbcTemplate.queryForList(
+                    "SELECT voyage_id FROM voyage_matiere WHERE id = ?", Long.class, matiereId);
+            if (!vids.isEmpty()) majDechargementVoyageConteneur(vids.get(0));
+        }
     }
 
     /** Applique les dates prévues (chargement/déchargement) sur les livraisons rattachées. */
@@ -825,7 +1205,7 @@ public class GapReadService {
     public List<MatierePremiereDTO> getVoyageMatieres(Long voyageId) {
         return gapJdbcTemplate.query(
                 "SELECT id, projet, cdno, ref, designation, of_no, quantite, unite, " +
-                        "piece_fournisseur, qte_commande, statut, date_chargement, date_dechargement " +
+                        "piece_fournisseur, qte_commande, statut, source, depot, date_chargement, date_dechargement " +
                         "FROM voyage_matiere WHERE voyage_id = ? ORDER BY id",
                 (rs, i) -> {
                     MatierePremiereDTO d = new MatierePremiereDTO();
@@ -840,6 +1220,8 @@ public class GapReadService {
                     d.setPieceFournisseur(rs.getString("piece_fournisseur"));
                     double qc = rs.getDouble("qte_commande"); d.setQteCommande(rs.wasNull() ? null : qc);
                     d.setStatut(rs.getString("statut"));
+                    d.setSource(rs.getString("source"));
+                    d.setDepot(rs.getString("depot"));
                     Timestamp dc = rs.getTimestamp("date_chargement");
                     d.setDateChargement(dc != null ? dc.toLocalDateTime() : null);
                     Timestamp dd = rs.getTimestamp("date_dechargement");
@@ -913,33 +1295,74 @@ public class GapReadService {
      * Scan groupé : marque toutes les lignes (detail_livraison) des livraisons d'un voyage
      * selon la phase. Renvoie le nombre de lignes mises à jour.
      */
-    /** Scanne toutes les lignes d'UNE livraison (QR par livraison). Renvoie le nb de lignes. */
+    /**
+     * Scanne toute la LIGNE : tous les OF du MÊME chantier dans le MÊME voyage que la
+     * livraison scannée (1 ligne = 1 chantier). Renvoie le nb de lignes detail mises à jour.
+     */
     public int scanAllDetailsForLivraison(Long livraisonId, String phase) {
+        if (isLivraisonAnnulee(livraisonId)) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.CONFLICT, "Livraison annulée : scan impossible.");
+        }
         String statut = "CHARGEMENT".equalsIgnoreCase(phase) ? "SCANNE_CHARGEMENT" : "SCANNE_LIVRAISON";
+        boolean chargement = "CHARGEMENT".equalsIgnoreCase(phase);
         Timestamp now = Timestamp.valueOf(LocalDateTime.now());
-        int n = gapJdbcTemplate.update(
-                "UPDATE detail_livraison SET statut_reception = ?, modifier_le = ? WHERE id_livraison = ?",
-                statut, now, livraisonId);
-        if ("CHARGEMENT".equalsIgnoreCase(phase)) {
+
+        // Tous les OF du même chantier (id_projet) dans le même voyage que la livraison scannée.
+        List<Long> ids = gapJdbcTemplate.queryForList(
+                "SELECT l2.id FROM livraisons l1 JOIN livraisons l2 " +
+                        "ON l2.voyage_id = l1.voyage_id AND l2.id_projet = l1.id_projet " +
+                        "WHERE l1.id = ? AND l1.voyage_id IS NOT NULL", Long.class, livraisonId);
+        if (ids.isEmpty()) ids = java.util.Collections.singletonList(livraisonId);
+
+        int n = 0;
+        for (Long id : ids) {
+            n += gapJdbcTemplate.update(
+                    "UPDATE detail_livraison SET statut_reception = ?, modifier_le = ? WHERE id_livraison = ?",
+                    statut, now, id);
+            // En livraison, on NE marque PAS 'LIVRE' au scan (LIVRE = BL fourni) : en-tête au moins 'CHARGE'.
             gapJdbcTemplate.update(
                     "UPDATE livraisons SET statut_reception = 'CHARGE', modifier_le = ? " +
                             "WHERE id = ? AND (statut_reception IS NULL OR statut_reception <> 'LIVRE')",
-                    now, livraisonId);
-        } else {
-            gapJdbcTemplate.update(
-                    "UPDATE livraisons SET statut_reception = 'LIVRE', modifier_le = ? WHERE id = ?",
-                    now, livraisonId);
+                    now, id);
         }
+
+        // Matières premières du chantier de cette ligne : même phase que les articles.
+        gapJdbcTemplate.update(
+                "UPDATE vm SET vm.statut = ?, vm.modifier_le = ? " +
+                        "FROM voyage_matiere vm " +
+                        "JOIN livraisons l ON vm.voyage_id = l.voyage_id " +
+                        "LEFT JOIN projet p ON l.id_projet = p.id " +
+                        "WHERE l.id = ? AND vm.projet = p.code" +
+                        (chargement ? " AND (vm.statut IS NULL OR vm.statut <> 'LIVRE')" : ""),
+                chargement ? "CHARGE" : "LIVRE", now, livraisonId);
+        // 1er scan de chargement de la ligne → démarre le chargement du voyage (et son trajet).
+        if (chargement) marquerRealChargementParLivraison(livraisonId);
         return n;
     }
 
     public int scanAllDetailsForVoyage(Long voyageId, String phase) {
+        if (isVoyageConteneurAnnule(voyageId)) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.CONFLICT, "Voyage annulé : scan impossible.");
+        }
         String statut = "CHARGEMENT".equalsIgnoreCase(phase) ? "SCANNE_CHARGEMENT" : "SCANNE_LIVRAISON";
         Timestamp now = Timestamp.valueOf(LocalDateTime.now());
         int n = gapJdbcTemplate.update(
                 "UPDATE dl SET dl.statut_reception = ?, dl.modifier_le = ? " +
                         "FROM detail_livraison dl JOIN livraisons l ON dl.id_livraison = l.id " +
                         "WHERE l.voyage_id = ?", statut, now, voyageId);
+        // Matières premières du voyage : même phase que les articles (chargé puis livré).
+        if ("CHARGEMENT".equalsIgnoreCase(phase)) {
+            gapJdbcTemplate.update(
+                    "UPDATE voyage_matiere SET statut = 'CHARGE', modifier_le = ? " +
+                            "WHERE voyage_id = ? AND (statut IS NULL OR statut <> 'LIVRE')",
+                    now, voyageId);
+        } else {
+            gapJdbcTemplate.update(
+                    "UPDATE voyage_matiere SET statut = 'LIVRE', modifier_le = ? WHERE voyage_id = ?",
+                    now, voyageId);
+        }
         // Passe les livraisons du voyage à 'CHARGE' au chargement (sauf déjà 'LIVRE')
         if ("CHARGEMENT".equalsIgnoreCase(phase)) {
             gapJdbcTemplate.update(
@@ -950,13 +1373,16 @@ public class GapReadService {
             gapJdbcTemplate.update(
                     "UPDATE voyage SET real_chargement = COALESCE(real_chargement, ?) WHERE id = ?", now, voyageId);
         } else {
-            // Clôturer toutes les matières premières du voyage (livraison = tout validé)
+            // En livraison, on NE marque PAS le voyage livré au scan : il le devient quand
+            // toutes ses lignes ont leur BL (voir majDechargementVoyageSiComplet). On garde
+            // les en-têtes au moins à 'CHARGE'.
             gapJdbcTemplate.update(
-                    "UPDATE voyage_matiere SET statut = 'LIVRE', modifier_le = ? WHERE voyage_id = ?",
+                    "UPDATE livraisons SET statut_reception = 'CHARGE', modifier_le = ? " +
+                            "WHERE voyage_id = ? AND (statut_reception IS NULL OR statut_reception <> 'LIVRE')",
                     now, voyageId);
-            // Heure réelle de déchargement (première fois seulement)
-            gapJdbcTemplate.update(
-                    "UPDATE voyage SET real_dechargement = COALESCE(real_dechargement, ?) WHERE id = ?", now, voyageId);
+            // Voyage sans livraison à BL (matières/stock seuls) → le scan livraison le termine :
+            // si toutes ses lignes voyage_matiere sont LIVRE et aucune livraison en attente.
+            majDechargementVoyageConteneur(voyageId);
         }
         return n;
     }
