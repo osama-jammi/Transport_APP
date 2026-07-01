@@ -88,7 +88,9 @@ public class SchemaInitializer {
                 "table feature_flag");
         // Le suivi GPS est fusionné dans « suivi-trajets » : plus de flag « tracking » séparé.
         seedFeature("suivi-trajets", "Suivi des trajets (carte + GPS chauffeurs)");
-        seedFeature("cloture-mp", "Clôture des matières premières");
+        seedFeature("of-voyage", "Activé ordre de fabrication");
+        seedFeature("cloture-mp", "Activé matière première");
+        seedFeature("stock-voyage", "Activé stock");
         seedFeature("historique-voyages", "Historique des voyages");
         // Purge de l'ancienne fonctionnalité « tracking » (fusionnée dans « suivi-trajets »).
         exec(primaryJdbcTemplate, "DELETE FROM feature_flag WHERE cle = 'tracking'", "feature_flag:tracking (purge)");

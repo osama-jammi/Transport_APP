@@ -217,6 +217,7 @@ interface VoyageLigne {
               <!-- Une ligne peut contenir des articles ET des matières premières -->
               <div *ngIf="lg.chantierId">
                 <!-- Ordre de fabrication : livraisons de ce chantier (repliable, fermé par défaut) -->
+                <ng-container *ngIf="ofActif">
                 <h5 class="ligne-section clic" (click)="lg.ofOuvert = !lg.ofOuvert">
                   <i class="fa-solid" [ngClass]="lg.ofOuvert ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
                   <i class="fa-solid fa-boxes-stacked"></i> Ordre de fabrication
@@ -229,8 +230,10 @@ interface VoyageLigne {
                       <span class="muted">{{ l.nbArticles }} article(s) · {{ l.statutReception || '—' }}</span></div>
                   </label>
                 </div>
+                </ng-container>
 
                 <!-- Matières premières : commande de ce chantier -> lignes (repliable, fermé par défaut) -->
+                <ng-container *ngIf="mpActif">
                 <h5 class="ligne-section clic" (click)="lg.mpOuvert = !lg.mpOuvert">
                   <i class="fa-solid" [ngClass]="lg.mpOuvert ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
                   <i class="fa-solid fa-cubes"></i> Matières premières
@@ -264,8 +267,10 @@ interface VoyageLigne {
                     </div>
                   </div>
                 </div>
+                </ng-container>
 
-                <!-- Stock : dépôt -> articles disponibles (lecture seule, repliable) -->
+                <!-- Stock : dépôt -> articles disponibles (repliable) -->
+                <ng-container *ngIf="stockActif">
                 <h5 class="ligne-section clic" (click)="lg.stockOuvert = !lg.stockOuvert">
                   <i class="fa-solid" [ngClass]="lg.stockOuvert ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
                   <i class="fa-solid fa-warehouse"></i> Stock
@@ -298,6 +303,7 @@ interface VoyageLigne {
                     <button type="button" class="btn btn-outline" [disabled]="(lg.stockPage || 0) >= stockNbPages(lg) - 1" (click)="stockPageSuivante(lg)">›</button>
                   </div>
                 </div>
+                </ng-container>
               </div>
               </ng-container>
             </div>
@@ -339,6 +345,7 @@ interface VoyageLigne {
 
           <div *ngIf="ligneDraft.chantierId">
             <!-- ═══ Ordre de fabrication : clic sur l'entête → table + ng-select ═══ -->
+            <ng-container *ngIf="ofActif">
             <h5 class="ligne-section clic" (click)="ligneDraft.ofOuvert = !ligneDraft.ofOuvert">
               <i class="fa-solid" [ngClass]="ligneDraft.ofOuvert ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
               <i class="fa-solid fa-boxes-stacked"></i> Ordre de fabrication
@@ -371,9 +378,10 @@ interface VoyageLigne {
                 </table>
               </div>
             </div>
+            </ng-container>
 
             <!-- MP sauvegardées d'autres commandes -->
-            <div *ngIf="ligneDraft.mpSauvegardes?.length" style="margin:6px 0;padding:8px;background:#f0faf0;border-radius:8px;border:1px solid #c3e6c3">
+            <div *ngIf="mpActif && ligneDraft.mpSauvegardes?.length" style="margin:6px 0;padding:8px;background:#f0faf0;border-radius:8px;border:1px solid #c3e6c3">
               <span class="muted" style="font-size:11px"><i class="fa-solid fa-circle-check" style="color:#21ba45;margin-right:4px"></i>
                 {{ ligneDraft.mpSauvegardes.length }} matière(s) conservée(s) depuis d'autres commandes :</span>
               <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">
@@ -385,6 +393,7 @@ interface VoyageLigne {
               </div>
             </div>
             <!-- ═══ Matières premières : clic sur l'entête → commande (ng-select) + table ═══ -->
+            <ng-container *ngIf="mpActif">
             <h5 class="ligne-section clic" (click)="ligneDraft.mpOuvert = !ligneDraft.mpOuvert">
               <i class="fa-solid" [ngClass]="ligneDraft.mpOuvert ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
               <i class="fa-solid fa-cubes"></i> Matières premières
@@ -421,8 +430,10 @@ interface VoyageLigne {
               <div *ngIf="ligneDraft.commandeId && !ligneDraft.loadingMp && lignesMpFiltrees(ligneDraft).length===0"
                    class="muted" style="font-size:12px;padding:8px">Aucune ligne.</div>
             </div>
+            </ng-container>
 
-            <!-- ═══ Stock : clic sur l'entête → dépôt + articles disponibles (lecture seule) ═══ -->
+            <!-- ═══ Stock : clic sur l'entête → dépôt + articles disponibles ═══ -->
+            <ng-container *ngIf="stockActif">
             <h5 class="ligne-section clic" (click)="ligneDraft.stockOuvert = !ligneDraft.stockOuvert">
               <i class="fa-solid" [ngClass]="ligneDraft.stockOuvert ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
               <i class="fa-solid fa-warehouse"></i> Stock
@@ -466,6 +477,7 @@ interface VoyageLigne {
               <div *ngIf="ligneDraft.depotStock && !ligneDraft.loadingStock && (ligneDraft.articlesStockFiltered?.length || 0)===0"
                    class="muted" style="font-size:12px;padding:8px">Aucun article en stock pour ce dépôt.</div>
             </div>
+            </ng-container>
           </div>
         </div>
         <div class="m-foot">
@@ -898,6 +910,10 @@ export class VoyagesConteneursComponent implements OnInit {
 
   // Nouvelle saisie (interrupteur Administration « voyage-nouvelle-saisie »)
   nouvelleSaisie = true;
+  // Interrupteurs Administration : sections de contenu activables/désactivables à la saisie.
+  ofActif = true;
+  mpActif = true;
+  stockActif = true;
   ligneModal = false;
   ligneDraft: VoyageLigne | null = null;
   ligneEditIndex: number | null = null;   // null = ajout ; sinon index de la ligne éditée
@@ -969,10 +985,16 @@ export class VoyagesConteneursComponent implements OnInit {
 
   ngOnInit(): void {
     this.charger();
-    // Interrupteur Administration : nouveau parcours de saisie ou ancien.
+    // Interrupteurs Administration : parcours de saisie + sections de contenu activables.
     this.adminSvc.getFeatures().subscribe({
-      next: fs => { const f = fs.find(x => x.cle === 'voyage-nouvelle-saisie'); this.nouvelleSaisie = f ? f.actif : true; },
-      error: () => { this.nouvelleSaisie = true; }
+      next: fs => {
+        const actif = (cle: string) => { const f = fs.find(x => x.cle === cle); return f ? f.actif : true; };
+        this.nouvelleSaisie = actif('voyage-nouvelle-saisie');
+        this.ofActif = actif('of-voyage');
+        this.mpActif = actif('cloture-mp');
+        this.stockActif = actif('stock-voyage');
+      },
+      error: () => { this.nouvelleSaisie = true; this.ofActif = true; this.mpActif = true; this.stockActif = true; }
     });
     // Dépôts de stock (RB1..RB5) — silencieux si le stock DivNet est injoignable.
     this.stockSvc.getDepots().subscribe({ next: d => this.depotsStock = d, error: () => { this.depotsStock = []; } });
