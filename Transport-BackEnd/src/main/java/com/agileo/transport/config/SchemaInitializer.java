@@ -255,6 +255,13 @@ public class SchemaInitializer {
                 "ALTER TABLE voyage_matiere ADD statut VARCHAR(20) NULL", "voyage_matiere.statut");
         exec(gapJdbcTemplate, "IF COL_LENGTH('voyage_matiere','modifier_le') IS NULL " +
                 "ALTER TABLE voyage_matiere ADD modifier_le datetime2 NULL", "voyage_matiere.modifier_le");
+        // Origine de la ligne : MATIERE (Divalto, défaut) ou STOCK (vue Article_en_stock DivNet, lecture seule).
+        exec(gapJdbcTemplate, "IF COL_LENGTH('voyage_matiere','source') IS NULL " +
+                "ALTER TABLE voyage_matiere ADD source VARCHAR(20) NULL CONSTRAINT DF_voyage_matiere_source DEFAULT 'MATIERE'",
+                "voyage_matiere.source");
+        // Dépôt d'origine (code DEPO, ex. RB1) pour les lignes issues du stock.
+        exec(gapJdbcTemplate, "IF COL_LENGTH('voyage_matiere','depot') IS NULL " +
+                "ALTER TABLE voyage_matiere ADD depot VARCHAR(20) NULL", "voyage_matiere.depot");
 
         // Lignes de matières premières (issues de Divalto) rattachées à une livraison.
         // Table dédiée car les MP n'ont pas d'id_article GAP (detail_livraison est article-only).
