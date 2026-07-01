@@ -20,4 +20,8 @@ public class VoyageMatiereLigneDTO {
     private LocalDate dateLivraison;
     private LocalDateTime dateChargement;
     private LocalDateTime dateDechargement;
+    /** Origine de la ligne : MATIERE (Divalto, défaut) ou STOCK (vue Article_en_stock DivNet, lecture seule). */
+    private String source;
+    /** Dépôt d'origine (code DEPO, ex. RB1) — renseigné pour les lignes de stock. */
+    private String depot;
 }

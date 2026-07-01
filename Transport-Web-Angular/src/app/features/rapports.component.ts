@@ -43,9 +43,6 @@ interface RapportCard { type: RapportType; titre: string; desc: string; icon: st
            style="color:var(--gray-light)"></i>
       </div>
     </div>
-
-    <p class="muted"><i class="fa-solid fa-circle-info"></i>
-      Les rapports sont générés au format Excel (.xlsx) sur la période sélectionnée.</p>
   `
 })
 export class RapportsComponent {

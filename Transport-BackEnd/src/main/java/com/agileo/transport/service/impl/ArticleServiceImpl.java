@@ -185,7 +185,8 @@ public class ArticleServiceImpl implements ArticleService {
         if (qrCode != null && qrCode.startsWith("LIVRAISON:")) {
             return scanLivraisonGap(qrCode, phase);
         }
-        // QR d'une matière première ("DETAIL_MP:{id}") → clôture la ligne de matière
+        // QR d'une matière première ("DETAIL_MP:{id}") → scan en 2 phases comme les articles
+        // (1er scan au chargement = CHARGE, 2e scan à la livraison = LIVRE).
         if (qrCode != null && qrCode.startsWith("DETAIL_MP:")) {
             Long mpId;
             try {
@@ -193,11 +194,13 @@ public class ArticleServiceImpl implements ArticleService {
             } catch (NumberFormatException e) {
                 throw new EntityNotFoundException("QR matière invalide : " + qrCode);
             }
-            gapReadService.updateVoyageMatiereStatut(mpId, "LIVRE");
+            boolean chargementMp = "CHARGEMENT".equalsIgnoreCase(phase);
+            gapReadService.updateVoyageMatiereStatut(mpId, chargementMp ? "CHARGE" : "LIVRE");
             ArticleResponseDTO dto = new ArticleResponseDTO();
             dto.setId(mpId);
-            dto.setNom("Matière première #" + mpId + " — livrée");
-            dto.setStatutScan(Article.StatutScan.SCANNE_LIVRAISON);
+            dto.setNom("Matière première #" + mpId + (chargementMp ? " — chargée" : " — livrée"));
+            dto.setStatutScan(chargementMp
+                    ? Article.StatutScan.SCANNE_CHARGEMENT : Article.StatutScan.SCANNE_LIVRAISON);
             return dto;
         }
         // Nouveau format : QR d'une ligne de livraison GAP ("DETAIL:{id}")

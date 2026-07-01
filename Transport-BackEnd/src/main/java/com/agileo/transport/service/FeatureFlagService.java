@@ -26,7 +26,9 @@ public class FeatureFlagService {
     private static final Map<String, String> DEFAUTS = new LinkedHashMap<>() {{
         // Le suivi GPS est désormais inclus dans « suivi-trajets » (plus de flag « tracking » séparé).
         put("suivi-trajets", "Suivi des trajets (carte + GPS chauffeurs)");
+        put("of-voyage", "Activé ordre de fabrication");
         put("cloture-mp", "Activé matière première");
+        put("stock-voyage", "Activé stock");
         put("historique-voyages", "Historique des voyages");
         put("voyage-nouvelle-saisie", "Nouvelle saisie des voyages (Ordre de fabrication repliable, ng-select)");
     }};

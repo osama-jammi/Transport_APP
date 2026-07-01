@@ -3,7 +3,7 @@
    ============================================================ */
 
 export type EtatChargement = 'EN_ATTENTE' | 'EN_COURS' | 'TERMINE' | 'INCIDENT';
-export type StatutVoyage   = 'EN_COURS' | 'ARCHIVE' | 'SUPPRIME';
+export type StatutVoyage   = 'EN_COURS' | 'ARCHIVE' | 'SUPPRIME' | 'ANNULE';
 export type StatutScan     = 'NON_SCANNE' | 'SCANNE_CHARGEMENT' | 'SCANNE_LIVRAISON';
 export type EtatCamion     = 'LIBRE' | 'OCCUPE';
 
@@ -250,6 +250,10 @@ export interface VoyageConteneurRequest {
     of?: string; quantite?: number; unite?: string;
     pieceFournisseur?: string; qteCommande?: number;
     dateLivraison?: string; dateChargement?: string; dateDechargement?: string;
+    /** MATIERE (Divalto) ou STOCK (vue Article_en_stock DivNet, lecture seule). */
+    source?: string;
+    /** Dépôt d'origine (code DEPO, ex. RB1) pour les lignes de stock. */
+    depot?: string;
   }[];
   livraisonDates?: { id: number; chargement?: string; dechargement?: string }[];
   localNom?: string;
@@ -327,8 +331,19 @@ export interface MatierePremiere {
   pieceFournisseur?: string;
   qteCommande?: number;
   statut?: string;
+  source?: string;
+  depot?: string;
   dateChargement?: string;
   dateDechargement?: string;
+}
+
+/** Article disponible en stock (vue Article_en_stock DivNet, lecture seule). */
+export interface ArticleStock {
+  reference?: string;
+  designation?: string;
+  unite?: string;
+  stockDisponible?: number;
+  depot?: string;
 }
 
 export interface PositionGps {

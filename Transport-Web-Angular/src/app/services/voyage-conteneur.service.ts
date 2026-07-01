@@ -23,6 +23,12 @@ export class VoyageConteneurService {
   archiver(id: number): Observable<void> {
     return this.http.patch<void>(`${this.base}/${id}/archiver`, {});
   }
+  /** Export Excel (.xlsx) de la liste des voyages selon la vue affichée. */
+  exportExcel(vue: 'en-cours' | 'archives' | 'historique' = 'en-cours'): Observable<Blob> {
+    const archives = vue === 'archives';
+    const tout = vue === 'historique';
+    return this.http.get(`${this.base}/export?archives=${archives}&tout=${tout}`, { responseType: 'blob' });
+  }
   create(req: VoyageConteneurRequest): Observable<number> {
     return this.http.post<number>(this.base, req);
   }
@@ -35,6 +41,10 @@ export class VoyageConteneurService {
   /** Livraisons libres ou déjà rattachées à ce voyage. */
   livraisonsAssignables(id: number): Observable<GapVoyage[]> {
     return this.http.get<GapVoyage[]>(`${this.base}/${id}/livraisons-assignables`);
+  }
+  /** Livraisons libres (non assignées à aucun voyage) — pour créer un nouveau voyage. */
+  livraisonsLibres(): Observable<GapVoyage[]> {
+    return this.http.get<GapVoyage[]>(`${this.base}/livraisons-libres`);
   }
   /** Livraisons rattachées à ce voyage. */
   livraisons(id: number): Observable<GapVoyage[]> {
@@ -55,6 +65,11 @@ export class VoyageConteneurService {
   /** Clôture / rouvre une ligne de matière première (statut local, sans impact ERP). */
   statutMatiere(mpId: number, statut: string): Observable<void> {
     return this.http.patch<void>(`${this.base}/matieres/${mpId}/statut?statut=${statut}`, {});
+  }
+
+  /** Génère le code de forçage du voyage conteneur (commun à toutes ses lignes, MP incluses). */
+  regenererForceCode(id: number): Observable<{ forceCode: string }> {
+    return this.http.patch<{ forceCode: string }>(`${this.base}/${id}/force-code`, {});
   }
 
   /** Met à jour les dates chargement/déchargement prévu + réel du voyage. */
@@ -82,8 +97,8 @@ export class VoyageConteneurService {
     return this.http.post<number>(`${environment.apiUrl}/voyages/${livraisonId}/bls`, form);
   }
 
-  /** URL de téléchargement d'un BL spécifique. */
-  blUrl(livraisonId: number, blId: number): string {
-    return `${environment.apiUrl}/voyages/${livraisonId}/bls/${blId}`;
+  /** URL d'un BL spécifique : affichage inline par défaut, téléchargement si download=true. */
+  blUrl(livraisonId: number, blId: number, download = false): string {
+    return `${environment.apiUrl}/voyages/${livraisonId}/bls/${blId}${download ? '?dl=true' : ''}`;
   }
 }

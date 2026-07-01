@@ -76,13 +76,9 @@ import * as L from 'leaflet';
       <div class="modal" style="max-width:1040px" (click)="$event.stopPropagation()">
         <div class="m-head"><h3>{{ editId ? 'Modifier' : 'Nouvelle' }} livraison</h3><button class="x" (click)="modal=false">&times;</button></div>
         <div class="m-body">
-          <p class="muted" style="margin:0 0 12px;font-size:12px">
-            <i class="fa-solid fa-circle-info"></i> Le chauffeur et les heures de chargement/déchargement
-            se définissent au niveau du <strong>Voyage</strong>.
-          </p>
           <div class="form-grid">
             <div class="field combo">
-              <label>Chantier (client) *</label>
+              <label>Chantier *</label>
               <input class="filtre-input" [(ngModel)]="filtreChantier" autocomplete="off"
                      (focus)="comboChantierOpen=true"
                      (input)="comboChantierOpen=true; form.chantierId=undefined"
@@ -151,10 +147,6 @@ import * as L from 'leaflet';
             <div><span class="dk">Déchargement</span><span class="dv">{{ detail.dechargementJour || '—' }} {{ detail.dechargementHeure || '' }}</span></div>
           </div>
 
-          <p class="muted" style="font-size:12px;margin-top:8px">
-            <i class="fa-solid fa-circle-info"></i> Le code de forçage et le bon de livraison se gèrent désormais au niveau du <strong>Voyage</strong> (par ligne).
-          </p>
-
           <h4 class="art-title">Articles du voyage ({{ detailArticles.length }})</h4>
           <div *ngIf="detailLoading" class="spinner" style="margin:20px auto"></div>
           <div *ngIf="!detailLoading && detailArticles.length===0" class="empty" style="padding:20px">
@@ -168,7 +160,7 @@ import * as L from 'leaflet';
                   <td><strong>{{ a.designation || '—' }}</strong></td>
                   <td><code>{{ a.numPrix || '—' }}</code></td>
                   <td>{{ a.quantite ?? '—' }}</td>
-                  <td><span class="badge badge-gray">{{ a.statutReception || '—' }}</span></td>
+                  <td><span [ngClass]="a.statutReception | statutBadge">{{ a.statutReception || '—' }}</span></td>
                   <td>{{ a.heureScan ? (a.heureScan | date:'dd/MM/yy HH:mm:ss') : '—' }}</td>
                   <td style="white-space:nowrap">
                     <img [src]="qrDetailUrl(a.id)" alt="QR" style="width:56px;height:56px;vertical-align:middle">
@@ -181,10 +173,6 @@ import * as L from 'leaflet';
               </tbody>
             </table>
           </div>
-
-          <p class="muted" style="font-size:12px;margin-top:14px">
-            <i class="fa-solid fa-circle-info"></i> Le suivi GPS du chauffeur est consultable dans le <strong>Voyage</strong>.
-          </p>
         </div>
         <div class="m-foot">
           <button class="btn btn-outline" (click)="fermerDetailModal()">Fermer</button>
@@ -580,6 +568,7 @@ export class VoyagesComponent implements OnInit {
 
   /** Statut global affiché : Livré > Chargé > statut brut */
   statutVoyage(v: Voyage): { label: string; cls: string } {
+    if (v.statut === 'ANNULE') return { label: 'Annulé', cls: 'badge-red' };
     if (v.etatDechargement === 'TERMINE') return { label: 'Livré', cls: 'badge-green' };
     if (v.etatChargement === 'TERMINE') return { label: 'Chargé', cls: 'badge-blue' };
     if (v.statut === 'ARCHIVE') return { label: 'Archivé', cls: 'badge-gray' };

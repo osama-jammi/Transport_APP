@@ -12,6 +12,7 @@ import net.sf.jasperreports.engine.JasperFillManager;
 import net.sf.jasperreports.engine.JasperPrint;
 import net.sf.jasperreports.engine.JasperReport;
 import net.sf.jasperreports.engine.data.JRBeanCollectionDataSource;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.InputStream;
@@ -34,6 +35,14 @@ public class BonLivraisonServiceImpl implements BonLivraisonService {
     private final GapReadService gap;
     private volatile JasperReport compiled;
 
+    // Agents du processus FL-PRO-07 (cachet/visa). Configurables par environnement.
+    @Value("${app.bl.agent-livraison:}")
+    private String agentLivraison;
+    @Value("${app.bl.agent-controle-qualite:}")
+    private String agentControleQualite;
+    @Value("${app.bl.agent-reception:}")
+    private String agentReception;
+
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private static final DecimalFormat QTE =
             new DecimalFormat("0.0##", DecimalFormatSymbols.getInstance(Locale.US));
@@ -49,24 +58,39 @@ public class BonLivraisonServiceImpl implements BonLivraisonService {
             throw new EntityNotFoundException("Voyage (livraison) introuvable : " + voyageId);
         }
 
+        // Infos par ligne calculées exactement comme GAP (ID OF, emplacement, observation).
+        java.util.Map<Long, String[]> infos = gap.getBlInfosParLigne(voyageId);
         List<BlLigneDTO> lignes = new ArrayList<>();
         for (GapVoyageArticleDTO a : gap.getVoyageArticles(voyageId)) {
+            String[] info = infos.get(a.getId());
+            String idOf = (info != null && !info[0].isBlank()) ? info[0] : formatIdOf(a.getOrigineArticle());
+            String emplacement = info != null ? info[1] : "";
+            String observation = info != null ? info[2] : "";
             lignes.add(new BlLigneDTO(
-                    nz(a.getOrigineArticle()),                       // ID OF
+                    idOf,                                            // ID OF (façon GAP)
                     nz(a.getNumPrix()),                              // N° de Prix
                     nz(a.getDesignation()),                          // Désignation
-                    "",                                              // Repère / Emplacement (absent de GAP)
+                    emplacement,                                     // Repère / Emplacement
                     a.getQuantite() != null ? QTE.format(a.getQuantite()) : "",
-                    ""                                               // Observation (absent de GAP)
+                    observation                                      // Observation
             ));
         }
 
+        // Agents façon GAP (atelier + utilisateur saisisseur) ; repli sur la config si introuvables.
+        String[] agents = gap.getBlAgents(voyageId);
+        String aLivraison = !agents[0].isEmpty() ? agents[0] : nz(agentLivraison);
+        String aControle = !agents[1].isEmpty() ? agents[1] : nz(agentControleQualite);
+
         Map<String, Object> params = new HashMap<>();
-        params.put("blNumero", (v.getBl() != null && !v.getBl().isBlank()) ? v.getBl() : "BL-" + voyageId);
+        // N° BL identique à GAP : "BL-" + id de la livraison.
+        params.put("blNumero", "BL-" + voyageId);
         params.put("lieu", nz(v.getAtelierDesignation()));
         params.put("dateBl", v.getDateLivraison() != null ? v.getDateLivraison().format(DATE) : "");
         params.put("projet", (nz(v.getProjetCode()) + " " + nz(v.getProjetDesignation())).trim());
-        params.put("chauffeur", nz(v.getChauffeur()));
+        params.put("chauffeur", nz(v.getChauffeur()).toUpperCase());
+        params.put("agentLivraison", aLivraison);
+        params.put("agentControleQualite", aControle);
+        params.put("agentReception", nz(agentReception));
         InputStream logo = getClass().getResourceAsStream("/reports/riche-bois-logo.jpg");
         if (logo != null) {
             params.put("logo", logo);
@@ -104,5 +128,12 @@ public class BonLivraisonServiceImpl implements BonLivraisonService {
 
     private static String nz(String s) {
         return s != null ? s : "";
+    }
+
+    /** ID OF tel qu'affiché sur le BL de référence : « OF 193-06S ». Préfixe « OF » si absent. */
+    private static String formatIdOf(String origineArticle) {
+        String of = nz(origineArticle).trim();
+        if (of.isEmpty()) return "";
+        return of.toUpperCase(Locale.ROOT).startsWith("OF") ? of : "OF " + of;
     }
 }

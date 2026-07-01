@@ -40,6 +40,13 @@ spring.datasource.divalto.password=CHANGE_ME
 spring.datasource.divalto.driver-class-name=com.microsoft.sqlserver.jdbc.SQLServerDriver
 spring.datasource.divalto.hikari.initialization-fail-timeout=-1
 
+# Stock DivNet (lecture seule, vue Article_en_stock) — base applicative DivNet
+spring.datasource.stock.jdbc-url=jdbc:sqlserver://HOST:1433;databaseName=DIVNET_DEV;encrypt=true;trustServerCertificate=true;
+spring.datasource.stock.username=CHANGE_ME
+spring.datasource.stock.password=CHANGE_ME
+spring.datasource.stock.driver-class-name=com.microsoft.sqlserver.jdbc.SQLServerDriver
+spring.datasource.stock.hikari.initialization-fail-timeout=-1
+
 # ============ JPA ============
 spring.jpa.hibernate.ddl-auto=none
 spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.SQLServerDialect

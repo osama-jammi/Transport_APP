@@ -8,7 +8,7 @@ import { useSelector } from 'react-redux';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import type { RootState } from '@/store';
-import { confirmerArrivee } from '@/services/livraisonService';
+import { confirmerArrivee, getLivraisonsDuVoyage } from '@/services/livraisonService';
 import { COLORS } from '@/constants/theme';
 
 function distanceMeters(a: { latitude: number; longitude: number }, b: { latitude: number; longitude: number }) {
@@ -69,14 +69,16 @@ export default function NavigationScreen() {
   };
 
   const confirmer = async (force = false, code?: string) => {
-    if (!voyage) return;
+    // Voyage MP seul : pas de livraison dans le store → on utilise l'id conteneur (vcId/voyageId).
+    const vid = voyage?.id ?? (voyageId ? Number(voyageId) : null);
+    if (vid == null) return;
     if (dejaLivre) {
       Alert.alert('Voyage deja livre', 'Ce voyage est deja livre : le bon de livraison a deja ete enregistre.');
       return;
     }
     setBusy(true);
     try {
-      const res = await confirmerArrivee(voyage.id, {
+      const res = await confirmerArrivee(vid, {
         latitude: pos?.latitude,
         longitude: pos?.longitude,
         force,
@@ -84,8 +86,18 @@ export default function NavigationScreen() {
       });
       if (res.confirmed) {
         setForceOpen(false);
+        // 1 ligne = 1 chantier : confirmer aussi l'arrivée des autres OF du même chantier
+        // (même destination), en best-effort, pour horodater leur arrivée.
+        if (vcId && projetCode) {
+          try {
+            const livs = await getLivraisonsDuVoyage(Number(vcId));
+            const autres = livs.filter(l => (l.projetCode ?? null) === projetCode && l.id !== vid);
+            await Promise.all(autres.map(o =>
+              confirmerArrivee(o.id, { latitude: pos?.latitude, longitude: pos?.longitude, force, forceCode: code })));
+          } catch { /* non bloquant */ }
+        }
         // Construire les params ici pour éviter la perte dans la closure
-        const livParams = { id: String(voyage.id), vcId: vcId ?? '', projetCode: projetCode ?? '' };
+        const livParams = { id: String(vid), vcId: vcId ?? '', projetCode: projetCode ?? '' };
         Alert.alert('Arrivee confirmee', res.message + '\n\nScannez maintenant les articles et matières premières.', [
           {
             text: 'Scanner la livraison',

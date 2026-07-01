@@ -20,12 +20,14 @@ import { ChantiersComponent } from './features/chantiers.component';
 import { ArticlesComponent } from './features/articles.component';
 import { MatieresPremieresComponent } from './features/matieres-premieres.component';
 import { DepotsComponent } from './features/depots.component';
+import { StockComponent } from './features/stock.component';
 import { SuiviTrajetsComponent } from './features/suivi-trajets.component';
 import { AdministrationComponent } from './features/administration.component';
 import { RapportsComponent } from './features/rapports.component';
 import { PaginatePipe } from './shared/paginate.pipe';
 import { PaginatorComponent } from './shared/paginator.component';
 import { SortPipe } from './shared/sort.pipe';
+import { StatutBadgePipe } from './shared/statut-badge.pipe';
 import { SortableDirective } from './shared/sortable.directive';
 import { ColFilterComponent } from './shared/col-filter.component';
 import { FiltrePanelComponent } from './shared/filtre-panel.component';
@@ -41,12 +43,14 @@ import { FiltrePanelComponent } from './shared/filtre-panel.component';
     ArticlesComponent,
     MatieresPremieresComponent,
     DepotsComponent,
+    StockComponent,
     SuiviTrajetsComponent,
     AdministrationComponent,
     RapportsComponent,
     PaginatePipe,
     PaginatorComponent,
     SortPipe,
+    StatutBadgePipe,
     SortableDirective,
     ColFilterComponent,
     FiltrePanelComponent

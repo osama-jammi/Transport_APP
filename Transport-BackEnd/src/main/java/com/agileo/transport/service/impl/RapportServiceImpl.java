@@ -1,6 +1,7 @@
 package com.agileo.transport.service.impl;
 
 import com.agileo.transport.Dtos.response.DashboardStatsDTO;
+import com.agileo.transport.Dtos.response.VoyageConteneurDTO;
 import com.agileo.transport.entity.Reserve;
 import com.agileo.transport.entity.Voyage;
 import com.agileo.transport.repository.ReserveRepository;
@@ -139,6 +140,37 @@ public class RapportServiceImpl implements RapportService {
             return toBytes(wb);
         } catch (Exception e) {
             throw new RuntimeException("Erreur export non livrés", e);
+        }
+    }
+
+    @Override
+    public byte[] exportVoyagesConteneurs(boolean archives, boolean tout) {
+        List<VoyageConteneurDTO> voyages = gapReadService.getVoyagesConteneurs(archives, null, tout);
+        try (Workbook wb = new XSSFWorkbook()) {
+            Sheet sheet = wb.createSheet("Voyages");
+            String[] headers = {"ID", "Date voyage", "Chauffeur", "Nb livraisons", "Nb matières",
+                    "Chargement prévu", "Déchargement prévu", "Chargement réel", "Déchargement réel",
+                    "Statut", "Local de départ"};
+            createHeaderRow(sheet, headers);
+            int row = 1;
+            for (VoyageConteneurDTO v : voyages) {
+                Row r = sheet.createRow(row++);
+                r.createCell(0).setCellValue(v.getId() != null ? v.getId() : 0);
+                r.createCell(1).setCellValue(v.getDateVoyage() != null ? v.getDateVoyage().format(FMT) : "");
+                r.createCell(2).setCellValue(v.getChauffeur() != null ? v.getChauffeur() : "");
+                r.createCell(3).setCellValue(v.getNbLivraisons());
+                r.createCell(4).setCellValue(v.getNbMatieres());
+                r.createCell(5).setCellValue(v.getChargement() != null ? v.getChargement().format(FMT) : "");
+                r.createCell(6).setCellValue(v.getDechargement() != null ? v.getDechargement().format(FMT) : "");
+                r.createCell(7).setCellValue(v.getRealChargement() != null ? v.getRealChargement().format(FMT) : "");
+                r.createCell(8).setCellValue(v.getRealDechargement() != null ? v.getRealDechargement().format(FMT) : "");
+                r.createCell(9).setCellValue(v.getStatut() != null ? v.getStatut() : "");
+                r.createCell(10).setCellValue(v.getLocalNom() != null ? v.getLocalNom() : "");
+            }
+            autoSize(sheet, headers.length);
+            return toBytes(wb);
+        } catch (Exception e) {
+            throw new RuntimeException("Erreur export voyages", e);
         }
     }
 
