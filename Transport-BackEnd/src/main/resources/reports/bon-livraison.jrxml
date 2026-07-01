@@ -19,6 +19,9 @@
     <parameter name="dateBl" class="java.lang.String"/>
     <parameter name="projet" class="java.lang.String"/>
     <parameter name="chauffeur" class="java.lang.String"/>
+    <parameter name="agentLivraison" class="java.lang.String"/>
+    <parameter name="agentControleQualite" class="java.lang.String"/>
+    <parameter name="agentReception" class="java.lang.String"/>
     <parameter name="logo" class="java.io.InputStream"/>
 
     <field name="idOf" class="java.lang.String"/>
@@ -157,24 +160,8 @@
         </band>
     </detail>
 
-    <pageFooter>
-        <band height="44">
-            <staticText>
-                <reportElement x="0" y="6" width="555" height="24"/>
-                <textElement textAlignment="Center"><font size="7" isItalic="true"/></textElement>
-                <text><![CDATA[Toute communication de ce document est strictement interdite sans autorisation de la direction RICHE BOIS
-Veiller à la vérification de l'édition de ce document avant son utilisation]]></text>
-            </staticText>
-            <staticText>
-                <reportElement x="380" y="32" width="175" height="12"/>
-                <textElement textAlignment="Right"><font size="8"/></textElement>
-                <text><![CDATA[Code : FL-PRO-07 V02]]></text>
-            </staticText>
-        </band>
-    </pageFooter>
-
-    <summary>
-        <band height="166">
+    <lastPageFooter>
+        <band height="210">
             <staticText>
                 <reportElement style="cell" x="0" y="10" width="555" height="22"/>
                 <textElement textAlignment="Center" verticalAlignment="Middle"><font size="10" isBold="true"/></textElement>
@@ -232,24 +219,38 @@ Veiller à la vérification de l'édition de ce document avant son utilisation]]
                 <text><![CDATA[Agent de réception (cachet et/ou Visa)]]></text>
             </staticText>
 
-            <staticText>
+            <textField>
                 <reportElement style="cell" x="0" y="100" width="139" height="58"/>
-                <text><![CDATA[]]></text>
-            </staticText>
-            <staticText>
+                <textElement textAlignment="Center" verticalAlignment="Middle"><font size="9"/></textElement>
+                <textFieldExpression><![CDATA[$P{agentLivraison} == null ? "" : $P{agentLivraison}]]></textFieldExpression>
+            </textField>
+            <textField>
                 <reportElement style="cell" x="139" y="100" width="139" height="58"/>
-                <text><![CDATA[]]></text>
-            </staticText>
+                <textElement textAlignment="Center" verticalAlignment="Middle"><font size="9"/></textElement>
+                <textFieldExpression><![CDATA[$P{agentControleQualite} == null ? "" : $P{agentControleQualite}]]></textFieldExpression>
+            </textField>
             <textField>
                 <reportElement style="cell" x="278" y="100" width="139" height="58"/>
                 <textElement textAlignment="Center" verticalAlignment="Middle"><font size="9"/></textElement>
-                <textFieldExpression><![CDATA[$P{chauffeur}]]></textFieldExpression>
+                <textFieldExpression><![CDATA[$P{chauffeur} == null ? "" : $P{chauffeur}]]></textFieldExpression>
+            </textField>
+            <textField>
+                <reportElement style="cell" x="417" y="100" width="138" height="58"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle"><font size="9"/></textElement>
+                <textFieldExpression><![CDATA[$P{agentReception} == null ? "" : $P{agentReception}]]></textFieldExpression>
             </textField>
             <staticText>
-                <reportElement style="cell" x="417" y="100" width="138" height="58"/>
-                <text><![CDATA[]]></text>
+                <reportElement x="0" y="170" width="555" height="24"/>
+                <textElement textAlignment="Center"><font size="7" isItalic="true"/></textElement>
+                <text><![CDATA[Toute communication de ce document est strictement interdite sans autorisation de la direction RICHE BOIS
+Veiller à la vérification de l'édition de ce document avant son utilisation]]></text>
+            </staticText>
+            <staticText>
+                <reportElement x="380" y="196" width="175" height="12"/>
+                <textElement textAlignment="Right"><font size="8"/></textElement>
+                <text><![CDATA[Code : FL-PRO-07 V02]]></text>
             </staticText>
         </band>
-    </summary>
+    </lastPageFooter>
 
 </jasperReport>
