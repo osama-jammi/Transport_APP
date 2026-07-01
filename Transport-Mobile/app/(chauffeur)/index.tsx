@@ -114,9 +114,14 @@ export default function VoyagesScreen() {
     if (chauffeur?.id) enregistrerPush(chauffeur.id);
   }, [chauffeur?.id]);
 
-  // Suivi du trajet : un point GPS toutes les 2 minutes, lié au voyage en cours
-  // (le premier voyage non encore livré), pour tracer le déplacement du chauffeur.
-  const voyageActifId = voyages.find((v: VoyageConteneur) => !v.realDechargement)?.id;
+  // Suivi du trajet : un point GPS toutes les 2 minutes. Le trajet n'est rattaché au
+  // voyage qu'À PARTIR DU CHARGEMENT (1er scan → realChargement renseigné). Avant le
+  // chargement, le chauffeur reste suivi (suivi général), mais ces points NE font PAS
+  // partie du trajet du voyage : ainsi le trajet du voyage démarre au chargement, pas à
+  // la connexion.
+  const voyageActif = voyages.find((v: VoyageConteneur) => !v.realDechargement) ?? null;
+  // On ne tague le trajet avec le voyage que lorsque son chargement a commencé.
+  const voyageTrajetId = voyageActif?.realChargement ? voyageActif.id : undefined;
   useEffect(() => {
     if (!chauffeur?.id) return;
     let annule = false;
@@ -130,12 +135,12 @@ export default function VoyagesScreen() {
       if (annule) return;
       setTrackingEnabled(trackingOn);
       if (!trackingOn) return; // setTrackingEnabled(false) a déjà tout arrêté
-      if (voyageActifId) {
-        // Voyage en cours → trajet lié au voyage (avec le chauffeur)
+      if (voyageTrajetId) {
+        // Chargement commencé → trajet lié au voyage (avec le chauffeur)
         stopSuiviChauffeur();
-        startTrajetVoyage(voyageActifId, chauffeur.camionId ?? undefined, chauffeur.id);
+        startTrajetVoyage(voyageTrajetId, chauffeur.camionId ?? undefined, chauffeur.id);
       } else {
-        // Pas de voyage → on suit quand même le chauffeur (tracking de tous)
+        // Pas encore chargé (ou aucun voyage) → suivi général du chauffeur, hors trajet voyage
         stopTrajetVoyage();
         startSuiviChauffeur(chauffeur.id, chauffeur.camionId ?? undefined);
       }
@@ -144,7 +149,7 @@ export default function VoyagesScreen() {
     appliquerSuivi();
     const t = setInterval(appliquerSuivi, 30_000);
     return () => { annule = true; clearInterval(t); stopTrajetVoyage(); stopSuiviChauffeur(); };
-  }, [voyageActifId, chauffeur?.id, chauffeur?.camionId]);
+  }, [voyageTrajetId, chauffeur?.id, chauffeur?.camionId]);
 
   const handleLogout = () => {
     Alert.alert('Déconnexion', 'Voulez-vous vous déconnecter ?', [
