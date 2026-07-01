@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity,
+  View, Text, ScrollView, TouchableOpacity, Alert,
   StyleSheet, ActivityIndicator, RefreshControl, StatusBar,
 } from 'react-native';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
@@ -8,16 +8,11 @@ import { useDispatch } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
 import { setVoyages } from '@/store/livraisonSlice';
 import {
-  getLivraisonsDuVoyage, getMatieresDuVoyageConteneur,
+  getLivraisonsDuVoyage, getMatieresDuVoyageConteneur, annulerVoyage as annulerVoyageApi,
+  mpEstChargee, mpEstLivree,
   type Voyage, type MatiereMp,
 } from '@/services/livraisonService';
 import { COLORS } from '@/constants/theme';
-
-const statutLivraison = (v: Voyage): { label: string; color: string; icon: string; action: string } => {
-  if (v.etatDechargement === 'TERMINE') return { label: 'Livré ✓',   color: COLORS.success,  icon: 'checkmark-done-circle', action: 'Voir' };
-  if (v.etatChargement === 'TERMINE')   return { label: 'Chargé ✓',  color: COLORS.goldDark, icon: 'checkmark-circle',      action: 'Confirmer arrivée' };
-  return                                       { label: 'À charger',  color: COLORS.warn,     icon: 'radio-button-off-outline', action: 'Scanner chargement' };
-};
 
 interface Groupe {
   livraisons: Voyage[];      // toutes les livraisons du même chantier
@@ -79,6 +74,22 @@ function construireGroupes(livraisons: Voyage[], matieres: MatiereMp[]): Groupe[
   return groupes;
 }
 
+/** Statut agrégé d'une ligne (chantier) : À charger → En cours → Chargé → Livré. */
+function statutGroupe(g: Groupe): { label: string; color: string; icon: string } {
+  const ofs = g.livraisons, mps = g.matieres;
+  const ofsLivres   = ofs.every(o => o.etatDechargement === 'TERMINE');
+  const ofsCharges  = ofs.every(o => o.etatChargement === 'TERMINE');
+  const ofsVierges  = ofs.every(o => o.etatChargement !== 'TERMINE');
+  const mpsLivrees  = mps.every(m => mpEstLivree(m.statut));
+  const mpsChargees = mps.every(m => mpEstChargee(m.statut));
+  const mpsVierges  = mps.every(m => !mpEstChargee(m.statut));
+
+  if (ofsLivres && mpsLivrees)   return { label: 'Livré ✓',  color: COLORS.success,  icon: 'checkmark-done-circle' };
+  if (ofsCharges && mpsChargees) return { label: 'Chargé ✓', color: COLORS.goldDark, icon: 'checkmark-circle' };
+  if (ofsVierges && mpsVierges)  return { label: 'À charger', color: COLORS.warn,    icon: 'radio-button-off-outline' };
+  return { label: 'En cours', color: COLORS.teal, icon: 'time-outline' };
+}
+
 export default function VoyageLivraisonsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router   = useRouter();
@@ -113,25 +124,43 @@ export default function VoyageLivraisonsScreen() {
     // Phase : CHARGEMENT si des livraisons ne sont pas encore chargées, sinon LIVRAISON
     const toutCharge = livraisons.length > 0 && livraisons.every(v => v.etatChargement === 'TERMINE');
     const phase = toutCharge ? 'LIVRAISON' : 'CHARGEMENT';
+    // En livraison, le scan global « tout valider » est interdit tant que l'arrivée n'a pas
+    // été confirmée sur toutes les lignes restantes : il faut livrer ligne par ligne pour
+    // confirmer l'arrivée à chaque chantier (« Je suis sur place » ou code de forçage).
+    if (phase === 'LIVRAISON') {
+      const nonArrivees = livraisons.filter(v => v.etatDechargement !== 'TERMINE' && !v.arriveeConfirmee);
+      if (nonArrivees.length > 0) {
+        Alert.alert(
+          'Arrivée non confirmée',
+          "Pour livrer, ouvrez chaque ligne et confirmez votre arrivée au chantier avant de scanner la livraison.",
+        );
+        return;
+      }
+    }
     router.push({ pathname: '/(chauffeur)/scan', params: { voyageId: String(voyageId), phase } });
   };
 
-  const ouvrirLivraison = (liv: Voyage) => {
-    const params = { id: String(liv.id), vcId: String(voyageId), projetCode: liv.projetCode ?? '' };
-
-    if (liv.etatDechargement === 'TERMINE') {
-      // Tout terminé → lecture seule
-      router.push({ pathname: '/(chauffeur)/livraison/[id]', params });
-    } else if (liv.etatChargement === 'TERMINE') {
-      // Chargement fait, livraison pas encore → navigation + arrivée
-      router.push({
-        pathname: '/(chauffeur)/navigation',
-        params: { voyageId: String(liv.id), vcId: String(voyageId), projetCode: liv.projetCode ?? '' },
-      });
-    } else {
-      // Pas encore chargé → scan chargement (articles + MP) directement
-      router.push({ pathname: '/(chauffeur)/livraison/[id]', params });
+  const annulerVoyageHandler = async () => {
+    try {
+      await annulerVoyageApi(voyageId);
+      Alert.alert('Succès', 'Voyage annulé');
+      load();
+    } catch (e) {
+      Alert.alert('Erreur', 'Impossible d\'annuler le voyage');
     }
+  };
+
+  // 1 ligne = 1 chantier : ouvre l'écran dédié (agrège tous les OF du chantier + ses MP).
+  const ouvrirLigne = (g: Groupe) => {
+    const firstOf = g.livraisons[0];
+    router.push({
+      pathname: '/(chauffeur)/livraison/[id]',
+      params: {
+        id: String(firstOf ? firstOf.id : voyageId),
+        vcId: String(voyageId),
+        projetCode: g.chantierCode ?? '',
+      },
+    });
   };
 
   const total  = livraisons.length;
@@ -160,6 +189,13 @@ export default function VoyageLivraisonsScreen() {
         </View>
         <TouchableOpacity style={styles.iconBtn} onPress={load}>
           <Ionicons name="refresh-outline" size={20} color="#fff" />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.iconBtn}
+          onPress={() => Alert.alert('Annuler le voyage', 'Cette action annule tout le voyage. Confirmer ?', [
+            { text: 'Non', style: 'cancel' },
+            { text: 'Oui', style: 'destructive', onPress: annulerVoyageHandler },
+          ])}>
+          <Ionicons name="close-circle-outline" size={20} color="#ff6b6b" />
         </TouchableOpacity>
       </View>
 
@@ -212,75 +248,33 @@ export default function VoyageLivraisonsScreen() {
             <Text style={styles.scanVoyageTxt}>Scanner le QR du voyage (tout valider)</Text>
           </TouchableOpacity>
 
-          {/* Groupes par chantier : toutes les livraisons + MP UNE SEULE FOIS */}
-          {groupes.map((g, idx) => (
-            <View key={idx} style={styles.groupCard}>
-
-              {/* ── En-tête chantier ── */}
-              <View style={styles.chantierHeader}>
-                <Ionicons name="business-outline" size={14} color={COLORS.goldDark} />
-                <Text style={styles.chantierTxt} numberOfLines={1}>{g.chantierLabel}</Text>
-                {g.livraisons.length > 0 && (
-                  <View style={[styles.statusPill, { backgroundColor: COLORS.goldDark + '22' }]}>
-                    <Text style={[styles.statusTxt, { color: COLORS.goldDark }]}>{g.livraisons.length} OF</Text>
-                  </View>
-                )}
-                {g.matieres.length > 0 && (
-                  <View style={[styles.statusPill, { backgroundColor: COLORS.teal + '22' }]}>
-                    <Text style={[styles.statusTxt, { color: COLORS.teal }]}>{g.matieres.length} MP</Text>
-                  </View>
-                )}
-              </View>
-
-              {/* ── Une card par livraison du groupe ── */}
-              {g.livraisons.map(liv => {
-                const s = statutLivraison(liv);
-                return (
-                  <TouchableOpacity key={String(liv.id)}
-                    style={[styles.livRow, { borderTopWidth: 1, borderTopColor: COLORS.border + '50' }]}
-                    onPress={() => ouvrirLivraison(liv)} activeOpacity={0.85}>
-                    <View style={[styles.statusIcon, { backgroundColor: s.color + '1F' }]}>
-                      <Ionicons name={s.icon as any} size={20} color={s.color} />
-                    </View>
-                    <View style={styles.livBody}>
-                      <Text style={styles.livMeta}>OF #{liv.id}  ·  {liv.nbArticles ?? liv.nbColis} article(s)</Text>
-                      <Text style={[styles.livAction, { color: s.color }]}>{s.action} →</Text>
-                    </View>
-                    <View style={[styles.statusPill, { backgroundColor: s.color + '1F' }]}>
-                      <Text style={[styles.statusTxt, { color: s.color }]}>{s.label}</Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={16} color={COLORS.textFaint} />
-                  </TouchableOpacity>
-                );
-              })}
-
-              {/* ── MP du groupe — affichées UNE SEULE FOIS ── */}
-              {g.matieres.length > 0 && (
-                <View style={styles.mpZone}>
-                  <Text style={styles.mpZoneTitle}>
-                    Matières premières : {g.matieres.filter(m => (m.statut||'').toUpperCase()==='LIVRE').length}/{g.matieres.length} livrée(s)
-                  </Text>
-                  {g.matieres.map(m => {
-                    const livre = (m.statut || '').toUpperCase() === 'LIVRE';
-                    return (
-                      <View key={String(m.id)} style={[styles.mpRow, livre && { opacity: 0.65 }]}>
-                        <View style={styles.mpInfo}>
-                          <Text style={styles.mpDesig} numberOfLines={2}>{m.designation || m.reference || '—'}</Text>
-                          {m.reference ? <Text style={styles.mpMeta}>Réf {m.reference}</Text> : null}
-                          <Text style={styles.mpMeta}>Qté : {m.quantite ?? '—'}{m.unite ? ` ${m.unite}` : ''}</Text>
-                        </View>
-                        <View style={[styles.statusPill, { backgroundColor: livre ? COLORS.success + '22' : COLORS.warn + '22' }]}>
-                          <Text style={[styles.statusTxt, { color: livre ? COLORS.success : COLORS.warn }]}>
-                            {livre ? 'Livrée ✓' : 'En attente'}
-                          </Text>
-                        </View>
-                      </View>
-                    );
-                  })}
+          {/* Lignes du voyage (1 ligne = 1 chantier). Pas de détail inline : un clic ouvre l'écran ligne. */}
+          {groupes.map((g, idx) => {
+            const s = statutGroupe(g);
+            const dateCreation = g.livraisons.length > 0 ? g.livraisons[0].dateCreation : null;
+            return (
+              <TouchableOpacity key={idx} style={styles.lineRow} onPress={() => ouvrirLigne(g)} activeOpacity={0.85}>
+                <View style={[styles.statusIcon, { backgroundColor: s.color + '1F' }]}>
+                  <Ionicons name={s.icon as any} size={20} color={s.color} />
                 </View>
-              )}
-            </View>
-          ))}
+                <View style={{ flex: 1, gap: 3 }}>
+                  <Text style={styles.chantierTxt} numberOfLines={1}>{g.chantierLabel}</Text>
+                  <View style={styles.lineMetaRow}>
+                    {g.livraisons.length > 0 && <Text style={styles.lineMeta}>{g.livraisons.length} OF</Text>}
+                    {g.matieres.filter(m => (m.source || 'MATIERE') !== 'STOCK').length > 0 &&
+                      <Text style={styles.lineMeta}>{g.matieres.filter(m => (m.source || 'MATIERE') !== 'STOCK').length} MP</Text>}
+                    {g.matieres.filter(m => m.source === 'STOCK').length > 0 &&
+                      <Text style={styles.lineMeta}>{g.matieres.filter(m => m.source === 'STOCK').length} Stock</Text>}
+                    {dateCreation && <Text style={styles.lineMeta}>{new Date(dateCreation).toLocaleDateString()}</Text>}
+                  </View>
+                </View>
+                <View style={[styles.statusPill, { backgroundColor: s.color + '1F' }]}>
+                  <Text style={[styles.statusTxt, { color: s.color }]}>{s.label}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={COLORS.textFaint} />
+              </TouchableOpacity>
+            );
+          })}
         </ScrollView>
       )}
     </View>
@@ -327,13 +321,28 @@ const styles = StyleSheet.create({
   statusPill:   { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 },
   statusTxt:    { fontSize: 10, fontWeight: '700' },
 
+  // Ligne du voyage (1 chantier) — carte cliquable, pas de dépliage
+  lineRow:      {
+    flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14,
+    backgroundColor: COLORS.card, borderRadius: 14,
+    shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 6, elevation: 2,
+  },
+  lineMetaRow:  { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  lineMeta:     { fontSize: 11, color: COLORS.textSub, fontWeight: '600' },
+
   chantierHeader: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     backgroundColor: COLORS.goldTint, paddingHorizontal: 14, paddingVertical: 10,
   },
-  chantierTxt:   { fontSize: 13, fontWeight: '700', color: COLORS.brown, flex: 1 },
+  chantierTxt:   { fontSize: 13, fontWeight: '700', color: COLORS.brown },
+  chantierDate:  { fontSize: 11, color: COLORS.textSub },
   chantierBadge: { fontSize: 10, fontWeight: '700', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10,
                    backgroundColor: COLORS.goldDark + '22', color: COLORS.goldDark },
+
+  actionBar:     { flexDirection: 'row', gap: 8, paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: COLORS.border + '50' },
+  actionBtn:     { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 10, backgroundColor: COLORS.gold + '22', borderRadius: 8 },
+  actionBtnDanger: { backgroundColor: '#ff6b6b22' },
+  actionBtnTxt:  { fontSize: 11, fontWeight: '600', color: COLORS.brown },
 
   mpZone:        { paddingHorizontal: 14, paddingBottom: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: COLORS.border },
   mpZoneTitle:   { fontSize: 11, fontWeight: '600', color: COLORS.textSub, marginBottom: 6 },

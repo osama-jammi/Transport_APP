@@ -21,6 +21,9 @@ export interface Voyage {
   destinationLat?: number | null;
   destinationLng?: number | null;
   destinationRayon?: number | null;
+  // Arrivée au chantier confirmée (geofence « Je suis sur place » ou code de forçage).
+  // Conditionne l'autorisation du scan de livraison (2ᵉ scan).
+  arriveeConfirmee?: boolean;
 }
 
 export interface ArriveeResult {
@@ -76,6 +79,7 @@ function mapGapVoyage(g: any): Voyage {
     destinationLat: g.destinationLat ?? null,
     destinationLng: g.destinationLng ?? null,
     destinationRayon: g.destinationRayon ?? null,
+    arriveeConfirmee: !!g.arriveeDechargement,
   };
 }
 
@@ -157,6 +161,10 @@ export interface MatiereMp {
   pieceFournisseur?: string;
   qteCommande?: number;
   statut?: string;
+  /** MATIERE (Divalto) ou STOCK (vue Article_en_stock DivNet, lecture seule). */
+  source?: string;
+  /** Dépôt d'origine (code DEPO, ex. RB1) pour les lignes de stock. */
+  depot?: string;
 }
 
 /** Matières premières d'un voyage conteneur, filtrées par chantier de la livraison. */
@@ -172,13 +180,15 @@ export async function getMatieresDuVoyageConteneur(voyageConteneurId: number): P
     pieceFournisseur: m.pieceFournisseur ?? undefined,
     qteCommande: m.qteCommande ?? undefined,
     statut: m.statut ?? undefined,
+    source: m.source ?? undefined,
+    depot: m.depot ?? undefined,
   } as MatiereMp));
 }
 
-/** Clôture / rouvre une ligne de matière première (statut local). */
-export async function cloturerMatiere(mpId: number, statut: 'LIVRE' | 'EN_ATTENTE'): Promise<void> {
-  await api.patch(`/voyages-conteneurs/matieres/${mpId}/statut`, null, { params: { statut } });
-}
+/** MP chargée (1er scan = CHARGE) ou déjà livrée. */
+export const mpEstChargee = (statut?: string | null) => ['CHARGE', 'LIVRE'].includes((statut || '').toUpperCase());
+/** MP livrée (2e scan = LIVRE). */
+export const mpEstLivree = (statut?: string | null) => (statut || '').toUpperCase() === 'LIVRE';
 
 /** Upload un BL (photo ou PDF) pour une livraison — endpoint multi-BL. */
 export async function ajouterBlFile(voyageId: number, photoUri: string, reference?: string): Promise<void> {
@@ -203,4 +213,22 @@ export async function getArticlesByVoyage(voyageId: number): Promise<ArticleScan
       : d.statutReception === 'SCANNE_CHARGEMENT' ? 'SCANNE_CHARGEMENT'
       : 'NON_SCANNE',
   } as ArticleScan));
+}
+
+/** Annule une ligne de livraison individuelle (livraison/OF). */
+export async function annulerLigne(livraisonId: number): Promise<void> {
+  await api.patch(`/voyages-conteneurs/livraisons/${livraisonId}/annuler`, null);
+}
+
+/** Annule le voyage conteneur complet. */
+export async function annulerVoyage(voyageConteneurId: number): Promise<void> {
+  await api.patch(`/voyages-conteneurs/${voyageConteneurId}/annuler`, null);
+}
+
+/** Confirme une livraison en saisissant le BL manuellement (QR illisible). */
+export async function enregistrerBLManuelLivraison(
+  voyageId: number,
+  reference: string,
+): Promise<void> {
+  await api.post(`/voyages/${voyageId}/bl-manuel`, null, { params: { reference } });
 }
