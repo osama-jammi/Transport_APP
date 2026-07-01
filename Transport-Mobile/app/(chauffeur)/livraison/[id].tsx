@@ -275,7 +275,7 @@ export default function LivraisonArticlesScreen() {
       {dejaLivre && (
         <View style={[styles.readonlyBar, { backgroundColor: COLORS.success }]}>
           <Ionicons name="checkmark-done-circle" size={13} color="#fff" />
-          <Text style={[styles.readonlyTxt, { color: '#fff' }]}>Ligne terminée — lecture seule</Text>
+          <Text style={[styles.readonlyTxt, { color: '#fff' }]}>Ligne terminée</Text>
         </View>
       )}
 

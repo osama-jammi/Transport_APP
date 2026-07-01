@@ -22,7 +22,7 @@ interface BarItem { label: string; value: number; color: string; }
       </div>
       <div class="stat">
         <div class="ic blue"><i class="fa-solid fa-route"></i></div>
-        <div><div class="val">{{ nbLivraisons }}</div><div class="lbl">Livraisons (GAP)</div></div>
+        <div><div class="val">{{ nbLivraisons }}</div><div class="lbl">Livraisons</div></div>
       </div>
       <div class="stat">
         <div class="ic green"><i class="fa-solid fa-id-card"></i></div>
@@ -34,7 +34,7 @@ interface BarItem { label: string; value: number; color: string; }
       </div>
       <div class="stat">
         <div class="ic cyan"><i class="fa-solid fa-boxes-stacked"></i></div>
-        <div><div class="val">{{ articles.length }}</div><div class="lbl">Articles (GAP)</div></div>
+        <div><div class="val">{{ articles.length }}</div><div class="lbl">Articles</div></div>
       </div>
       <div class="stat">
         <div class="ic blue"><i class="fa-solid fa-helmet-safety"></i></div>
@@ -109,7 +109,7 @@ interface BarItem { label: string; value: number; color: string; }
 
     <!-- Tableau voyages -->
     <div class="card">
-      <div class="card-head"><h2>Livraisons (GAP)</h2>
+      <div class="card-head"><h2>Livraisons</h2>
         <a class="btn btn-outline btn-sm" routerLink="/voyages">Tout voir</a></div>
       <div class="card-body" style="padding:0">
         <div *ngIf="loading" class="spinner"></div>

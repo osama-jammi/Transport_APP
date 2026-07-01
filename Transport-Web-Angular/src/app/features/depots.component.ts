@@ -11,7 +11,7 @@ import * as L from 'leaflet';
   selector: 'app-depots',
   template: `
     <div class="toolbar">
-      <span class="badge badge-blue"><i class="fa-solid fa-warehouse"></i> Dépôts (locaux de départ)</span>
+      <span class="badge badge-blue"><i class="fa-solid fa-warehouse"></i> Dépôts</span>
       <div class="search"><i class="fa-solid fa-magnifying-glass"></i>
         <input [(ngModel)]="q" (ngModelChange)="page=1" placeholder="Rechercher un dépôt…"></div>
       <button class="btn" [ngClass]="filtresUI ? 'btn-primary' : 'btn-outline'" (click)="basculerFiltres()"

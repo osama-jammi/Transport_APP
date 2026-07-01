@@ -10,7 +10,7 @@ import { FiltreField } from '../shared/filtre-panel.component';
   selector: 'app-stock',
   template: `
     <div class="toolbar">
-      <span class="badge badge-green"><i class="fa-solid fa-warehouse"></i> Stock DivNet (lecture seule)</span>
+      <span class="badge badge-green"><i class="fa-solid fa-warehouse"></i> Stock</span>
       <div class="field" style="min-width:150px">
         <select [(ngModel)]="depot" (change)="chargerArticles()">
           <option [ngValue]="undefined" disabled>— Choisir un dépôt —</option>
@@ -22,8 +22,6 @@ import { FiltreField } from '../shared/filtre-panel.component';
       <button class="btn" [ngClass]="filtresUI ? 'btn-primary' : 'btn-outline'" (click)="basculerFiltres()"
               title="Filtrer par colonne">
         <i class="fa-solid fa-filter"></i> Filtres</button>
-      <button class="btn btn-outline right" (click)="chargerArticles()" [disabled]="loading || !depot">
-        <i class="fa-solid fa-rotate"></i> Actualiser</button>
     </div>
 
     <app-filtre-panel *ngIf="filtresUI" [fields]="filterFields" [filters]="colF" (change)="page=1"></app-filtre-panel>
@@ -35,7 +33,7 @@ import { FiltreField } from '../shared/filtre-panel.component';
         <i class="fa-solid fa-boxes-stacked"></i> Aucun article en stock</div>
       <div class="table-wrap" *ngIf="depot && !loading && articlesFiltres().length">
         <div class="muted" style="padding:8px 12px;font-size:12px">
-          Articles disponibles (avec stock) — {{ articlesFiltres().length }} article(s)</div>
+          Articles disponibles — {{ articlesFiltres().length }} article(s)</div>
         <table>
           <thead>
             <tr>
@@ -83,7 +81,7 @@ export class StockComponent implements OnInit {
   ngOnInit(): void {
     this.svc.getDepots().subscribe({
       next: d => { this.depots = d; if (d.length && !this.depot) { this.depot = d[0]; this.chargerArticles(); } },
-      error: () => this.toastr.error('Dépôts de stock indisponibles (DivNet).')
+      error: () => this.toastr.error('Dépôts de stock indisponibles.')
     });
   }
 
@@ -92,7 +90,7 @@ export class StockComponent implements OnInit {
     this.loading = true; this.page = 1;
     this.svc.getArticles(this.depot).subscribe({
       next: d => { this.articles = d; this.loading = false; },
-      error: () => { this.loading = false; this.toastr.error('Stock indisponible (DivNet).'); }
+      error: () => { this.loading = false; this.toastr.error('Stock indisponible.'); }
     });
   }
 

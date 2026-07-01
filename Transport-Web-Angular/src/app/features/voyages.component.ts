@@ -76,13 +76,9 @@ import * as L from 'leaflet';
       <div class="modal" style="max-width:1040px" (click)="$event.stopPropagation()">
         <div class="m-head"><h3>{{ editId ? 'Modifier' : 'Nouvelle' }} livraison</h3><button class="x" (click)="modal=false">&times;</button></div>
         <div class="m-body">
-          <p class="muted" style="margin:0 0 12px;font-size:12px">
-            <i class="fa-solid fa-circle-info"></i> Le chauffeur et les heures de chargement/déchargement
-            se définissent au niveau du <strong>Voyage</strong>.
-          </p>
           <div class="form-grid">
             <div class="field combo">
-              <label>Chantier (client) *</label>
+              <label>Chantier *</label>
               <input class="filtre-input" [(ngModel)]="filtreChantier" autocomplete="off"
                      (focus)="comboChantierOpen=true"
                      (input)="comboChantierOpen=true; form.chantierId=undefined"
@@ -151,10 +147,6 @@ import * as L from 'leaflet';
             <div><span class="dk">Déchargement</span><span class="dv">{{ detail.dechargementJour || '—' }} {{ detail.dechargementHeure || '' }}</span></div>
           </div>
 
-          <p class="muted" style="font-size:12px;margin-top:8px">
-            <i class="fa-solid fa-circle-info"></i> Le code de forçage et le bon de livraison se gèrent désormais au niveau du <strong>Voyage</strong> (par ligne).
-          </p>
-
           <h4 class="art-title">Articles du voyage ({{ detailArticles.length }})</h4>
           <div *ngIf="detailLoading" class="spinner" style="margin:20px auto"></div>
           <div *ngIf="!detailLoading && detailArticles.length===0" class="empty" style="padding:20px">
@@ -181,10 +173,6 @@ import * as L from 'leaflet';
               </tbody>
             </table>
           </div>
-
-          <p class="muted" style="font-size:12px;margin-top:14px">
-            <i class="fa-solid fa-circle-info"></i> Le suivi GPS du chauffeur est consultable dans le <strong>Voyage</strong>.
-          </p>
         </div>
         <div class="m-foot">
           <button class="btn btn-outline" (click)="fermerDetailModal()">Fermer</button>

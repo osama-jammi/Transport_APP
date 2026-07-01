@@ -10,14 +10,12 @@ import { FiltreField } from '../shared/filtre-panel.component';
   selector: 'app-articles',
   template: `
     <div class="toolbar">
-      <span class="badge badge-blue"><i class="fa-solid fa-database"></i> Ordres de fabrication lus depuis la base GAP</span>
+      <span class="badge badge-blue"><i class="fa-solid fa-database"></i> Ordres de fabrication</span>
       <div class="search"><i class="fa-solid fa-magnifying-glass"></i>
-        <input [(ngModel)]="q" (ngModelChange)="page=1" placeholder="Rechercher (désignation, n° prix, origine)…"></div>
+        <input [(ngModel)]="q" (ngModelChange)="page=1" placeholder="Rechercher…"></div>
       <button class="btn" [ngClass]="filtresUI ? 'btn-primary' : 'btn-outline'" (click)="basculerFiltres()"
               title="Filtrer par colonne">
         <i class="fa-solid fa-filter"></i> Filtres</button>
-      <button class="btn btn-outline right" (click)="charger()" [disabled]="loading">
-        <i class="fa-solid fa-rotate"></i> Actualiser depuis GAP</button>
     </div>
 
     <app-filtre-panel *ngIf="filtresUI" [fields]="filterFields" [filters]="colF" (change)="page=1"></app-filtre-panel>

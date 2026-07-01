@@ -292,10 +292,6 @@ export default function AdminAnalyses() {
               )}
             </View>
 
-            <View style={styles.note}>
-              <Ionicons name="information-circle-outline" size={15} color={COLORS.textSub} />
-              <Text style={styles.noteTxt}>Données calculées en temps réel depuis l'ERP, filtrées par période / chantier / chauffeur. Tirez vers le bas pour actualiser.</Text>
-            </View>
           </>
         )}
       </ScrollView>

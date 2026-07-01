@@ -281,7 +281,7 @@ interface VoyageLigne {
                          (ngModelChange)="majArticlesStockView(lg)" placeholder="🔍 Chercher un article…" style="margin-bottom:6px">
                   <div *ngIf="lg.loadingStock" class="spinner" style="margin:12px auto"></div>
                   <div *ngIf="lg.depotStock && !lg.loadingStock" class="muted" style="font-size:12px;padding:0 0 4px">
-                    Articles disponibles (avec stock) — {{ lg.articlesStockFiltered?.length || 0 }} article(s)</div>
+                    Articles disponibles — {{ lg.articlesStockFiltered?.length || 0 }} article(s)</div>
                   <div class="art-list full" *ngIf="lg.depotStock && !lg.loadingStock">
                     <div *ngIf="(lg.articlesStockFiltered?.length || 0)===0" class="muted" style="font-size:12px;padding:8px">Aucun article en stock.</div>
                     <div class="art-item" *ngFor="let a of lg.articlesStockView; trackBy: trackStock" [class.checked]="lg.selectedStock?.[a.reference||'']">
@@ -441,7 +441,7 @@ interface VoyageLigne {
                      placeholder="🔍 Chercher un article (désignation, réf)…">
               <div *ngIf="ligneDraft.loadingStock" class="spinner" style="margin:12px auto"></div>
               <div *ngIf="ligneDraft.depotStock && !ligneDraft.loadingStock" class="muted" style="font-size:12px;margin:4px 0">
-                Articles disponibles (avec stock) — {{ ligneDraft.articlesStockFiltered?.length || 0 }} article(s)</div>
+                Articles disponibles — {{ ligneDraft.articlesStockFiltered?.length || 0 }} article(s)</div>
               <div class="table-wrap pick-table" *ngIf="ligneDraft.depotStock && !ligneDraft.loadingStock && (ligneDraft.articlesStockView?.length || 0)">
                 <table>
                   <thead><tr><th style="width:38px"></th><th>Référence</th><th>Désignation</th><th>Unité</th><th>Stock disponible</th><th style="width:90px">Quantité</th></tr></thead>
