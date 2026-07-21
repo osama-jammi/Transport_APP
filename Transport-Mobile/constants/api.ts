@@ -49,6 +49,8 @@ export const ENDPOINTS = {
 
   // Voyages conteneurs (regroupent plusieurs livraisons), filtrés par chauffeur
   VOYAGES_CONTENEURS: '/voyages-conteneurs',
+  // Arrivée sur un chantier sans OF (matières premières / stock seuls)
+  ARRIVEE_CHANTIER: (vcId: number) => `/voyages-conteneurs/${vcId}/arrivee`,
 
   // Tableau de bord administrateur
   DASHBOARD_STATS: '/voyages/stats',

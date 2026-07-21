@@ -134,6 +134,35 @@ export async function confirmerArrivee(
   return data;
 }
 
+/**
+ * Arrivée sur un chantier SANS OF (ligne matières premières / stock seuls).
+ * Rattachée au couple (voyage conteneur, chantier), pas à une livraison GAP.
+ */
+export async function getArriveeChantier(vcId: number, projet: string): Promise<string | null> {
+  const { data } = await api.get<{ arrivee: string | null }>(ENDPOINTS.ARRIVEE_CHANTIER(vcId), { params: { projet } });
+  return data?.arrivee ?? null;
+}
+
+/** Confirmer l'arrivée sur un chantier sans OF (géofence chantier + code de forçage). */
+export async function confirmerArriveeChantier(
+  vcId: number,
+  projet: string,
+  opts: { latitude?: number; longitude?: number; force?: boolean; forceCode?: string } = {},
+): Promise<ArriveeResult> {
+  const { data } = await api.patch<ArriveeResult>(ENDPOINTS.ARRIVEE_CHANTIER(vcId), null, { params: { projet, ...opts } });
+  return data;
+}
+
+/** Géolocalisation d'un chantier (projet GAP) par son code — utile quand aucun OF n'est présent. */
+export async function getChantierGeo(
+  projet: string,
+): Promise<{ latitude: number; longitude: number; rayonMetres?: number } | null> {
+  const { data } = await api.get<any[]>(ENDPOINTS.CHANTIERS_GAP);
+  const ch = (data || []).find((c) => c.code === projet);
+  if (!ch || ch.latitude == null || ch.longitude == null) return null;
+  return { latitude: ch.latitude, longitude: ch.longitude, rayonMetres: ch.rayonMetres ?? undefined };
+}
+
 /** Enregistre le bon de livraison (photo facultative + référence(s)) → voyage livré */
 export async function enregistrerBL(
   voyageId: number,

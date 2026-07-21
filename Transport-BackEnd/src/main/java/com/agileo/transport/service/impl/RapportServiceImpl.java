@@ -55,6 +55,7 @@ public class RapportServiceImpl implements RapportService {
                 r.createCell(9).setCellValue(v.getStatut().name());
             }
             autoSize(sheet, headers.length);
+            insertLogo(wb, sheet);
             return toBytes(wb);
         } catch (Exception e) {
             throw new RuntimeException("Erreur export synthèse", e);
@@ -88,6 +89,7 @@ public class RapportServiceImpl implements RapportService {
                 r.createCell(12).setCellValue(v.getDerniereConnexion() != null ? v.getDerniereConnexion().format(FMT) : "Jamais");
             }
             autoSize(sheet, headers.length);
+            insertLogo(wb, sheet);
             return toBytes(wb);
         } catch (Exception e) {
             throw new RuntimeException("Erreur export détaillé", e);
@@ -110,6 +112,7 @@ public class RapportServiceImpl implements RapportService {
                 r.createCell(3).setCellValue(res.getDate() != null ? res.getDate().format(FMT) : "");
             }
             autoSize(sheet, headers.length);
+            insertLogo(wb, sheet);
             return toBytes(wb);
         } catch (Exception e) {
             throw new RuntimeException("Erreur export réserves", e);
@@ -137,6 +140,7 @@ public class RapportServiceImpl implements RapportService {
                 r.createCell(5).setCellValue(v.getBl() != null ? v.getBl() : "ABSENT");
             }
             autoSize(sheet, headers.length);
+            insertLogo(wb, sheet);
             return toBytes(wb);
         } catch (Exception e) {
             throw new RuntimeException("Erreur export non livrés", e);
@@ -168,6 +172,7 @@ public class RapportServiceImpl implements RapportService {
                 r.createCell(10).setCellValue(v.getLocalNom() != null ? v.getLocalNom() : "");
             }
             autoSize(sheet, headers.length);
+            insertLogo(wb, sheet);
             return toBytes(wb);
         } catch (Exception e) {
             throw new RuntimeException("Erreur export voyages", e);
@@ -219,6 +224,7 @@ public class RapportServiceImpl implements RapportService {
             kv(syn, r++, "Réserves / incidents", reserves.size(), label);
             kv(syn, r++, "Total voyages (hors archivés, filtre)", stats.getVoyagesTotal(), label);
             autoSize(syn, 2);
+            insertLogo(wb, syn);
 
             // ── Feuille 2 : Par chauffeur ───────────────────────────────────
             Sheet sc = wb.createSheet("Par chauffeur");
@@ -235,6 +241,7 @@ public class RapportServiceImpl implements RapportService {
                 row.createCell(6).setCellValue(c.getArticles());
             }
             autoSize(sc, 7);
+            insertLogo(wb, sc);
 
             // ── Feuille 3 : Par chantier ────────────────────────────────────
             Sheet sch = wb.createSheet("Par chantier");
@@ -248,6 +255,7 @@ public class RapportServiceImpl implements RapportService {
                 row.createCell(3).setCellValue(c.getTotal() > 0 ? Math.round(c.getLivres() * 100f / c.getTotal()) : 0);
             }
             autoSize(sch, 4);
+            insertLogo(wb, sch);
 
             // ── Feuille 4 : Par jour ────────────────────────────────────────
             Sheet sj = wb.createSheet("Par jour");
@@ -261,6 +269,7 @@ public class RapportServiceImpl implements RapportService {
                 row.createCell(3).setCellValue(j.getTotal() > 0 ? Math.round(j.getLivres() * 100f / j.getTotal()) : 0);
             }
             autoSize(sj, 4);
+            insertLogo(wb, sj);
 
             // ── Feuille 5 : Réserves / incidents ────────────────────────────
             Sheet sr = wb.createSheet("Réserves");
@@ -274,6 +283,7 @@ public class RapportServiceImpl implements RapportService {
                 row.createCell(3).setCellValue(res.getDate() != null ? res.getDate().format(FMT) : "");
             }
             autoSize(sr, 4);
+            insertLogo(wb, sr);
 
             return toBytes(wb);
         } catch (Exception e) {
@@ -295,7 +305,8 @@ public class RapportServiceImpl implements RapportService {
         Font font = sheet.getWorkbook().createFont();
         font.setBold(true);
         style.setFont(font);
-        style.setFillForegroundColor(IndexedColors.LIGHT_BLUE.getIndex());
+        font.setColor(IndexedColors.WHITE.getIndex());
+        style.setFillForegroundColor(IndexedColors.TEAL.getIndex());
         style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
         for (int i = 0; i < headers.length; i++) {
             Cell cell = headerRow.createCell(i);
@@ -314,7 +325,8 @@ public class RapportServiceImpl implements RapportService {
         CellStyle s = wb.createCellStyle();
         Font f = wb.createFont(); f.setBold(true);
         s.setFont(f);
-        s.setFillForegroundColor(IndexedColors.LIGHT_BLUE.getIndex());
+        f.setColor(IndexedColors.WHITE.getIndex());
+        s.setFillForegroundColor(IndexedColors.TEAL.getIndex());
         s.setFillPattern(FillPatternType.SOLID_FOREGROUND);
         return s;
     }
@@ -352,5 +364,26 @@ public class RapportServiceImpl implements RapportService {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         wb.write(out);
         return out.toByteArray();
+    }
+
+    private void insertLogo(Workbook wb, Sheet sheet) {
+        try {
+            java.io.InputStream is = getClass().getResourceAsStream("/reports/riche-bois-logo.jpg");
+            if (is == null) return;
+            byte[] bytes = org.apache.poi.util.IOUtils.toByteArray(is);
+            int pictureIdx = wb.addPicture(bytes, Workbook.PICTURE_TYPE_JPEG);
+            is.close();
+
+            CreationHelper helper = wb.getCreationHelper();
+            Drawing<?> drawing = sheet.createDrawingPatriarch();
+            ClientAnchor anchor = helper.createClientAnchor();
+            // Position logo flexibly far right
+            anchor.setCol1(sheet.getRow(0) != null ? sheet.getRow(0).getLastCellNum() + 1 : 5);
+            anchor.setRow1(0);
+            Picture pict = drawing.createPicture(anchor, pictureIdx);
+            pict.resize(1.2, 1.2);
+        } catch (Exception e) {
+            // ignore
+        }
     }
 }

@@ -78,7 +78,9 @@ export default function VoyagesScreen() {
     if (!silent) setLoadingState(true);
     try {
       const data = await getVoyagesConteneurs(chauffeur?.id);
-      setVoyagesState(data);
+      // FIFO : le voyage assigné en premier (id le plus petit) apparaît en tête de liste.
+      const dataFifo = [...data].sort((a, b) => a.id - b.id);
+      setVoyagesState(dataFifo);
       // Détecte les voyages nouvellement assignés → sonnerie + notification
       const ids = new Set(data.map(v => v.id));
       if (knownIds.current) {

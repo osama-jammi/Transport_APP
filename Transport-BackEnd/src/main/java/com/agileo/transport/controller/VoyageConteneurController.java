@@ -1,6 +1,8 @@
 package com.agileo.transport.controller;
 
 import com.agileo.transport.Dtos.request.VoyageConteneurRequestDTO;
+import com.agileo.transport.Dtos.response.ArriveeResponseDTO;
+import com.agileo.transport.Dtos.response.GapChantierDTO;
 import com.agileo.transport.Dtos.response.GapVoyageDTO;
 import com.agileo.transport.Dtos.response.VoyageConteneurDTO;
 import com.agileo.transport.Dtos.response.TrajetVoyageResponseDTO;
@@ -8,6 +10,7 @@ import com.agileo.transport.service.ArticleService;
 import com.agileo.transport.service.GapReadService;
 import com.agileo.transport.service.GpsService;
 import com.agileo.transport.service.RapportService;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.http.MediaType;
@@ -18,7 +21,9 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Voyage "conteneur" : regroupe 1..N livraisons. Le chauffeur est affecté ici.
@@ -33,6 +38,10 @@ public class VoyageConteneurController {
     private final GpsService gpsService;
     private final ArticleService articleService;
     private final RapportService rapportService;
+
+    /** Code de forçage d'arrivée fourni par l'administration (identique à /api/voyages). */
+    @Value("${app.arrivee.force-code:AGILEO2026}")
+    private String forceCodeAdmin;
 
     public VoyageConteneurController(GapReadService gapReadService, GpsService gpsService,
                                      ArticleService articleService, RapportService rapportService) {
@@ -162,6 +171,69 @@ public class VoyageConteneurController {
     @Operation(summary = "Lignes de matières premières rattachées au voyage")
     public ResponseEntity<List<com.agileo.transport.Dtos.response.MatierePremiereDTO>> matieres(@PathVariable Long id) {
         return ResponseEntity.ok(gapReadService.getVoyageMatieres(id));
+    }
+
+    @GetMapping("/{id}/arrivee")
+    @Operation(summary = "Etat d'arrivée sur un chantier sans OF (matières premières / stock seuls)")
+    public ResponseEntity<Map<String, Object>> getArriveeChantier(
+            @PathVariable Long id,
+            @RequestParam String projet) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("arrivee", gapReadService.getArriveeChantier(id, projet));
+        return ResponseEntity.ok(body);
+    }
+
+    @PatchMapping("/{id}/arrivee")
+    @Operation(summary = "Confirmer l'arrivée sur un chantier sans OF (géofence chantier + code de forçage)")
+    public ResponseEntity<ArriveeResponseDTO> confirmerArriveeChantier(
+            @PathVariable Long id,
+            @RequestParam String projet,
+            @RequestParam(required = false) Double latitude,
+            @RequestParam(required = false) Double longitude,
+            @RequestParam(required = false, defaultValue = "false") boolean force,
+            @RequestParam(required = false) String forceCode) {
+
+        if (gapReadService.getArriveeChantier(id, projet) != null) {
+            return ResponseEntity.ok(new ArriveeResponseDTO(true, null, null, false, "Arrivée déjà confirmée."));
+        }
+
+        GapChantierDTO chantier = gapReadService.getChantierByCode(projet);
+        boolean geolocalise = chantier != null && chantier.getLatitude() != null && chantier.getLongitude() != null;
+        int rayon = (chantier != null && chantier.getRayonMetres() != null) ? chantier.getRayonMetres() : 100;
+
+        String saisi = forceCode != null ? forceCode.trim() : "";
+        boolean codeOk = force && !saisi.isEmpty()
+                && (saisi.equalsIgnoreCase(forceCodeAdmin) || gapReadService.isForceCodeConteneur(id, saisi));
+
+        Integer distance = null;
+        boolean dansZone = false;
+        if (geolocalise && latitude != null && longitude != null) {
+            double d = distanceMetres(latitude, longitude, chantier.getLatitude(), chantier.getLongitude());
+            distance = (int) Math.round(d);
+            dansZone = d <= rayon;
+        }
+
+        if (dansZone || codeOk) {
+            gapReadService.setArriveeChantier(id, projet, LocalDateTime.now());
+            return ResponseEntity.ok(new ArriveeResponseDTO(true, distance, rayon, false,
+                    codeOk && !dansZone ? "Arrivée forcée validée par code." : "Arrivée confirmée sur le chantier."));
+        }
+
+        String msg = !geolocalise
+                ? "Chantier non géolocalisé : saisissez le code de forçage."
+                : "Hors zone (" + distance + " m > " + rayon + " m). Saisissez le code de forçage si nécessaire.";
+        return ResponseEntity.ok(new ArriveeResponseDTO(false, distance, rayon, true, msg));
+    }
+
+    /** Distance Haversine en mètres entre deux points GPS. */
+    private static double distanceMetres(double lat1, double lon1, double lat2, double lon2) {
+        final double R = 6371000;
+        double dLat = Math.toRadians(lat2 - lat1);
+        double dLon = Math.toRadians(lon2 - lon1);
+        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
+                * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     }
 
     @GetMapping(value = "/{id}/qrcode", produces = MediaType.IMAGE_PNG_VALUE)
