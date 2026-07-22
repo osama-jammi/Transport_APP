@@ -1,0 +1,31 @@
+flowchart LR
+    %% Styles
+    classDef frontend fill:#dbeafe,stroke:#3b82f6,stroke-width:2px,color:#1e3a8a,font-weight:bold,rx:10,ry:10;
+    classDef backend fill:#dcfce7,stroke:#22c55e,stroke-width:2px,color:#14532d,font-weight:bold,rx:10,ry:10;
+    classDef db fill:#fef3c7,stroke:#d97706,stroke-width:2px,color:#78350f,font-weight:bold;
+    classDef boundary fill:none,stroke:#94a3b8,stroke-width:2px,stroke-dasharray: 5 5;
+
+    subgraph Clients ["Interfaces Utilisateurs"]
+        W["Interface Web Angular<br>Back-office et Admin"]:::frontend
+        M["Application Mobile React Native<br>Chauffeurs"]:::frontend
+    end
+
+    subgraph Serveur ["Backend Spring Boot"]
+        A["API REST Core"]:::backend
+        K["Keycloak<br>Authentification SSO"]:::backend
+    end
+
+    subgraph Data ["Bases de Données"]
+        DB1[("Base App Locale<br>Livrables et GPS")]:::db
+        DB2[("Base ERP Divalto<br>Lecture seule")]:::db
+    end
+
+    W <-->|JSON / HTTP| A
+    M <-->|JSON / HTTP| A
+    W -.->|Token JWT| K
+    M -.->|Token JWT| K
+    
+    A <-->|JPA / Hibernate| DB1
+    A -->|JDBC / Vue| DB2
+
+    class Clients,Serveur,Data boundary;

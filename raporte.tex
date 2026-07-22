@@ -1,0 +1,940 @@
+\documentclass[12pt,a4paper]{report}
+\usepackage[utf8]{inputenc}
+\usepackage[french]{babel}
+\usepackage[T1]{fontenc}
+\usepackage{times}
+\usepackage{geometry}
+\usepackage{graphicx}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{setspace}
+\usepackage{enumitem}
+\usepackage{caption}
+\usepackage{etoolbox}
+\usepackage{array}
+\usepackage{xcolor}
+
+% ========== CONFIGURATION GÉNÉRALE ==========
+\geometry{
+    left=2.5cm,
+    right=2.5cm,
+    top=2.5cm,
+    bottom=2.5cm
+}
+
+% Interligne 1.5
+\onehalfspacing
+
+% Justification du texte
+\raggedright
+
+% Configuration de la numérotation des sections
+\renewcommand{\thechapter}{\Roman{chapter}}
+\renewcommand{\thesection}{\thechapter.\arabic{section}}
+\renewcommand{\thesubsection}{\thesection.\arabic{subsection}}
+\renewcommand{\thesubsubsection}{\thesubsection.\arabic{subsubsection}}
+
+% Configuration des titres de chapitres
+\titleformat{\chapter}[display]
+    {\normalfont\fontsize{16}{0}\bfseries\filleft}
+    {}
+    {0pt}
+    {\MakeUppercase}
+    [\vspace{54pt}]
+
+\titlespacing*{\chapter}{0pt}{0pt}{54pt}
+
+% Configuration des sections
+\titleformat{\section}
+    {\normalfont\fontsize{14}{0}\bfseries}
+    {\thesection}
+    {1em}
+    {}
+\titlespacing*{\section}{0pt}{12pt}{12pt}
+
+% Configuration des sous-sections
+\titleformat{\subsection}
+    {\normalfont\fontsize{12}{0}\bfseries}
+    {\thesubsection}
+    {1em}
+    {}
+\titlespacing*{\subsection}{0pt}{6pt}{6pt}
+
+% Configuration des sous-sous-sections
+\titleformat{\subsubsection}
+    {\normalfont\fontsize{12}{0}\bfseries}
+    {\thesubsubsection}
+    {1em}
+    {}
+\titlespacing*{\subsubsection}{0pt}{6pt}{6pt}
+
+% Configuration des légendes
+\captionsetup[figure]{
+    font=small,
+    labelfont=bf,
+    textfont=it,
+    justification=centering,
+    skip=6pt,
+    singlelinecheck=false
+}
+
+\captionsetup[table]{
+    font=small,
+    labelfont=bf,
+    textfont=normalfont,
+    justification=centering,
+    skip=6pt,
+    singlelinecheck=false,
+    position=top
+}
+
+\renewcommand{\figurename}{Figure}
+\renewcommand{\tablename}{Tableau}
+
+% Configuration en-têtes et pieds de page
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\leftmark}
+\fancyfoot[R]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\setlength{\headheight}{15pt}
+
+\fancypagestyle{plain}{
+    \fancyhf{}
+    \fancyhead[L]{\leftmark}
+    \fancyfoot[R]{\thepage}
+    \renewcommand{\headrulewidth}{0.4pt}
+}
+
+\renewcommand{\chaptermark}[1]{\markboth{\MakeUppercase{#1}}{}}
+\renewcommand{\sectionmark}[1]{\markright{\thesection\ #1}}
+
+\newcommand{\preliminarymark}[1]{\markboth{\MakeUppercase{#1}}{}}
+
+% ========== NUMÉROTATION DES PAGES ==========
+\newcommand{\frontmatter}{
+    \pagestyle{empty}
+    \pagenumbering{gobble}
+    \setcounter{page}{0}
+}
+
+\newcommand{\mainmatter}{
+    \cleardoublepage
+    \pagestyle{fancy}
+    \pagenumbering{arabic}
+    \setcounter{page}{1}
+}
+
+% ========== HYPERREF ==========
+\usepackage[pdftex,
+            pdfauthor={Osama Jammi},
+            pdftitle={Rapport de Stage - Conception et developpement d'une application de gestion et de suivi du transport et de la livraison},
+            pdfsubject={Solution multiplateforme web et mobile pour la livraison de chantier},
+            pdfkeywords={transport, livraison, Angular, Spring Boot, React Native, QR code, GPS, Keycloak},
+            colorlinks=true,
+            linkcolor=blue,
+            citecolor=blue,
+            urlcolor=blue,
+            breaklinks=true,
+            bookmarks=true,
+            bookmarksopen=true]{hyperref}
+
+\begin{document}
+
+% ====================== PAGES PRÉLIMINAIRES ======================
+\frontmatter
+
+% -------- PAGE DE GARDE --------
+\begin{titlepage}
+    \begin{center}
+        \includegraphics[width=0.70\textwidth]{logo.png}\\[0.3cm]
+        {\color{blue}\rule{\textwidth}{15pt}} \\[1cm]
+        {\Large \textbf{RAPPORT DE STAGE}}\\[0.5cm]
+
+        \textbf{Filière :} Management et Gouvernance des Systèmes d'Information \\[1cm]
+
+       {\color{blue}\rule{\textwidth}{5pt}} \\[0.2cm]
+{\LARGE \textbf{CONCEPTION ET DÉVELOPPEMENT D'UNE APPLICATION MULTIPLATEFORME DE GESTION ET DE SUIVI DU TRANSPORT ET DE LA LIVRAISON}} \\[0.5cm]
+{\color{blue}\rule{\textwidth}{5pt}} \\[0.2cm]
+
+        \textbf{Présenté par :}\\
+        Osama JAMMI\\[0.5cm]
+
+        \textbf{Soutenue le ......................  l'Heure  .......}
+
+        \textbf{Devant le jury :}\\[0.5cm]
+        \begin{tabular}{ll}
+        M. ANTARI JILALI & Président \\
+        Pr .......................................... & Examinateur \\
+        Pr .......................................... & Examinateur \\
+        Pr. Said AIT TEMGHART & Encadrant académique \\
+        M. Yahya AHROUM & Encadrant entreprise \\
+        \end{tabular}\\[1.5cm]
+
+        \vfill
+        Année Universitaire 2024-2025
+        {\color{blue}\rule{\textwidth}{15pt}} \\[0.5cm]
+    \end{center}
+\end{titlepage}
+\newpage
+\newpage
+
+% ====================== DÉDICACES ======================
+\chapter*{Dédicaces}
+\preliminarymark{}
+\thispagestyle{plain}
+
+\begin{center}
+\vspace*{\fill}
+
+{\large\textit{À ma très chère Mère,}}
+
+\vspace{0.5cm}
+
+Quoi que je fasse ou que je dise, je ne saurais vous remercier assez. Au fil des ans, vous avez été ma source d'amour, de sagesse et de réconfort. Votre infinie bonté m'a guidé à travers les hauts et les bas de la vie.
+
+\vspace{0.8cm}
+
+{\large\textit{À mon très cher père,}}
+
+\vspace{0.5cm}
+
+Votre exemple de persévérance, de détermination et de bonté est une source constante d'inspiration. Les valeurs et les enseignements que vous m'avez transmis ont profondément façonné mon caractère et ma vision du monde.
+
+\vspace{0.8cm}
+
+{\large\textit{À mes chers frères et sœurs,}}
+
+\vspace{0.5cm}
+
+Que Dieu vous comble de santé, de bonheur et de réussite. Votre bien-être et votre épanouissement sont des prières dans mon cœur.
+
+\vspace{0.8cm}
+
+{\large\textit{À mes amis,}}
+
+\vspace{0.5cm}
+
+Que la vie vous accorde santé, joie et réussite en abondance. Mes pensées les plus sincères vous accompagnent toujours.
+
+\vspace{0.8cm}
+
+{\large\textit{À toute ma famille,}}
+
+\vspace{0.5cm}
+
+Qui a fait preuve de soutien et qui m'a donné une motivation sans prix.
+
+\vspace{0.8cm}
+
+{\large\textit{À toutes les personnes qui ont cru en mes succès,}}
+
+\vspace{0.5cm}
+
+Votre confiance a été un puissant moteur sur mon chemin. Je vous en suis profondément reconnaissant.
+
+\vspace*{\fill}
+\end{center}
+\newpage
+
+% ====================== REMERCIEMENTS ======================
+\chapter*{Remerciements}
+\preliminarymark{}
+\thispagestyle{plain}
+
+\vspace*{2cm}
+
+Ce projet n'aurait jamais pu voir le jour sans l'aide et le soutien de plusieurs personnes que je tiens à remercier sincèrement et à qui je dédie ce travail.
+
+\vspace{0.8cm}
+
+\textbf{Pr. Said AIT TEMGHART}, mon encadrant pédagogique, qui m'a constamment conseillé et n'a ménagé aucun effort pour contribuer à la réussite de ce projet.
+
+\vspace{0.5cm}
+
+\textbf{M. Yahya AHROUM}, pour son accueil et son accompagnement au sein de l'entreprise, ce qui m'a permis de vivre une expérience enrichissante et intéressante.
+
+\vspace{0.5cm}
+
+Je tiens également à remercier \textbf{M. Hicham AZZA}, consultant ERP, pour ses précieux conseils et son soutien tout au long du projet.
+
+\vspace{0.5cm}
+
+Tous mes professeurs, et en particulier les membres du jury, qui ont accepté d'évaluer mon travail.
+
+\vspace{0.5cm}
+
+Mon institut, l'\textbf{ENSIASD}, qui m'a offert l'opportunité de suivre une formation professionnelle de qualité.
+
+\vspace{0.5cm}
+
+Enfin, je tiens à remercier sincèrement \textbf{Mme Narjiss DAHBI} et toutes les personnes chez Riche Bois qui ont contribué, de près ou de loin, à la réussite de ce projet.
+
+\newpage
+
+% ====================== RÉSUMÉ ======================
+\chapter*{Résumé}
+\preliminarymark{}
+\thispagestyle{plain}
+
+La maîtrise des flux logistiques est aujourd'hui un facteur déterminant de performance pour les entreprises du bâtiment, dont l'activité repose sur l'acheminement quotidien de matériel vers des chantiers dispersés. Pourtant, la phase de transport et de livraison reste souvent gérée de façon manuelle, ce qui prive l'entreprise de toute visibilité en temps réel et fragilise la traçabilité des marchandises.
+
+\vspace{0.5cm}
+
+Ce projet de stage porte sur la conception et le développement d'une solution numérique dédiée à la gestion et au suivi du transport et de la livraison chez Riche Bois. L'objectif est de remplacer un processus essentiellement papier — bons de livraison manuscrits, suivi téléphonique, ressaisie a posteriori — par un outil connecté qui couvre l'ensemble du cycle, depuis la préparation du voyage jusqu'à la confirmation de livraison sur le chantier.
+
+\vspace{0.5cm}
+
+La solution mise en place s'articule autour de trois composants complémentaires : une interface web Angular destinée à l'administration et au pilotage, une application mobile React Native (Expo) utilisée par les chauffeurs et les superviseurs sur le terrain, et un backend Spring Boot exposant des APIs REST. L'application s'appuie sur la base de l'ERP Divalto déjà en place, qu'elle exploite en lecture pour récupérer les commandes, les chantiers et les articles, sans jamais altérer les données de gestion. La confirmation des opérations repose sur la lecture de codes QR, et la position des camions est remontée en temps réel par GPS.
+
+\vspace{0.5cm}
+
+Les apports concrets de ce travail sont la dématérialisation du bon de livraison, le suivi cartographique des trajets, un mécanisme de validation en deux temps (chargement puis livraison) sécurisé par une vérification d'arrivée sur le chantier, ainsi que des tableaux de bord et des exports statistiques exploitables par l'encadrement. L'ensemble redonne à l'entreprise une visibilité qui lui faisait défaut et réduit sensiblement les sources d'erreur et de litige.
+
+\vspace{1cm}
+
+\textbf{Mots-clés :} transport, livraison, traçabilité, code QR, suivi GPS, Angular, Spring Boot, React Native, Keycloak, API REST, ERP Divalto.
+
+\newpage
+
+% ====================== TABLE DES MATIÈRES ======================
+\chapter*{Table des matières}
+\preliminarymark{TABLE DES MATIÈRES}
+\thispagestyle{plain}
+
+\vspace{1cm}
+
+\begin{center}
+{\Large \textbf{Table des matières}}
+\end{center}
+
+\vspace{0.5cm}
+
+\begin{spacing}{1.0}
+
+\textbf{INTRODUCTION GÉNÉRALE} \dotfill  1\\
+
+\noindent
+\textbf{I PRÉSENTATION DE L'ENTREPRISE ET CADRAGE DU PROJET} \dotfill 3 \\
+\quad I.1 Introduction \dotfill 3 \\
+\quad I.2 Présentation de l'entreprise Riche Bois \dotfill 3 \\
+\quad \quad I.2.1 Présentation générale \dotfill 3 \\
+\quad \quad I.2.2 Domaines d'activité \dotfill 3 \\
+\quad \quad I.2.3 Organisation interne \dotfill 4 \\
+\quad \quad I.2.4 Ressources matérielles et logicielles \dotfill 5 \\
+\quad \quad I.2.5 Références clients \dotfill 5 \\
+\quad \quad I.2.6 Parties prenantes \dotfill 6 \\
+\quad I.3 Analyse stratégique \dotfill 6 \\
+\quad \quad I.3.1 Analyse SWOT \dotfill 6 \\
+\quad \quad I.3.2 Analyse PESTEL \dotfill 7 \\
+\quad I.4 Contexte et problématique \dotfill 8 \\
+\quad I.5 Conclusion \dotfill 8 \\
+
+\noindent
+\textbf{II ANALYSE DE L'EXISTANT ET SPÉCIFICATION DES BESOINS} \dotfill 9 \\
+\quad II.1 Introduction \dotfill 9 \\
+\quad II.2 Étude du processus actuel \dotfill 9 \\
+\quad \quad II.2.1 Le circuit de livraison aujourd'hui \dotfill 9 \\
+\quad \quad II.2.2 Outils et supports utilisés \dotfill 10 \\
+\quad \quad II.2.3 Problèmes identifiés \dotfill 11 \\
+\quad \quad II.2.4 Impact sur l'activité \dotfill 13 \\
+\quad II.3 Spécification des besoins \dotfill 14 \\
+\quad \quad II.3.1 Identification des acteurs \dotfill 14 \\
+\quad \quad II.3.2 Besoins fonctionnels \dotfill 14 \\
+\quad \quad II.3.3 Besoins non fonctionnels \dotfill 16 \\
+\quad II.4 Solution proposée \dotfill 17 \\
+\quad II.5 Méthodologie de travail \dotfill 18 \\
+\quad II.6 Conclusion \dotfill 19 \\
+
+\noindent
+\textbf{III CONCEPTION ET MODÉLISATION DU PROJET} \dotfill 20 \\
+\quad III.1 Introduction \dotfill 20 \\
+\quad III.2 Architecture de la solution \dotfill 20 \\
+\quad \quad III.2.1 Vue d'ensemble \dotfill 20 \\
+\quad \quad III.2.2 Choix d'une architecture découplée \dotfill 21 \\
+\quad \quad III.2.3 Accès aux données et intégration ERP \dotfill 22 \\
+\quad III.3 Diagramme de cas d'utilisation \dotfill 22 \\
+\quad \quad III.3.1 Rôles et permissions \dotfill 24 \\
+\quad III.4 Diagramme de classes \dotfill 24 \\
+\quad III.5 Diagrammes de séquence \dotfill 26 \\
+\quad \quad III.5.1 Chargement, arrivée et livraison \dotfill 26 \\
+\quad \quad III.5.2 Suivi GPS en temps réel \dotfill 28 \\
+\quad III.6 Conclusion \dotfill 29 \\
+
+\noindent
+\textbf{IV MISE EN ŒUVRE DU PROJET} \dotfill 30 \\
+\quad IV.1 Introduction \dotfill 30 \\
+\quad IV.2 Environnement de travail \dotfill 30 \\
+\quad \quad IV.2.1 Environnement matériel \dotfill 30 \\
+\quad \quad IV.2.2 Environnement logiciel \dotfill 30 \\
+\quad IV.3 Réalisation de l'interface web \dotfill 31 \\
+\quad IV.4 Réalisation de l'application mobile \dotfill 35 \\
+\quad IV.5 Fonctionnalités transverses \dotfill 38 \\
+\quad IV.6 Tests et validation \dotfill 40 \\
+\quad IV.7 Conclusion \dotfill 41 \\
+
+\noindent
+\textbf{CONCLUSION GÉNÉRALE} \dotfill 42 \\
+\textbf{BIBLIOGRAPHIE ET WEBographie} \dotfill 43
+\end{spacing}
+
+\newpage
+
+% ====================== LISTE DES FIGURES ======================
+\chapter*{Liste des figures}
+\preliminarymark{LISTE DES FIGURES}
+\thispagestyle{plain}
+
+\vspace{1cm}
+
+\begin{center}
+{\Large \textbf{Liste des figures}}
+\end{center}
+
+\vspace{0.5cm}
+
+\begin{spacing}{1.0}
+\textbf{Figure I.1} : Organigramme de l'entreprise \dotfill 6 \\
+
+\textbf{Figure II.1} : Bon de livraison papier utilisé sur les chantiers \dotfill 11 \\
+\textbf{Figure II.2} : Schéma du circuit de livraison manuel actuel \dotfill 12 \\
+
+\textbf{Figure III.1} : Architecture générale de la solution \dotfill 21 \\
+\textbf{Figure III.2} : Diagramme de cas d'utilisation \dotfill 23 \\
+\textbf{Figure III.3} : Diagramme de classes des entités principales \dotfill 25 \\
+\textbf{Figure III.4} : Diagramme de séquence — chargement, arrivée et livraison \dotfill 27 \\
+\textbf{Figure III.5} : Diagramme de séquence — suivi GPS en temps réel \dotfill 28 \\
+
+\textbf{Figure IV.1} : Page de connexion de l'interface web \dotfill 31 \\
+\textbf{Figure IV.2} : Tableau de bord web \dotfill 32 \\
+\textbf{Figure IV.3} : Liste des livraisons \dotfill 32 \\
+\textbf{Figure IV.4} : Saisie d'un voyage (ordre de fabrication et matières) \dotfill 33 \\
+\textbf{Figure IV.5} : Détail d'une livraison \dotfill 33 \\
+\textbf{Figure IV.6} : Bon de livraison généré (PDF) \dotfill 34 \\
+\textbf{Figure IV.7} : Gestion de la flotte \dotfill 34 \\
+\textbf{Figure IV.8} : Suivi des trajets sur carte \dotfill 35 \\
+\textbf{Figure IV.9} : Espace d'administration \dotfill 35 \\
+\textbf{Figure IV.10} : Connexion du chauffeur par QR code (mobile) \dotfill 36 \\
+\textbf{Figure IV.11} : Accueil chauffeur — liste des voyages \dotfill 36 \\
+\textbf{Figure IV.12} : Détail d'une livraison et scan des articles \dotfill 37 \\
+\textbf{Figure IV.13} : Confirmation d'arrivée sur le chantier \dotfill 37 \\
+\textbf{Figure IV.14} : Tableau de bord administrateur (mobile) \dotfill 38 \\
+\textbf{Figure IV.15} : Positions des chauffeurs en temps réel (mobile) \dotfill 38 \\
+\end{spacing}
+
+\newpage
+
+% ====================== LISTE DES TABLEAUX ======================
+\chapter*{Liste des tableaux}
+\preliminarymark{LISTE DES TABLEAUX}
+\thispagestyle{plain}
+
+\vspace{1cm}
+
+\begin{center}
+{\Large \textbf{Liste des tableaux}}
+\end{center}
+
+\vspace{0.5cm}
+
+\begin{spacing}{1.0}
+\textbf{Tableau I.1} : Analyse SWOT \dotfill 7 \\
+\textbf{Tableau II.1} : Principaux dysfonctionnements du processus actuel \dotfill 13 \\
+\textbf{Tableau II.2} : Besoins fonctionnels par acteur \dotfill 15 \\
+\textbf{Tableau II.3} : Comparaison entre le processus actuel et la solution cible \dotfill 18 \\
+\textbf{Tableau III.1} : Matrice des rôles et permissions \dotfill 24 \\
+\textbf{Tableau IV.1} : Stack technologique utilisée \dotfill 31 \\
+\textbf{Tableau IV.2} : Résultats des tests fonctionnels \dotfill 40 \\
+\end{spacing}
+
+\newpage
+
+% ====================== LISTE DES ACRONYMES ======================
+\chapter*{Liste des Acronymes}
+\preliminarymark{LISTE DES ABRÉVIATIONS}
+\thispagestyle{plain}
+
+\vspace{1cm}
+
+\begin{center}
+{\Large \textbf{Liste des Acronymes}}
+\end{center}
+
+\vspace{0.5cm}
+
+\begin{spacing}{1.0}
+\begin{tabular}{p{3cm}p{10cm}}
+\textbf{AES} & Advanced Encryption Standard \\
+\textbf{API} & Application Programming Interface \\
+\textbf{BET} & Bureau d'Études Techniques \\
+\textbf{BL} & Bon de Livraison \\
+\textbf{CAO} & Conception Assistée par Ordinateur \\
+\textbf{CRUD} & Create, Read, Update, Delete \\
+\textbf{ERP} & Enterprise Resource Planning (progiciel de gestion intégré) \\
+\textbf{GAP} & Base de données de l'ERP Divalto (Gestion des Achats et Production) \\
+\textbf{GPS} & Global Positioning System \\
+\textbf{JPA} & Jakarta Persistence API \\
+\textbf{JWT} & JSON Web Token \\
+\textbf{KPI} & Key Performance Indicator \\
+\textbf{MP} & Matière Première \\
+\textbf{OF} & Ordre de Fabrication \\
+\textbf{OIDC} & OpenID Connect \\
+\textbf{ORM} & Object-Relational Mapping \\
+\textbf{QR} & Quick Response (code) \\
+\textbf{REST} & REpresentational State Transfer \\
+\textbf{SGBD} & Système de Gestion de Base de Données \\
+\textbf{SPA} & Single Page Application \\
+\textbf{SSO} & Single Sign-On \\
+\textbf{STOMP} & Simple Text Oriented Messaging Protocol \\
+\textbf{TCE} & Tous Corps d'État \\
+\textbf{UML} & Unified Modeling Language \\
+\end{tabular}
+\end{spacing}
+
+\newpage
+
+% ====================== CORPS DU DOCUMENT ======================
+\mainmatter
+
+% ====================== INTRODUCTION GÉNÉRALE ======================
+\chapter*{INTRODUCTION GÉNÉRALE}
+\preliminarymark{INTRODUCTION GÉNÉRALE}
+\addcontentsline{toc}{chapter}{INTRODUCTION GÉNÉRALE}
+\label{chap:intro}
+
+La logistique du dernier kilomètre est devenue un point sensible pour beaucoup d'entreprises industrielles. Fabriquer dans les délais ne suffit plus : encore faut-il acheminer le bon matériel, au bon endroit, au bon moment, et pouvoir le prouver. Dans le secteur du bâtiment, où les chantiers sont nombreux et géographiquement éclatés, cette exigence prend une dimension particulière.
+
+Riche Bois, entreprise marocaine spécialisée dans la menuiserie et l'agencement, livre chaque jour ses chantiers à partir de ses ateliers. Jusqu'à présent, cette activité de transport reposait largement sur des supports papier et sur des échanges informels : un bon de livraison rempli à la main, un coup de téléphone pour savoir où se trouve le camion, une remontée d'information souvent tardive. Ce fonctionnement, longtemps suffisant, montre aujourd'hui ses limites au fur et à mesure que le volume d'activité augmente.
+
+C'est dans ce cadre que s'inscrit mon projet de stage. Il ne s'agit pas de modifier la façon dont l'entreprise gère ses achats ou sa production — domaines déjà couverts par l'ERP Divalto — mais d'outiller spécifiquement la phase de livraison, qui en était jusque-là le maillon faible. L'idée directrice a été de partir des données déjà présentes dans le système de gestion et de construire, par-dessus, une couche dédiée au suivi terrain.
+
+La solution développée est volontairement multiplateforme. Côté bureau, une application web permet aux responsables de préparer les voyages, de suivre les livraisons et d'éditer les documents. Côté terrain, une application mobile accompagne le chauffeur tout au long de sa tournée : elle lui présente ses livraisons, lui fait scanner les marchandises, confirme son arrivée sur le chantier et remonte sa position. L'ensemble communique avec un serveur central qui centralise la logique métier et reste branché en lecture sur la base de l'ERP.
+
+Ce rapport rend compte de la démarche suivie. Le premier chapitre présente l'entreprise d'accueil et situe le besoin. Le deuxième analyse le fonctionnement actuel de la livraison et en déduit les spécifications. Le troisième détaille la conception : architecture, modélisation et principaux scénarios. Le quatrième décrit la réalisation concrète, les interfaces produites et les tests menés. Une conclusion revient enfin sur les apports du projet et sur ses prolongements possibles.
+
+\newpage
+
+% ====================== CHAPITRE 1 ======================
+\chapter{ Chapitre I : PRÉSENTATION DE L'ENTREPRISE ET CADRAGE DU PROJET}
+
+\section{Introduction}
+
+Avant d'entrer dans le détail technique, il est utile de présenter le contexte dans lequel ce projet a vu le jour. Ce chapitre décrit l'entreprise Riche Bois, son activité et son organisation, puis pose le cadre du stage et la problématique à laquelle la solution répond.
+
+\section{Présentation de l'entreprise Riche Bois}
+
+\subsection{Présentation générale}
+
+Fondée en 1977 par M. Lahcen El Baz, Riche Bois est une entreprise marocaine spécialisée dans les travaux de menuiserie, d'agencement et de second œuvre pour le secteur du bâtiment. Implantée à Casablanca, elle dispose de plusieurs sites industriels, notamment à Aïn Sebaâ et à Beau Site, où elle opère ses différentes unités de production.
+
+Avec un effectif de près de 2000 collaborateurs et un capital social de 35 millions de dirhams, Riche Bois s'impose aujourd'hui comme l'un des acteurs majeurs de l'aménagement technique et architectural au Maroc. Son savoir-faire couvre aussi bien les projets résidentiels que les établissements professionnels : banques, hôtels, musées, hôpitaux, entre autres.
+
+\subsection{Domaines d'activité}
+
+L'entreprise intervient dans plusieurs métiers liés au second œuvre et à l'aménagement intérieur sur mesure :
+
+\begin{itemize}
+\item \textbf{Menuiserie bois} : fabrication et installation de portes, cloisons, habillages muraux et mobiliers personnalisés ;
+\item \textbf{Menuiserie aluminium} : conception de fenêtres, châssis, verrières et cloisons intérieures ;
+\item \textbf{Métallerie} : réalisation de structures métalliques, escaliers, garde-corps et éléments en inox ;
+\item \textbf{Travaux tous corps d'état (TCE)} : électricité, climatisation, peinture, revêtements de sol, faux plafonds.
+\end{itemize}
+
+Cette diversité permet à Riche Bois de prendre en charge des projets clé en main, en proposant des solutions intégrées et à forte valeur ajoutée. Elle implique aussi une logistique importante : chaque chantier doit être approvisionné en continu, ce qui place le transport au cœur du bon déroulement des opérations.
+
+\subsection{Organisation interne}
+
+L'organisation de Riche Bois s'appuie sur plusieurs départements fonctionnels — production, achats, logistique, gestion commerciale — chacun doté d'équipes spécialisées. Cette structuration vise à coordonner des activités nombreuses et de natures très différentes.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.8\textwidth]{structuree.png}
+    \caption{Organigramme de l'entreprise}
+    \label{fig:organigramme}
+\end{figure}
+
+La Figure \ref{fig:organigramme} présente l'organisation hiérarchique de l'entreprise. Au sommet se trouve la Direction Générale, qui supervise six départements principaux.
+
+\subsubsection{Département commercial}
+
+Ce département regroupe plusieurs chefs de projet, organisés en deux branches : une branche technique (réalisation, métré, attachement) et une branche commerciale (prospection, offres, commandes, suivi du chiffre d'affaires et des marges). Une secrétaire assiste l'ensemble du département.
+
+\subsubsection{Département technique}
+
+Il rassemble les services opérationnels : le Bureau d'Études Techniques (B.E.T) chargé de l'étude et du chiffrage, la production (fabrication, assemblage, finition), la coordination de chantier (installation et pose), ainsi que les achats, la logistique et le magasin qui gèrent l'approvisionnement et les stocks. C'est de ce périmètre que relève directement la problématique de transport traitée ici.
+
+\subsubsection{Département administratif et financier}
+
+Organisé autour de la comptabilité, du recouvrement, des ressources humaines et des affaires générales — ce dernier service incluant notamment la gestion des chauffeurs et des véhicules.
+
+\subsubsection{Département I.T. (informatique)}
+
+Il assure la gestion de la base de données, des flux de données, du site internet, de la communication interne, de l'intranet et du mailing. C'est l'interlocuteur naturel pour tout projet de digitalisation.
+
+\subsubsection{Département Qualité}
+
+Chargé du Système de Management de la Qualité, du pilotage de la certification ISO 9001:2015, de la rédaction des procédures et du suivi des indicateurs.
+
+\subsection{Ressources matérielles et logicielles}
+
+Riche Bois s'appuie sur des infrastructures bien structurées :
+
+\begin{itemize}
+\item Quatre ateliers industriels, spécialisés respectivement dans le bois, l'aluminium, le métal et l'électricité ;
+\item Un bureau d'études techniques équipé de logiciels de conception assistée par ordinateur (CAO) ;
+\item Un ERP Divalto, utilisé pour les volets commercial, achats, comptabilité et, en partie, production ;
+\item Un parc de véhicules (camions, pick-up, voitures) dédié à la livraison des chantiers ;
+\item Des outils bureautiques classiques, notamment Excel, pour de nombreux suivis quotidiens.
+\end{itemize}
+
+Il faut souligner que l'ERP couvre bien la gestion administrative, mais qu'aucun outil ne prenait en charge le suivi physique des livraisons. C'est précisément ce vide que le projet vient combler.
+
+\subsection{Références clients}
+
+Forte de son expérience, Riche Bois a participé à de nombreux projets d'envergure au Maroc :
+
+\begin{itemize}
+\item \textbf{Secteur bancaire} : aménagements pour la Banque Populaire, le CIH, Bank of Africa ;
+\item \textbf{Hôtellerie} : interventions dans des hôtels comme ONOMO et Kenzi ;
+\item \textbf{Établissements publics} : musées, ministères, infrastructures culturelles ;
+\item \textbf{Santé et éducation} : hôpitaux universitaires et écoles privées.
+\end{itemize}
+
+\subsection{Parties prenantes}
+
+Plusieurs acteurs ont été impliqués dans le projet :
+
+\begin{enumerate}
+\item \textbf{La direction et le département logistique :} à l'origine du besoin, ils ont défini les attentes en matière de suivi et de traçabilité ;
+
+\item \textbf{Le département informatique :} responsable du déploiement, de l'accès à la base ERP et de l'hébergement de l'application ;
+
+\item \textbf{Les utilisateurs finaux :} les chauffeurs sur le terrain et les superviseurs au bureau, dont les retours ont guidé l'ergonomie de l'outil.
+\end{enumerate}
+
+\section{Analyse stratégique}
+
+\subsection{Analyse SWOT}
+
+\begin{table}[htbp]
+\centering
+\caption{Analyse SWOT}
+\label{tab:swot_complete}
+\begin{tabular}{|p{7cm}|p{7cm}|}
+\hline
+\textbf{Forces} & \textbf{Faiblesses} \\
+\hline
+- Expertise technique reconnue dans plusieurs métiers & - Suivi de livraison manuel, sans traçabilité \\
+- Forte présence sur le marché du BTP marocain & - Bons de livraison papier souvent perdus ou illisibles \\
+- Parc de véhicules et chauffeurs déjà en place & - Aucune visibilité sur la position des camions \\
+- ERP Divalto déjà intégré aux processus de gestion & - Remontée d'information tardive vers le bureau \\
+\hline
+\textbf{Opportunités} & \textbf{Menaces} \\
+\hline
+- Digitalisation croissante des entreprises marocaines & - Concurrents équipés d'outils de suivi plus modernes \\
+- Démocratisation du smartphone sur le terrain & - Litiges clients en cas de livraison non prouvée \\
+- Attente des clients en matière de traçabilité & - Dépendance à la qualité du réseau mobile sur chantier \\
+ & - Résistance possible au changement chez certains chauffeurs \\
+\hline
+\end{tabular}
+\end{table}
+
+L'analyse SWOT (Tableau \ref{tab:swot_complete}) montre une entreprise solide sur son cœur de métier mais peu outillée sur le volet logistique aval. La présence d'un parc de véhicules, de chauffeurs et d'un ERP déjà alimenté constitue un terrain favorable : il ne manquait qu'une brique applicative pour relier le terrain au système d'information. C'est l'opportunité que ce projet a cherché à saisir.
+
+\subsection{Analyse PESTEL}
+
+L'analyse PESTEL replace le projet dans son environnement externe.
+
+\textbf{Facteurs politiques :} stabilité favorable aux investissements informatiques et politiques publiques encourageant la transformation numérique des entreprises.
+
+\textbf{Facteurs économiques :} nécessité de réduire les coûts logistiques et d'éviter les pertes liées aux erreurs de livraison ; retour sur investissement attendu d'un meilleur taux de service.
+
+\textbf{Facteurs socioculturels :} généralisation du smartphone, y compris chez les conducteurs, qui rend une application mobile naturelle à adopter ; il faut toutefois accompagner le changement d'habitudes.
+
+\textbf{Facteurs technologiques :} maturité des frameworks web et mobiles, disponibilité de la géolocalisation sur les terminaux courants, et solutions d'authentification éprouvées.
+
+\textbf{Facteurs environnementaux :} la suppression du papier et une meilleure planification des tournées contribuent, modestement, à réduire l'empreinte de l'activité.
+
+\textbf{Facteurs juridiques :} besoin de conserver une preuve de livraison opposable et de protéger les données personnelles des employés (position, identité du chauffeur).
+
+\section{Contexte et problématique}
+
+Le constat de départ est simple. Riche Bois sait précisément ce qu'elle produit et ce qu'elle facture, mais beaucoup moins ce qui se passe entre la sortie de l'atelier et la réception sur le chantier. Une fois le camion parti, l'information se perd : on ne sait pas où il est, ni si la livraison s'est réellement déroulée comme prévu, jusqu'au retour — parfois tardif — d'un bon de livraison papier.
+
+La problématique peut donc se formuler ainsi : \textit{comment doter l'entreprise d'un outil permettant de préparer, suivre et prouver ses livraisons en temps réel, sans perturber le système de gestion existant ?} Répondre à cette question suppose de relier deux mondes qui ne se parlaient pas — le bureau et le terrain — et de le faire en s'appuyant sur les données déjà présentes dans l'ERP plutôt qu'en les dupliquant.
+
+\section{Conclusion}
+
+Ce premier chapitre a présenté Riche Bois, son organisation et son environnement, puis a circonscrit le besoin. L'entreprise dispose des moyens humains et matériels pour livrer ses chantiers, mais lui manque une visibilité sur cette activité. Le chapitre suivant analyse en détail le fonctionnement actuel de la livraison et en déduit les fonctionnalités attendues de la nouvelle solution.
+
+\newpage
+
+% ====================== CHAPITRE 2 ======================
+\chapter{Chapitre II : ANALYSE DE L'EXISTANT ET SPÉCIFICATION DES BESOINS}
+
+\section{Introduction}
+
+Pour concevoir un outil réellement utile, il faut d'abord comprendre comment les choses se passent sur le terrain. Ce chapitre décrit le circuit de livraison tel qu'il existait au début du stage, met en lumière ses limites, puis traduit ces constats en besoins fonctionnels et non fonctionnels précis.
+
+\section{Étude du processus actuel}
+
+\subsection{Le circuit de livraison aujourd'hui}
+
+Le déroulement d'une livraison suivait, dans les grandes lignes, le scénario suivant. Une fois la production terminée, le magasin préparait la marchandise destinée à un chantier. Un bon de livraison était rempli à la main, reprenant le chantier, les articles et les quantités. Le chauffeur chargeait le camion, prenait le bon papier, puis partait livrer.
+
+Pendant le trajet, le bureau n'avait aucun moyen de savoir où se trouvait le véhicule. La seule façon d'obtenir une information était d'appeler le chauffeur. À l'arrivée, le client ou son représentant signait le bon papier. Ce bon revenait ensuite au bureau — parfois le jour même, parfois plusieurs jours plus tard — où il était archivé, voire ressaisi pour les besoins du suivi.
+
+\subsection{Outils et supports utilisés}
+
+Concrètement, le processus s'appuyait sur trois supports : le bon de livraison papier, le téléphone pour le suivi, et des fichiers Excel pour consolider l'information après coup. L'ERP Divalto contenait bien les commandes et les chantiers, mais il n'était pas conçu pour suivre l'exécution physique d'une tournée.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.7\textwidth]{bl_papier.png}
+\caption{Bon de livraison papier utilisé sur les chantiers}
+\label{fig:bl_papier}
+\end{figure}
+
+La Figure \ref{fig:bl_papier} montre le type de document utilisé. Au-delà du risque de perte, ce support pose un problème de fiabilité : une quantité mal recopiée, une signature illisible ou un bon égaré suffisent à fausser le suivi.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.85\textwidth]{circuit_manuel.png}
+\caption{Schéma du circuit de livraison manuel actuel}
+\label{fig:circuit_manuel}
+\end{figure}
+
+La Figure \ref{fig:circuit_manuel} résume ce circuit. On y voit nettement la rupture d'information : entre le départ du camion et le retour du bon signé, le système de l'entreprise est aveugle.
+
+\subsection{Problèmes identifiés}
+
+L'analyse du processus fait ressortir plusieurs difficultés récurrentes.
+
+\textbf{Absence de visibilité en temps réel.} Une fois le camion parti, impossible de connaître sa position ou son avancement. Toute question (« le chantier X est-il livré ? ») impose un appel téléphonique, et la réponse dépend de la disponibilité du chauffeur.
+
+\textbf{Traçabilité fragile.} Le bon papier est l'unique preuve de livraison. S'il est perdu ou abîmé, l'entreprise n'a plus de justificatif, ce qui complique le traitement des litiges avec les clients.
+
+\textbf{Double saisie et délais.} Les informations du bon doivent être ressaisies pour alimenter les suivis Excel. Cette étape est chronophage, source d'erreurs, et surtout différée : l'information arrive au bureau avec un décalage.
+
+\textbf{Pas de contrôle des quantités au chargement.} Rien ne garantit que ce qui est chargé correspond exactement à ce qui était prévu. Les écarts ne sont souvent détectés qu'à l'arrivée, voire plus tard.
+
+\textbf{Aucune preuve d'arrivée.} Le système ne distingue pas une marchandise « partie » d'une marchandise « réellement livrée sur place ». Cette confusion alimente une partie des contestations.
+
+\begin{table}[htbp]
+\centering
+\caption{Principaux dysfonctionnements du processus actuel}
+\label{tab:dysfonctionnements}
+\begin{tabular}{|p{5.5cm}|p{8cm}|}
+\hline
+\textbf{Dysfonctionnement} & \textbf{Conséquence concrète} \\
+\hline
+Suivi par téléphone uniquement & Perte de temps, information non fiable et non historisée \\
+\hline
+Bon de livraison sur papier & Documents perdus ou illisibles, pas de preuve fiable \\
+\hline
+Ressaisie manuelle dans Excel & Erreurs de recopie et information en retard \\
+\hline
+Pas de vérification au chargement & Écarts de quantité détectés trop tard \\
+\hline
+Pas de preuve d'arrivée sur site & Litiges difficiles à arbitrer \\
+\hline
+\end{tabular}
+\end{table}
+
+Le Tableau \ref{tab:dysfonctionnements} synthétise ces points. Pris isolément, chacun paraît mineur ; mis bout à bout, ils privent l'entreprise de tout pilotage de son activité de livraison.
+
+\subsection{Impact sur l'activité}
+
+Ces dysfonctionnements ont un coût, même s'il est diffus. Le bureau consacre du temps à « courir après » l'information au lieu de la consulter. Les litiges clients, faute de preuve, se règlent au cas par cas et parfois en défaveur de l'entreprise. Enfin, l'absence de données historiques empêche toute analyse : on ne peut pas mesurer ce qu'on n'enregistre pas. Améliorer la productivité des tournées ou la ponctualité des livraisons devient, dans ces conditions, un objectif difficile à objectiver.
+
+\section{Spécification des besoins}
+
+\subsection{Identification des acteurs}
+
+Trois profils d'utilisateurs ont été identifiés :
+
+\begin{itemize}
+\item \textbf{Le chauffeur} : utilise l'application mobile sur le terrain pour consulter ses livraisons, scanner la marchandise, confirmer son arrivée et clôturer la livraison ;
+\item \textbf{Le superviseur / administrateur} : suit l'activité, soit depuis le web, soit depuis l'espace administrateur de l'application mobile ; gère les chauffeurs, les véhicules et les paramètres ;
+\item \textbf{Le responsable logistique (back-office)} : prépare les voyages depuis l'interface web, édite les bons de livraison et exploite les statistiques.
+\end{itemize}
+
+\subsection{Besoins fonctionnels}
+
+\textbf{BF01 — Préparation des voyages.} Permettre au back-office de constituer un voyage à partir des commandes et chantiers issus de l'ERP : choix du chantier, du camion, du chauffeur, et des lignes à livrer (articles d'ordres de fabrication et matières premières).
+
+\textbf{BF02 — Application mobile chauffeur.} Donner au chauffeur, après connexion par QR code, la liste de ses voyages et le détail de chaque livraison.
+
+\textbf{BF03 — Validation par scan en deux phases.} Confirmer chaque ligne par lecture de QR code, d'abord au chargement (la marchandise passe à l'état « chargé »), puis à la livraison (état « livré »). La validation peut se faire ligne par ligne ou en lot via un QR récapitulatif.
+
+\textbf{BF04 — Vérification d'arrivée.} Empêcher la validation de la livraison tant que le chauffeur n'a pas confirmé son arrivée sur le chantier (par géolocalisation ou, à défaut, par un code communiqué par l'administration).
+
+\textbf{BF05 — Suivi GPS.} Remonter la position du véhicule pendant la tournée et la restituer sur une carte côté administration, y compris l'historique des trajets par chauffeur sur une période.
+
+\textbf{BF06 — Bon de livraison numérique.} Générer un bon de livraison au format PDF à partir des données du voyage, et permettre également d'attacher une photo ou un scan du bon signé.
+
+\textbf{BF07 — Tableau de bord et statistiques.} Présenter des indicateurs (voyages en cours, livraisons réalisées, taux de livraison, durée moyenne) et produire un export Excel détaillé par chauffeur, chantier et période.
+
+\textbf{BF08 — Administration.} Gérer les chauffeurs et leur activation, la flotte de véhicules, les dépôts de départ, et activer ou désactiver certaines fonctionnalités selon les besoins.
+
+\begin{table}[htbp]
+\centering
+\caption{Besoins fonctionnels par acteur}
+\label{tab:besoins_acteurs}
+\begin{tabular}{|l|p{9cm}|}
+\hline
+\textbf{Acteur} & \textbf{Principaux besoins} \\
+\hline
+Chauffeur & Connexion par QR, consultation des voyages, scan chargement/livraison, confirmation d'arrivée, bon de livraison \\
+\hline
+Superviseur / Admin & Suivi temps réel, carte des trajets, gestion des chauffeurs et de la flotte, statistiques \\
+\hline
+Back-office logistique & Préparation des voyages, édition du BL, exports et rapports \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Besoins non fonctionnels}
+
+\textbf{BNF01 — Intégrité de l'ERP.} La base de l'ERP Divalto ne doit jamais être modifiée par l'application. Toutes les données de gestion sont lues, et l'état propre à la livraison est stocké à part. Cette contrainte, posée par l'entreprise, a structuré toute la conception.
+
+\textbf{BNF02 — Disponibilité sur le terrain.} L'application mobile doit rester utilisable malgré une connexion parfois instable sur les chantiers, et son interface doit être lisible en extérieur, avec des actions simples et de grandes zones tactiles.
+
+\textbf{BNF03 — Sécurité.} L'accès doit être authentifié : authentification centralisée pour le web, jeton sécurisé pour le mobile, QR code chiffré pour l'appairage du chauffeur. Les échanges passent par des APIs protégées.
+
+\textbf{BNF04 — Performance.} Les écrans courants doivent répondre rapidement et la position GPS être remontée sans latence perceptible.
+
+\textbf{BNF05 — Maintenabilité.} Une séparation nette entre le frontend et le backend, des APIs documentées et un code organisé par responsabilités, pour faciliter les évolutions ultérieures.
+
+\section{Solution proposée}
+
+La solution retenue est une plateforme à trois composants, articulée autour d'un backend unique :
+
+\begin{enumerate}
+\item Une \textbf{interface web} pour l'administration et le pilotage, accessible au bureau ;
+\item Une \textbf{application mobile} pour les chauffeurs et les superviseurs sur le terrain ;
+\item Un \textbf{backend} exposant des APIs REST, qui porte la logique métier, gère l'état des livraisons dans sa propre base et lit les données de gestion dans la base de l'ERP.
+\end{enumerate}
+
+Ce découpage permet à chaque public d'avoir l'outil adapté à son usage, tout en partageant une même source de vérité. Surtout, il respecte la contrainte d'intégrité : l'ERP reste la référence, l'application ne fait qu'en exploiter le contenu.
+
+\begin{table}[htbp]
+\centering
+\caption{Comparaison entre le processus actuel et la solution cible}
+\label{tab:comparaison_cible}
+\begin{tabular}{|p{4.5cm}|p{4.5cm}|p{4.5cm}|}
+\hline
+\textbf{Critère} & \textbf{Processus actuel} & \textbf{Solution cible} \\
+\hline
+Suivi du camion & Par téléphone & Position GPS sur carte \\
+\hline
+Bon de livraison & Papier manuscrit & PDF généré + photo du bon signé \\
+\hline
+Validation marchandise & Visuelle, non tracée & Scan QR en deux phases \\
+\hline
+Preuve d'arrivée & Aucune & Confirmation géolocalisée \\
+\hline
+Remontée d'information & Différée, ressaisie & Temps réel, sans ressaisie \\
+\hline
+Statistiques & Quasi inexistantes & Tableaux de bord et exports \\
+\hline
+\end{tabular}
+\end{table}
+
+Le Tableau \ref{tab:comparaison_cible} met face à face l'existant et la cible. L'écart porte moins sur le nombre de fonctionnalités que sur un changement de nature : on passe d'un suivi déclaratif et différé à un suivi factuel et immédiat.
+
+\section{Méthodologie de travail}
+
+Le projet a été mené de façon itérative. Plutôt que de tout spécifier puis tout développer, j'ai avancé par incréments : une première version couvrant la préparation des voyages et le scan, puis l'ajout progressif du suivi GPS, de la vérification d'arrivée, du bon de livraison PDF et enfin des statistiques. Chaque incrément était testé, montré à l'encadrant entreprise, et ajusté selon ses retours.
+
+Cette approche a eu deux avantages. Elle a permis de valider tôt les choix structurants — en particulier l'accès en lecture seule à l'ERP — et elle a laissé de la place aux demandes apparues en cours de route, comme la confirmation d'arrivée sur le chantier, qui n'était pas dans le besoin initial mais s'est révélée essentielle à l'usage.
+
+\section{Conclusion}
+
+L'étude de l'existant a confirmé que le problème n'était pas l'absence d'information, mais sa circulation. Les données existent dans l'ERP ; ce qui manque, c'est le lien entre le terrain et le bureau. Les besoins recensés dessinent une plateforme multiplateforme, branchée en lecture sur l'ERP et centrée sur la traçabilité. Le chapitre suivant traduit ces besoins en une architecture et des modèles concrets.
+
+\newpage
+
+% ====================== CHAPITRE 3 ======================
+\chapter{Chapitre III : CONCEPTION ET MODÉLISATION DU PROJET}
+
+\section{Introduction}
+
+Ce chapitre présente la conception de la solution. Il décrit d'abord l'architecture générale et les choix qui la sous-tendent, puis modélise le système à l'aide de diagrammes UML : cas d'utilisation, classes et séquences. L'objectif est de montrer comment les besoins du chapitre précédent se traduisent en une structure technique cohérente.
+
+\section{Architecture de la solution}
+
+\subsection{Vue d'ensemble}
+
+La solution repose sur une architecture client-serveur découplée. Deux clients distincts — une application web et une application mobile — consomment les mêmes APIs REST exposées par un backend central. Ce dernier dialogue avec deux bases de données : sa propre base, qui stocke l'état lié à la livraison, et la base de l'ERP Divalto, consultée en lecture seule.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.95\textwidth]{architecture.png}
+\caption{Architecture générale de la solution}
+\label{fig:architecture}
+\end{figure}
+
+La Figure \ref{fig:architecture} illustre cet ensemble. À gauche, les clients : le web pour l'administration, le mobile pour le terrain. Au centre, le backend, qui concentre la logique métier, la sécurité, la génération de documents et la diffusion des positions GPS. À droite, les deux sources de données. L'authentification web s'appuie sur un serveur Keycloak, tandis que le mobile utilise un jeton émis directement par le backend.
+
+\subsection{Choix d'une architecture découplée}
+
+Séparer le frontend du backend n'est pas un choix purement esthétique. Il permet de servir des publics aux contraintes opposées — un poste de bureau et un smartphone en extérieur — sans dupliquer la logique métier, celle-ci restant côté serveur. Il facilite aussi la maintenance : on peut faire évoluer une interface sans toucher au reste, et les mêmes APIs pourraient demain alimenter un autre client.
+
+Côté backend, le code est organisé en couches classiques : des contrôleurs qui exposent les routes REST, des services qui portent la logique, et des repositories qui accèdent aux données. Cette séparation des responsabilités rend le système plus lisible et plus facile à faire évoluer.
+
+\subsection{Accès aux données et intégration ERP}
+
+Le point le plus délicat de la conception est la cohabitation de deux bases. Le backend est configuré avec deux sources de données. La première, propre à l'application, contient les entités de livraison : voyages, camions, chauffeurs locaux, positions GPS, statuts de scan, etc. La seconde pointe vers la base de l'ERP Divalto, dont l'application lit les commandes, les chantiers, les articles et les matières.
+
+La règle est stricte : rien n'est jamais écrit dans la base de l'ERP. Lorsqu'une marchandise est scannée, son nouveau statut est enregistré côté application, pas dans le système de gestion. Cette séparation garantit que le déploiement de l'outil de livraison ne présente aucun risque pour les données comptables et commerciales de l'entreprise — condition posée d'emblée par la direction informatique.
+
+\section{Diagramme de cas d'utilisation}
+
+Le diagramme de cas d'utilisation décrit les interactions entre les acteurs et le système.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.95\textwidth]{use_case.png}
+\caption{Diagramme de cas d'utilisation}
+\label{fig:use_case}
+\end{figure}
+
+La Figure \ref{fig:use_case} présente les principaux cas d'utilisation. Le chauffeur se connecte par QR code, consulte ses voyages, scanne la marchandise, confirme son arrivée et clôture la livraison. Le superviseur suit l'activité, consulte la carte des trajets et gère les chauffeurs et la flotte. Le back-office prépare les voyages, édite les bons de livraison et exploite les statistiques.
+
+\subsection{Rôles et permissions}
+
+Les actions disponibles dépendent du rôle de l'utilisateur. Le Tableau \ref{tab:roles_permissions} résume cette répartition.
+
+\begin{table}[htbp]
+\centering
+\caption{Matrice des rôles et permissions}
+\label{tab:roles_permissions}
+\begin{tabular}{|l|c|c|c|c|}
+\hline
+\textbf{Rôle} & \textbf{Voyages} & \textbf{Scan / Livraison} & \textbf{Suivi GPS} & \textbf{Administration} \\
+\hline
+Chauffeur & Consulter (les siens) & Oui & Émet sa position & - \\
+Superviseur & Consulter & - & Consulter & Partielle \\
+Administrateur & Toutes actions & - & Consulter & Complète \\
+Back-office & Créer / Modifier & - & Consulter & - \\
+\hline
+\end{tabular}
+\end{table}
+
+\section{Diagramme de classes}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=1.0\textwidth,height=0.95\textheight,keepaspectratio]{class_diagram.png}
+\caption{Diagramme de classes des entités principales}
+\label{fig:class_diagram}
+\end{figure}
+
+La Figure \ref{fig:class_diagram} présente les entités du domaine et leurs relations. Les principales sont :
+
+\begin{itemize}
+\item \textbf{Voyage} : une livraison ou une tournée, rattachée à un camion, un chauffeur et un chantier de destination ; elle porte les états de chargement et de déchargement, la référence du bon de livraison et son statut ;
+\item \textbf{Camion} : un véhicule de la flotte (immatriculation, type, marque, état libre/occupé) ;
+\item \textbf{Chauffeur} : le conducteur, identifié par un matricule et un QR code d'appairage, avec un indicateur d'activation et un rôle administrateur éventuel ;
+\item \textbf{Chantier} : le lieu de destination, issu de l'ERP, utilisé notamme
