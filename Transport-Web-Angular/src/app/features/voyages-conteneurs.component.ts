@@ -66,36 +66,42 @@ interface VoyageLigne {
 @Component({
   selector: 'app-voyages-conteneurs',
   template: `
-    <div class="toolbar">
-      <select [(ngModel)]="vue" (change)="charger()" class="btn btn-outline">
+    <div class="premium-voyages-conteneurs">
+      
+    <div class="header">
+        <h1><i class="fa-solid fa-truck-fast"></i> Voyages</h1>
+        <p class="subtitle">Gestion globale des voyages, livraisons et matières premières.</p>
+      </div>
+      <div class="toolbar glass-panel">
+      <select [(ngModel)]="vue" (change)="charger()" class="p-btn p-btn-light">
         <option value="en-cours">Voyages en cours</option>
         <option value="archives">Voyages archivés</option>
         <option value="historique">Historique (tous)</option>
       </select>
-      <div class="search"><i class="fa-solid fa-magnifying-glass"></i>
+      <div class="search-box"><i class="fa-solid fa-magnifying-glass"></i>
         <input [(ngModel)]="q" (ngModelChange)="page=1" placeholder="Rechercher (chauffeur, statut)…"></div>
-      <button class="btn" [ngClass]="filtresUI ? 'btn-primary' : 'btn-outline'" (click)="basculerFiltres()"
+      <button class="p-btn" [ngClass]="filtresUI ? 'p-btn-primary' : 'p-btn-light'" (click)="basculerFiltres()"
               title="Filtrer par colonne">
         <i class="fa-solid fa-filter"></i> Filtres</button>
-      <button class="btn btn-outline" (click)="exporterExcel()" [disabled]="exporting"
+      <button class="p-btn p-btn-light" (click)="exporterExcel()" [disabled]="exporting"
               title="Exporter la liste en Excel">
         <i class="fa-solid fa-file-excel"></i> Excel</button>
-      <button class="btn btn-outline" (click)="exporterPdf()"
+      <button class="p-btn p-btn-light" (click)="exporterPdf()"
               title="Exporter / imprimer la liste en PDF">
         <i class="fa-solid fa-file-pdf"></i> PDF</button>
-      <button class="btn btn-primary right" (click)="ouvrir()">
+      <button class="p-btn p-btn-primary right" (click)="ouvrir()">
         <i class="fa-solid fa-plus"></i> Nouveau voyage
       </button>
     </div>
 
     <app-filtre-panel *ngIf="filtresUI" [fields]="filterFields" [filters]="colF" (change)="page=1"></app-filtre-panel>
 
-    <div class="card"><div class="card-body" style="padding:0">
+    <div class="glass-card m-t"><div class="card-body" style="padding:0">
       <div *ngIf="loading" class="spinner"></div>
       <div *ngIf="!loading && voyagesFiltres().length===0" class="empty">
         <i class="fa-solid fa-truck-fast"></i> Aucun voyage
       </div>
-      <div class="table-wrap" *ngIf="!loading && voyagesFiltres().length">
+      <div class="modern-table" *ngIf="!loading && voyagesFiltres().length">
         <table>
           <thead>
             <tr>
@@ -112,20 +118,20 @@ interface VoyageLigne {
               <td><code>#{{ v.id }}</code></td>
               <td>{{ v.dateVoyage ? (v.dateVoyage | date:'dd/MM/yy HH:mm') : '—' }}</td>
               <td>{{ v.chauffeur || '—' }}</td>
-              <td><span class="badge badge-gray">{{ v.nbLivraisons ?? 0 }}</span></td>
-              <td><span class="badge badge-blue">{{ v.nbMatieres ?? 0 }}</span></td>
+              <td><span class="p-badge light">{{ v.nbLivraisons ?? 0 }}</span></td>
+              <td><span class="p-badge blue">{{ v.nbMatieres ?? 0 }}</span></td>
               <td><span [ngClass]="v.statut | statutBadge">{{ v.statut || '—' }}</span></td>
               <td class="flex">
-                <button class="btn btn-outline btn-sm" (click)="consulter(v)" title="Consulter le détail">
+                <button class="p-btn p-btn-light p-btn-sm" (click)="consulter(v)" title="Consulter le détail">
                   <i class="fa-solid fa-eye"></i> Détails</button>
-                <button class="btn btn-outline btn-sm" (click)="ouvrir(v)" [disabled]="estScanne(v)"
+                <button class="p-btn p-btn-light p-btn-sm" (click)="ouvrir(v)" [disabled]="estScanne(v)"
                         [title]="estScanne(v) ? 'Voyage scanné : modification impossible' : 'Gérer les livraisons'">
                   <i class="fa-solid fa-pen"></i> Gérer</button>
-                <button *ngIf="vue==='en-cours'" class="btn btn-outline btn-sm" (click)="archiver(v)"
+                <button *ngIf="vue==='en-cours'" class="p-btn p-btn-light p-btn-sm" (click)="archiver(v)"
                         [disabled]="!estLivre(v)"
                         [title]="estLivre(v) ? 'Archiver' : 'Archivage possible une fois livré'">
                   <i class="fa-solid fa-box-archive"></i></button>
-                <button class="btn btn-danger btn-sm" (click)="supprimer(v)" [disabled]="estScanne(v)"
+                <button class="p-btn p-btn-icon danger p-btn-sm" (click)="supprimer(v)" [disabled]="estScanne(v)"
                         [title]="estScanne(v) ? 'Voyage scanné : suppression impossible' : 'Supprimer'">
                   <i class="fa-solid fa-trash"></i></button>
               </td>
@@ -139,7 +145,7 @@ interface VoyageLigne {
 
     <!-- Modal créer / gérer un voyage -->
     <div class="modal-backdrop" *ngIf="modal" (click)="fermer($event)">
-      <div class="modal" style="max-width:min(1280px,96vw)" (click)="$event.stopPropagation()">
+      <div class="modal p-modal" style="max-width:min(1280px,96vw)" (click)="$event.stopPropagation()">
         <div class="m-head"><h3>{{ editId ? 'Voyage #' + editId : 'Nouveau voyage' }}</h3>
           <button class="x" (click)="modal=false">&times;</button></div>
         <div class="m-body">
@@ -165,7 +171,7 @@ interface VoyageLigne {
           </div>
 
           <h4 class="art-title">Lignes du voyage</h4>
-          <div *ngFor="let lg of lignes; let i = index" class="card" style="margin:10px 0">
+          <div *ngFor="let lg of lignes; let i = index" class="glass-card m-t" style="margin:10px 0">
             <div class="card-body">
 
               <!-- Nouvelle saisie : résumé de la ligne (l'édition se fait dans la modale) -->
@@ -177,15 +183,15 @@ interface VoyageLigne {
                     <span *ngIf="lg.chargementJour"> · chargement {{ lg.chargementJour }} {{ lg.chargementHeure || '' }}</span>
                   </div>
                 </div>
-                <button class="btn btn-outline btn-sm" (click)="modifierLigne(i)"><i class="fa-solid fa-pen"></i> Modifier</button>
-                <button class="btn btn-danger btn-sm" (click)="retirerLigne(i)" title="Retirer"><i class="fa-solid fa-trash"></i></button>
+                <button class="p-btn p-btn-light p-btn-sm" (click)="modifierLigne(i)"><i class="fa-solid fa-pen"></i> Modifier</button>
+                <button class="p-btn p-btn-icon danger p-btn-sm" (click)="retirerLigne(i)" title="Retirer"><i class="fa-solid fa-trash"></i></button>
               </div>
 
               <!-- Ancienne saisie : éditeur en ligne -->
               <ng-container *ngIf="!nouvelleSaisie">
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
                 <strong>Ligne {{ i + 1 }}</strong>
-                <button class="btn btn-danger btn-sm" (click)="retirerLigne(i)" title="Retirer"><i class="fa-solid fa-trash"></i></button>
+                <button class="p-btn p-btn-icon danger p-btn-sm" (click)="retirerLigne(i)" title="Retirer"><i class="fa-solid fa-trash"></i></button>
               </div>
               <div class="form-grid">
                 <div class="field combo">
@@ -298,9 +304,9 @@ interface VoyageLigne {
                     </div>
                   </div>
                   <div *ngIf="stockNbPages(lg) > 1" style="display:flex;align-items:center;gap:10px;justify-content:center;margin-top:6px">
-                    <button type="button" class="btn btn-outline" [disabled]="(lg.stockPage || 0) === 0" (click)="stockPagePrecedente(lg)">‹</button>
+                    <button type="button" class="p-btn p-btn-light" [disabled]="(lg.stockPage || 0) === 0" (click)="stockPagePrecedente(lg)">‹</button>
                     <span class="muted" style="font-size:12px">Page {{ (lg.stockPage || 0) + 1 }} / {{ stockNbPages(lg) }}</span>
-                    <button type="button" class="btn btn-outline" [disabled]="(lg.stockPage || 0) >= stockNbPages(lg) - 1" (click)="stockPageSuivante(lg)">›</button>
+                    <button type="button" class="p-btn p-btn-light" [disabled]="(lg.stockPage || 0) >= stockNbPages(lg) - 1" (click)="stockPageSuivante(lg)">›</button>
                   </div>
                 </div>
                 </ng-container>
@@ -309,12 +315,12 @@ interface VoyageLigne {
             </div>
           </div>
 
-          <button class="btn btn-outline" (click)="nouvelleSaisie ? ouvrirLigneModal() : ajouterLigne()">
+          <button class="p-btn p-btn-light" (click)="nouvelleSaisie ? ouvrirLigneModal() : ajouterLigne()">
             <i class="fa-solid fa-plus"></i> Ajouter une ligne</button>
         </div>
         <div class="m-foot">
-          <button class="btn btn-outline" (click)="modal=false">Annuler</button>
-          <button class="btn btn-primary" (click)="enregistrer()" [disabled]="saving">
+          <button class="p-btn p-btn-light" (click)="modal=false">Annuler</button>
+          <button class="p-btn p-btn-primary" (click)="enregistrer()" [disabled]="saving">
             <i class="fa-solid fa-floppy-disk"></i> Enregistrer</button>
         </div>
       </div>
@@ -322,7 +328,7 @@ interface VoyageLigne {
 
     <!-- Modal AJOUT d'une ligne (nouvelle saisie) -->
     <div class="modal-backdrop" *ngIf="ligneModal && ligneDraft" (click)="fermerLigneModal($event)" style="z-index:1100">
-      <div class="modal" style="max-width:min(1100px,96vw)" (click)="$event.stopPropagation()">
+      <div class="modal p-modal" style="max-width:min(1100px,96vw)" (click)="$event.stopPropagation()">
         <div class="m-head"><h3>{{ ligneEditIndex===null ? 'Ajouter une ligne' : 'Modifier la ligne' }}</h3>
           <button class="x" (click)="ligneModal=false">&times;</button></div>
         <div class="m-body">
@@ -362,7 +368,7 @@ interface VoyageLigne {
               </ng-select>
               <div *ngIf="!(ligneDraft.livrDispo?.length)" class="muted" style="font-size:12px;padding:8px">
                 Aucune livraison pour ce chantier.</div>
-              <div class="table-wrap pick-table" *ngIf="ligneDraft.livrDispo?.length">
+              <div class="modern-table pick-table" *ngIf="ligneDraft.livrDispo?.length">
                 <table>
                   <thead><tr><th style="width:38px"></th><th>N° OF</th><th>Articles</th><th>Statut</th></tr></thead>
                   <tbody>
@@ -385,7 +391,7 @@ interface VoyageLigne {
               <span class="muted" style="font-size:11px"><i class="fa-solid fa-circle-check" style="color:#21ba45;margin-right:4px"></i>
                 {{ ligneDraft.mpSauvegardes.length }} matière(s) conservée(s) depuis d'autres commandes :</span>
               <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">
-                <span *ngFor="let s of ligneDraft.mpSauvegardes" class="badge badge-green" style="font-size:10px">
+                <span *ngFor="let s of ligneDraft.mpSauvegardes" class="p-badge green" style="font-size:10px">
                   {{ s.m.designation || s.m.reference }}
                   <button style="background:none;border:none;cursor:pointer;color:inherit;margin-left:4px;padding:0;line-height:1"
                           (click)="retirerMpSauvegardee(ligneDraft, s.m.reference)">×</button>
@@ -412,7 +418,7 @@ interface VoyageLigne {
               <input *ngIf="ligneDraft.commandeId && !ligneDraft.loadingMp" class="filtre-input"
                      [(ngModel)]="ligneDraft.filtreLignesMp" placeholder="🔍 Filtrer les lignes (désignation, réf)…">
               <div *ngIf="ligneDraft.loadingMp" class="spinner" style="margin:12px auto"></div>
-              <div class="table-wrap pick-table" *ngIf="ligneDraft.commandeId && !ligneDraft.loadingMp && lignesMpFiltrees(ligneDraft).length">
+              <div class="modern-table pick-table" *ngIf="ligneDraft.commandeId && !ligneDraft.loadingMp && lignesMpFiltrees(ligneDraft).length">
                 <table>
                   <thead><tr><th style="width:38px"></th><th>Désignation</th><th>Référence</th><th>Dispo</th><th style="width:90px">Qté</th></tr></thead>
                   <tbody>
@@ -453,7 +459,7 @@ interface VoyageLigne {
               <div *ngIf="ligneDraft.loadingStock" class="spinner" style="margin:12px auto"></div>
               <div *ngIf="ligneDraft.depotStock && !ligneDraft.loadingStock" class="muted" style="font-size:12px;margin:4px 0">
                 Articles disponibles — {{ ligneDraft.articlesStockFiltered?.length || 0 }} article(s)</div>
-              <div class="table-wrap pick-table" *ngIf="ligneDraft.depotStock && !ligneDraft.loadingStock && (ligneDraft.articlesStockView?.length || 0)">
+              <div class="modern-table pick-table" *ngIf="ligneDraft.depotStock && !ligneDraft.loadingStock && (ligneDraft.articlesStockView?.length || 0)">
                 <table>
                   <thead><tr><th style="width:38px"></th><th>Référence</th><th>Désignation</th><th>Unité</th><th>Stock disponible</th><th style="width:90px">Quantité</th></tr></thead>
                   <tbody>
@@ -470,9 +476,9 @@ interface VoyageLigne {
                 </table>
               </div>
               <div *ngIf="stockNbPages(ligneDraft) > 1" style="display:flex;align-items:center;gap:10px;justify-content:center;margin-top:6px">
-                <button type="button" class="btn btn-outline" [disabled]="(ligneDraft.stockPage || 0) === 0" (click)="stockPagePrecedente(ligneDraft)">‹</button>
+                <button type="button" class="p-btn p-btn-light" [disabled]="(ligneDraft.stockPage || 0) === 0" (click)="stockPagePrecedente(ligneDraft)">‹</button>
                 <span class="muted" style="font-size:12px">Page {{ (ligneDraft.stockPage || 0) + 1 }} / {{ stockNbPages(ligneDraft) }}</span>
-                <button type="button" class="btn btn-outline" [disabled]="(ligneDraft.stockPage || 0) >= stockNbPages(ligneDraft) - 1" (click)="stockPageSuivante(ligneDraft)">›</button>
+                <button type="button" class="p-btn p-btn-light" [disabled]="(ligneDraft.stockPage || 0) >= stockNbPages(ligneDraft) - 1" (click)="stockPageSuivante(ligneDraft)">›</button>
               </div>
               <div *ngIf="ligneDraft.depotStock && !ligneDraft.loadingStock && (ligneDraft.articlesStockFiltered?.length || 0)===0"
                    class="muted" style="font-size:12px;padding:8px">Aucun article en stock pour ce dépôt.</div>
@@ -481,8 +487,8 @@ interface VoyageLigne {
           </div>
         </div>
         <div class="m-foot">
-          <button class="btn btn-outline" (click)="ligneModal=false">Annuler</button>
-          <button class="btn btn-primary" (click)="validerLigne()" [disabled]="!ligneDraft.chantierId">
+          <button class="p-btn p-btn-light" (click)="ligneModal=false">Annuler</button>
+          <button class="p-btn p-btn-primary" (click)="validerLigne()" [disabled]="!ligneDraft.chantierId">
             <i class="fa-solid fa-check"></i> {{ ligneEditIndex===null ? 'Ajouter la ligne' : 'Enregistrer la ligne' }}</button>
         </div>
       </div>
@@ -490,7 +496,7 @@ interface VoyageLigne {
 
     <!-- ════════ Modal RÉCAPITULATIF avant enregistrement ════════ -->
     <div class="modal-backdrop" *ngIf="recap" (click)="fermerRecap($event)" style="z-index:1200">
-      <div class="modal" style="max-width:min(820px,96vw)" (click)="$event.stopPropagation()">
+      <div class="modal p-modal" style="max-width:min(820px,96vw)" (click)="$event.stopPropagation()">
         <div class="m-head"><h3><i class="fa-solid fa-clipboard-check"></i> Récapitulatif du voyage</h3>
           <button class="x" (click)="recap=false">&times;</button></div>
         <div class="m-body">
@@ -507,7 +513,7 @@ interface VoyageLigne {
           <div *ngIf="lignes.length===0" class="empty" style="padding:16px">
             <i class="fa-solid fa-layer-group"></i> Aucune ligne ajoutée</div>
 
-          <div *ngFor="let lg of lignes; let i = index" class="card" style="margin-bottom:12px">
+          <div *ngFor="let lg of lignes; let i = index" class="glass-card m-t" style="margin-bottom:12px">
             <div class="card-body">
               <strong>{{ lg.filtreChantier || ('Ligne ' + (i + 1)) }}</strong>
               <div class="muted" style="font-size:12px;margin:2px 0 8px">
@@ -519,13 +525,13 @@ interface VoyageLigne {
               <div *ngIf="selectedLivCount(lg)" style="margin-bottom:8px">
                 <span class="dk">Livraisons ({{ selectedLivCount(lg) }})</span>
                 <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">
-                  <span class="badge badge-gray" *ngFor="let id of selectedLivArray(lg)">#{{ id }}</span>
+                  <span class="p-badge light" *ngFor="let id of selectedLivArray(lg)">#{{ id }}</span>
                 </div>
               </div>
 
               <div *ngIf="selectedMpCount(lg)">
                 <span class="dk">Matières premières ({{ selectedMpCount(lg) }})</span>
-                <div class="table-wrap" style="margin-top:4px">
+                <div class="modern-table" style="margin-top:4px">
                   <table>
                     <thead><tr><th>Désignation</th><th>Référence</th><th>Qté</th></tr></thead>
                     <tbody>
@@ -541,7 +547,7 @@ interface VoyageLigne {
 
               <div *ngIf="selectedStockCount(lg)">
                 <span class="dk">Stock — dépôt {{ lg.depotStock }} ({{ selectedStockCount(lg) }})</span>
-                <div class="table-wrap" style="margin-top:4px">
+                <div class="modern-table" style="margin-top:4px">
                   <table>
                     <thead><tr><th>Désignation</th><th>Référence</th><th>Unité</th><th>Qté</th></tr></thead>
                     <tbody>
@@ -562,8 +568,8 @@ interface VoyageLigne {
           </div>
         </div>
         <div class="m-foot">
-          <button class="btn btn-outline" (click)="recap=false"><i class="fa-solid fa-arrow-left"></i> Retour</button>
-          <button class="btn btn-primary" (click)="confirmerEnregistrement()" [disabled]="saving">
+          <button class="p-btn p-btn-light" (click)="recap=false"><i class="fa-solid fa-arrow-left"></i> Retour</button>
+          <button class="p-btn p-btn-primary" (click)="confirmerEnregistrement()" [disabled]="saving">
             <i class="fa-solid fa-floppy-disk"></i> Confirmer et enregistrer</button>
         </div>
       </div>
@@ -571,7 +577,7 @@ interface VoyageLigne {
 
     <!-- Modal DÉTAIL du voyage -->
     <div class="modal-backdrop" *ngIf="detail" (click)="fermerDetail($event)">
-      <div class="modal" style="max-width:900px" (click)="$event.stopPropagation()">
+      <div class="modal p-modal" style="max-width:900px" (click)="$event.stopPropagation()">
         <div class="m-head"><h3>Voyage #{{ detail.id }}</h3>
           <button class="x" (click)="fermerDetailModal()">&times;</button></div>
         <div class="m-body">
@@ -589,7 +595,7 @@ interface VoyageLigne {
               <div><span class="dk">Déchargement prévu</span><span class="dv">{{ dechargementPrevu() ? (dechargementPrevu() | date:'dd/MM/yy HH:mm') : '—' }}</span></div>
               <div><span class="dk">Déchargement réel</span><span class="dv">{{ detail.realDechargement ? (detail.realDechargement | date:'dd/MM/yy HH:mm') : '—' }}</span></div>
             </div>
-            <button class="btn btn-outline btn-sm" style="margin-top:8px" (click)="ouvrirEditDates()">
+            <button class="p-btn p-btn-light p-btn-sm" style="margin-top:8px" (click)="ouvrirEditDates()">
               <i class="fa-solid fa-pen"></i> Modifier les dates</button>
           </div>
 
@@ -609,8 +615,8 @@ interface VoyageLigne {
               <div class="field"><label>Heure</label><input type="time" [(ngModel)]="datesForm.rDeHeure"></div>
             </div>
             <div style="display:flex;gap:8px;margin-top:10px">
-              <button class="btn btn-outline btn-sm" (click)="editDates=false">Annuler</button>
-              <button class="btn btn-primary btn-sm" (click)="enregistrerDates()" [disabled]="savingDates">
+              <button class="p-btn p-btn-light p-btn-sm" (click)="editDates=false">Annuler</button>
+              <button class="p-btn p-btn-primary p-btn-sm" (click)="enregistrerDates()" [disabled]="savingDates">
                 <i class="fa-solid fa-floppy-disk"></i> Enregistrer</button>
             </div>
           </div>
@@ -622,7 +628,7 @@ interface VoyageLigne {
             <div style="flex:1">
               <strong>QR du voyage</strong>
               <div class="muted" style="font-size:12px">Scanné par le chauffeur, il valide toutes les lignes du voyage en une fois.</div>
-              <button class="btn btn-outline btn-sm" style="margin-top:6px"
+              <button class="p-btn p-btn-light p-btn-sm" style="margin-top:6px"
                       (click)="voirQr(qrVoyageUrl(detail.id), 'QR voyage #' + detail.id, 'qr-voyage-' + detail.id)">
                 <i class="fa-solid fa-eye"></i> Voir / Télécharger</button>
             </div>
@@ -630,7 +636,7 @@ interface VoyageLigne {
             <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
               <span class="dk" style="font-size:11px">Code de forçage</span>
               <strong style="font-size:14px">{{ (detail.forceCode || '—') }}</strong>
-              <button class="btn btn-outline btn-sm"
+              <button class="p-btn p-btn-light p-btn-sm"
                       (click)="regenererForce()" [disabled]="regenForce || detail.statut === 'ANNULE'">
                 <i class="fa-solid fa-rotate"></i> Régénérer</button>
             </div>
@@ -649,14 +655,14 @@ interface VoyageLigne {
             <div style="padding:10px 14px;background:#f5f3ff;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border)">
               <i class="fa-solid fa-location-dot" style="color:var(--accent-dark)"></i>
               <strong style="flex:1">{{ grp.label }}</strong>
-              <span class="badge badge-gray">{{ grp.livraisons.length }} OF</span>
-              <span *ngIf="mpDe(grp.matieres).length" class="badge badge-blue">{{ mpDe(grp.matieres).length }} MP</span>
-              <span *ngIf="stockDe(grp.matieres).length" class="badge badge-green">{{ stockDe(grp.matieres).length }} Stock</span>
+              <span class="p-badge light">{{ grp.livraisons.length }} OF</span>
+              <span *ngIf="mpDe(grp.matieres).length" class="p-badge blue">{{ mpDe(grp.matieres).length }} MP</span>
+              <span *ngIf="stockDe(grp.matieres).length" class="p-badge green">{{ stockDe(grp.matieres).length }} Stock</span>
               <!-- QR code de la ligne complète (groupe) -->
               <img *ngIf="grp.livraisons.length > 0" [src]="qrLivraisonUrl(grp.livraisons[0].id)" alt="QR ligne"
                    style="width:36px;height:36px;vertical-align:middle;cursor:zoom-in"
                    (click)="voirQr(qrLivraisonUrl(grp.livraisons[0].id), 'QR ligne ' + grp.label, 'qr-ligne-' + grp.code)">
-              <button class="btn btn-outline btn-sm" *ngIf="grp.livraisons.length > 0"
+              <button class="p-btn p-btn-light p-btn-sm" *ngIf="grp.livraisons.length > 0"
                       (click)="voirQr(qrLivraisonUrl(grp.livraisons[0].id), 'QR ligne ' + grp.label, 'qr-ligne-' + grp.code)">
                 <i class="fa-solid fa-qrcode"></i></button>
             </div>
@@ -669,17 +675,17 @@ interface VoyageLigne {
                 <strong>#{{ l.id }}</strong>
                 <span [ngClass]="l.statutReception | statutBadge">{{ l.statutReception || '—' }}</span>
                 <span style="margin-left:auto;display:flex;gap:6px" (click)="$event.stopPropagation()">
-                  <button *ngIf="(blsParLivraison[l.id]?.length ?? 0) > 0" class="btn btn-outline btn-sm"
+                  <button *ngIf="(blsParLivraison[l.id]?.length ?? 0) > 0" class="p-btn p-btn-light p-btn-sm"
                           (click)="openLivId = l.id" title="Voir les bons de livraison">
                     <i class="fa-solid fa-file-lines"></i> BL
-                    <span class="badge badge-blue" style="margin-left:4px">{{ blsParLivraison[l.id].length }}</span>
+                    <span class="p-badge blue" style="margin-left:4px">{{ blsParLivraison[l.id].length }}</span>
                   </button>
-                  <button class="btn btn-outline btn-sm" (click)="annulerLigneWeb(l)"
+                  <button class="p-btn p-btn-light p-btn-sm" (click)="annulerLigneWeb(l)"
                           [disabled]="estScanne(detail) || l.statutReception === 'ANNULE'"
                           [ngClass]="l.statutReception === 'ANNULE' ? 'btn-gray' : ''"
                           [title]="l.statutReception === 'ANNULE' ? 'Livraison annulée' : 'Annuler la livraison'">
                     <i class="fa-solid fa-ban"></i> {{ l.statutReception === 'ANNULE' ? 'Annulée' : 'Annuler' }}</button>
-                  <button class="btn btn-danger btn-sm" (click)="detacher(l)"
+                  <button class="p-btn p-btn-icon danger p-btn-sm" (click)="detacher(l)"
                           [disabled]="estScanne(detail) || livraisonScannee(l)"
                           [title]="(estScanne(detail) || livraisonScannee(l)) ? 'Scannée : modification impossible' : 'Retirer du voyage'">
                     <i class="fa-solid fa-link-slash"></i> Retirer</button>
@@ -688,7 +694,7 @@ interface VoyageLigne {
 
               <div *ngIf="openLivId===l.id" style="padding:0 14px 12px">
                 <!-- Articles -->
-                <div class="table-wrap" *ngIf="contenu[l.id]?.articles?.length" style="margin-top:8px">
+                <div class="modern-table" *ngIf="contenu[l.id]?.articles?.length" style="margin-top:8px">
                   <table>
                     <thead><tr><th>Article</th><th>Qté</th><th>Statut</th><th>QR</th></tr></thead>
                     <tbody>
@@ -700,7 +706,7 @@ interface VoyageLigne {
                           <td style="white-space:nowrap" (click)="$event.stopPropagation()">
                             <img [src]="qrArticleUrl(a.id)" alt="QR" style="width:48px;height:48px;vertical-align:middle;cursor:zoom-in"
                                  (click)="voirQr(qrArticleUrl(a.id), 'QR article #' + a.id, 'qr-article-' + a.id)">
-                            <button class="btn btn-outline btn-sm" style="margin-left:6px"
+                            <button class="p-btn p-btn-light p-btn-sm" style="margin-left:6px"
                                     (click)="voirQr(qrArticleUrl(a.id), 'QR article #' + a.id, 'qr-article-' + a.id)">
                               <i class="fa-solid fa-eye"></i></button>
                           </td>
@@ -729,12 +735,12 @@ interface VoyageLigne {
                        style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
                     <i class="fa-solid fa-file-image" style="color:var(--accent)"></i>
                     <span style="flex:1;font-size:13px">{{ bl.reference || ('BL #' + bl.id) }}</span>
-                    <span class="badge badge-gray" style="font-size:10px">{{ bl.contentType?.includes('pdf') ? 'PDF' : 'Image' }}</span>
-                    <a [href]="svc.blUrl(l.id, bl.id)" target="_blank" rel="noopener" class="btn btn-outline btn-sm" title="Afficher"><i class="fa-solid fa-eye"></i></a>
-                    <a [href]="svc.blUrl(l.id, bl.id, true)" class="btn btn-outline btn-sm" title="Télécharger"><i class="fa-solid fa-download"></i></a>
+                    <span class="p-badge light" style="font-size:10px">{{ bl.contentType?.includes('pdf') ? 'PDF' : 'Image' }}</span>
+                    <a [href]="svc.blUrl(l.id, bl.id)" target="_blank" rel="noopener" class="p-btn p-btn-light p-btn-sm" title="Afficher"><i class="fa-solid fa-eye"></i></a>
+                    <a [href]="svc.blUrl(l.id, bl.id, true)" class="p-btn p-btn-light p-btn-sm" title="Télécharger"><i class="fa-solid fa-download"></i></a>
                   </div>
                   <div *ngIf="blUploadLivId !== l.id" style="margin-top:8px">
-                    <button class="btn btn-outline btn-sm" (click)="blUploadLivId=l.id;blUploadRef='';blUploadFile=null">
+                    <button class="p-btn p-btn-light p-btn-sm" (click)="blUploadLivId=l.id;blUploadRef='';blUploadFile=null">
                       <i class="fa-solid fa-plus"></i> Ajouter un BL</button>
                   </div>
                   <div *ngIf="blUploadLivId===l.id" style="margin-top:8px;padding:10px;background:#faf9fb;border-radius:8px;border:1px solid var(--border)">
@@ -743,8 +749,8 @@ interface VoyageLigne {
                       <div class="field"><label>Fichier</label><input type="file" accept="image/*,application/pdf" (change)="onBlFileChange($event)"></div>
                     </div>
                     <div style="display:flex;gap:8px">
-                      <button class="btn btn-outline btn-sm" (click)="blUploadLivId=null">Annuler</button>
-                      <button class="btn btn-primary btn-sm" (click)="uploaderBl(l.id)" [disabled]="blUploading||!blUploadFile">
+                      <button class="p-btn p-btn-light p-btn-sm" (click)="blUploadLivId=null">Annuler</button>
+                      <button class="p-btn p-btn-primary p-btn-sm" (click)="uploaderBl(l.id)" [disabled]="blUploading||!blUploadFile">
                         <i class="fa-solid fa-upload"></i> {{ blUploading ? 'Envoi…' : 'Envoyer' }}</button>
                     </div>
                   </div>
@@ -760,7 +766,7 @@ interface VoyageLigne {
                   <i class="fa-solid" [ngClass]="mpGroupOpen(grp.code) ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
                   <i class="fa-solid fa-cubes"></i> Matières premières ({{ mpDe(grp.matieres).length }})
                   <span class="muted">· {{ mpLivrees(mpDe(grp.matieres)) }}/{{ mpDe(grp.matieres).length }} livrée(s)</span></h5>
-                <div class="table-wrap" *ngIf="mpGroupOpen(grp.code)" style="padding:0 14px 12px;background:#fdf8ff">
+                <div class="modern-table" *ngIf="mpGroupOpen(grp.code)" style="padding:0 14px 12px;background:#fdf8ff">
                   <table>
                     <thead><tr><th>Désignation</th><th>Pièce fournisseur</th><th>Affaire</th>
                       <th>Qté cmd.</th><th>Qté livrée</th><th>Reste</th><th>Statut</th><th>QR</th></tr></thead>
@@ -773,11 +779,11 @@ interface VoyageLigne {
                         <td>{{ m.qteCommande ?? '—' }}</td>
                         <td>{{ qteLivree(m) }}</td>
                         <td><strong>{{ resteALivrer(m) }}</strong></td>
-                        <td><span class="badge" [ngClass]="statutMpClass(m)">{{ statutMpLabel(m) }}</span></td>
+                        <td><span class="p-badge" [ngClass]="statutMpClass(m)">{{ statutMpLabel(m) }}</span></td>
                         <td style="white-space:nowrap">
                           <img [src]="qrMatiereUrl(m.id)" alt="QR" style="width:48px;height:48px;vertical-align:middle;cursor:zoom-in"
                                (click)="voirQr(qrMatiereUrl(m.id), 'QR matière #' + m.id, 'qr-mp-' + m.id)">
-                          <button class="btn btn-outline btn-sm" style="margin-left:6px"
+                          <button class="p-btn p-btn-light p-btn-sm" style="margin-left:6px"
                                   (click)="voirQr(qrMatiereUrl(m.id), 'QR matière #' + m.id, 'qr-mp-' + m.id)">
                             <i class="fa-solid fa-eye"></i></button>
                         </td>
@@ -796,7 +802,7 @@ interface VoyageLigne {
                   <i class="fa-solid" [ngClass]="stockGroupOpen(grp.code) ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
                   <i class="fa-solid fa-warehouse"></i> Stock ({{ stockDe(grp.matieres).length }})
                   <span class="muted">· {{ mpLivrees(stockDe(grp.matieres)) }}/{{ stockDe(grp.matieres).length }} livré(s)</span></h5>
-                <div class="table-wrap" *ngIf="stockGroupOpen(grp.code)" style="padding:0 14px 12px;background:#f0fbf4">
+                <div class="modern-table" *ngIf="stockGroupOpen(grp.code)" style="padding:0 14px 12px;background:#f0fbf4">
                   <table>
                     <thead><tr><th>Désignation</th><th>Référence</th><th>Dépôt</th><th>Affaire</th>
                       <th>Qté</th><th>Statut</th><th>QR</th></tr></thead>
@@ -804,14 +810,14 @@ interface VoyageLigne {
                       <tr *ngFor="let m of stockDe(grp.matieres)" [class.row-done]="estLivree(m)">
                         <td><strong>{{ m.designation || '—' }}</strong></td>
                         <td><code>{{ m.reference || '—' }}</code></td>
-                        <td><span class="badge badge-green">{{ m.depot || '—' }}</span></td>
+                        <td><span class="p-badge green">{{ m.depot || '—' }}</span></td>
                         <td>{{ m.projet || '—' }}</td>
                         <td>{{ m.quantite ?? '—' }}</td>
-                        <td><span class="badge" [ngClass]="statutMpClass(m)">{{ statutMpLabel(m) }}</span></td>
+                        <td><span class="p-badge" [ngClass]="statutMpClass(m)">{{ statutMpLabel(m) }}</span></td>
                         <td style="white-space:nowrap">
                           <img [src]="qrMatiereUrl(m.id)" alt="QR" style="width:48px;height:48px;vertical-align:middle;cursor:zoom-in"
                                (click)="voirQr(qrMatiereUrl(m.id), 'QR stock #' + m.id, 'qr-stock-' + m.id)">
-                          <button class="btn btn-outline btn-sm" style="margin-left:6px"
+                          <button class="p-btn p-btn-light p-btn-sm" style="margin-left:6px"
                                   (click)="voirQr(qrMatiereUrl(m.id), 'QR stock #' + m.id, 'qr-stock-' + m.id)">
                             <i class="fa-solid fa-eye"></i></button>
                         </td>
@@ -838,44 +844,147 @@ interface VoyageLigne {
           </div>
         </div>
         <div class="m-foot">
-          <button class="btn btn-outline" (click)="fermerDetailModal()">Fermer</button>
+          <button class="p-btn p-btn-light" (click)="fermerDetailModal()">Fermer</button>
         </div>
       </div>
     </div>
 
     <!-- Aperçu d'un QR : voir en grand + télécharger PNG / PDF -->
     <div class="modal-backdrop" *ngIf="qrApercu" (click)="fermerQr()" style="z-index:1200">
-      <div class="modal" style="max-width:420px" (click)="$event.stopPropagation()">
+      <div class="modal p-modal" style="max-width:420px" (click)="$event.stopPropagation()">
         <div class="m-head"><h3>{{ qrApercu.titre }}</h3>
           <button class="x" (click)="fermerQr()">&times;</button></div>
         <div class="m-body" style="text-align:center">
           <img [src]="qrApercu.url" alt="QR" style="width:260px;height:260px;max-width:100%;border:1px solid var(--border);border-radius:8px;padding:8px;background:#fff">
         </div>
         <div class="m-foot" style="justify-content:center;gap:10px">
-          <button class="btn btn-outline" (click)="telechargerQrPng()">
+          <button class="p-btn p-btn-light" (click)="telechargerQrPng()">
             <i class="fa-solid fa-image"></i> PNG</button>
-          <button class="btn btn-primary" (click)="telechargerQrPdf()" [disabled]="qrPdfEnCours">
+          <button class="p-btn p-btn-primary" (click)="telechargerQrPdf()" [disabled]="qrPdfEnCours">
             <i class="fa-solid" [ngClass]="qrPdfEnCours ? 'fa-spinner fa-spin' : 'fa-file-pdf'"></i> PDF</button>
         </div>
       </div>
     </div>
-  `,
+  
+    `,
   styles: [`
-    tr.row-done td { opacity: .65; }
-    tr.row-done strong { text-decoration: line-through; }
-    h5.ligne-section { margin: 14px 0 6px; font-size: 13px; font-weight: 700; color: var(--primary); }
-    h5.ligne-section i { margin-right: 6px; color: var(--accent-dark); }
-    h5.ligne-section.clic { cursor: pointer; user-select: none; }
-    h5.ligne-section.clic:hover { color: var(--primary-dark); }
-    /* Lignes de commande (MP) : une par rangée, pleine largeur, désignation sur plusieurs lignes */
-    .art-list.full { grid-template-columns: 1fr; max-height: 320px; }
-    .art-list.full .art-info strong { white-space: normal; }
-    /* Tables de sélection (OF / MP) dans la modale d'ajout de ligne */
-    .pick-table { max-height: 300px; overflow-y: auto; margin-top: 6px; }
-    .pick-table tr.row-link { cursor: pointer; }
-    .pick-table tr.row-active { background: var(--primary-light); }
-    .pick-table .qte-input { width: 90px; min-width: 90px; flex: none; }
-    .pick-table input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent); }
+    .premium-voyages-conteneurs {
+      font-family: 'Inter', 'Segoe UI', Roboto, sans-serif;
+      color: #334155;
+      padding: 20px;
+      max-width: 1500px;
+      margin: 0 auto;
+    }
+
+    .header { margin-bottom: 25px; }
+    .header h1 {
+      margin: 0; font-size: 2rem; font-weight: 700; color: #0f172a; display: flex; align-items: center; gap: 12px;
+    }
+    .header h1 i { color: #0ea5e9; }
+    .subtitle { color: #64748b; margin-top: 4px; font-size: 1.05rem; }
+
+    /* Glass Panels */
+    .glass-panel, .glass-card {
+      background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+      border: 1px solid #ffffff; border-radius: 12px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+      padding: 20px;
+    }
+
+    /* Toolbar */
+    .toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 15px; margin-bottom: 25px; padding: 15px 20px; }
+    
+    .search-box {
+      display: flex; align-items: center; background: #f1f5f9; border-radius: 8px; padding: 0 15px; width: 320px; border: 1px solid transparent; transition: border 0.3s;
+    }
+    .search-box:focus-within { border-color: #bae6fd; background: #fff; box-shadow: 0 0 0 3px #e0f2fe; }
+    .search-box i { color: #94a3b8; }
+    .search-box input { border: none; background: transparent; padding: 10px; width: 100%; color: #0f172a; font-size: 0.95rem; outline: none; }
+    .actions { display: flex; gap: 10px; }
+
+    /* Buttons */
+    .p-btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 8px 16px; border-radius: 8px; font-weight: 600; font-size: 0.9rem;
+      cursor: pointer; border: none; transition: all 0.2s ease; text-decoration: none;
+    }
+    .p-btn-sm { padding: 5px 10px; font-size: 0.8rem; }
+    .p-btn-primary { background: #0ea5e9; color: #fff; box-shadow: 0 2px 10px rgba(14,165,233,0.3); }
+    .p-btn-primary:hover { background: #0284c7; box-shadow: 0 4px 15px rgba(14,165,233,0.4); }
+    .p-btn-primary[disabled] { opacity: 0.5; pointer-events: none; }
+    .p-btn-light { background: #f1f5f9; color: #475569; }
+    .p-btn-light:hover { background: #e2e8f0; }
+    .p-btn-light.active { background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd; }
+
+    .p-btn-icon { padding: 6px; border-radius: 6px; background: transparent; color: #64748b; font-size: 1rem; }
+    .p-btn-icon:hover { background: #f1f5f9; color: #0f172a; }
+    .p-btn-icon.danger { color: #ef4444; }
+    .p-btn-icon.danger:hover { background: #fee2e2; }
+
+    /* Tables */
+    .m-t { margin-top: 25px; }
+    .modern-table table { width: 100%; border-collapse: separate; border-spacing: 0; }
+    .modern-table th {
+      text-align: left; padding: 12px 15px; color: #64748b; font-weight: 600; font-size: 0.85rem;
+      text-transform: uppercase; border-bottom: 2px solid #f1f5f9;
+    }
+    .modern-table td { padding: 15px; color: #334155; font-weight: 500; font-size: 0.9rem; border-bottom: 1px solid #f1f5f9; }
+    .modern-table tr:hover td { background: #f8fafc; }
+    .modern-table tr.row-link { cursor: pointer; }
+    .modern-table tr.row-active td { background: #f0f9ff; }
+
+    .p-badge {
+      padding: 4px 10px; border-radius: 12px; font-size: 0.8rem; font-weight: 700;
+      background: #f1f5f9; color: #64748b; text-transform: uppercase; display: inline-flex; align-items: center; gap: 6px;
+    }
+    .p-badge.blue { background: #e0f2fe; color: #0284c7; }
+    .p-badge.green { background: #dcfce7; color: #16a34a; }
+    .p-badge.red { background: #fee2e2; color: #ef4444; }
+    .p-badge.orange { background: #ffedd5; color: #ea580c; }
+    .p-badge.light { background: #f8fafc; color: #94a3b8; border: 1px solid #e2e8f0; }
+
+    .empty { padding: 40px; text-align: center; color: #94a3b8; font-size: 1.1rem; display:flex; flex-direction:column; align-items:center; gap: 15px; }
+    .empty i { font-size: 3rem; color: #cbd5e1; }
+    .muted { color: #94a3b8; }
+    .mono { font-family: monospace; }
+    .color-primary { color: #0ea5e9; }
+
+    /* Modals */
+    .p-modal { border: none; border-radius: 16px; box-shadow: 0 20px 40px rgba(0,0,0,0.15); overflow: hidden; background: white; }
+    .p-modal .m-head { background: #f8fafc; border-bottom: 1px solid #e2e8f0; padding: 20px; }
+    .p-modal .m-head h3 { color: #0f172a; font-weight: 700; font-size: 1.2rem; margin:0; }
+    .p-modal .m-body { padding: 25px; max-height: 70vh; overflow-y: auto; }
+    .p-modal .m-foot { background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 20px; display: flex; justify-content: flex-end; gap: 10px; }
+    
+    .p-input, .filtre-input, input[type="date"], input[type="time"] {
+      width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px;
+      font-size: 0.95rem; color: #0f172a; transition: all 0.2s; background: #fff;
+    }
+    .p-input:focus, .filtre-input:focus, input[type="date"]:focus, input[type="time"]:focus { 
+      outline: none; border-color: #0ea5e9; box-shadow: 0 0 0 3px #e0f2fe; 
+    }
+    
+    .spinner-modern {
+      width: 40px; height: 40px; margin: 40px auto; border: 3px solid #e0f2fe; border-radius: 50%;
+      border-top-color: #0ea5e9; animation: spin 1s ease-in-out infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Specific to components */
+    .detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; }
+    .detail-grid .dk { display: block; font-size: 0.85rem; color: #64748b; margin-bottom: 4px; text-transform: uppercase; font-weight: 600; }
+    .detail-grid .dv { display: block; font-size: 1rem; color: #0f172a; font-weight: 500; }
+    
+    .ligne-section { background: #f1f5f9; padding: 12px; border-radius: 8px; margin: 10px 0; }
+    
+    .map-legend { display:flex; gap:18px; flex-wrap:wrap; margin-bottom:12px; font-size:12.5px; color:#64748b; }
+    .map-legend .dot { display:inline-block; width:11px; height:11px; border-radius:50%; margin-right:6px; vertical-align:middle; }
+    .map-legend .leg { cursor:pointer; padding:4px 8px; border-radius:6px; transition: all 0.2s; }
+    .map-legend .leg:hover { background: #f1f5f9; }
+    .map-legend .leg.active { background:#e0f2fe; font-weight:700; color:#0284c7; }
+    
+    .map-holder { position: relative; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0; }
+    #suivi-map { height: calc(100dvh - 430px); min-height: 400px; }
+    .map-fs { position: absolute; top: 12px; right: 12px; z-index: 1000; background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
   `]
 })
 export class VoyagesConteneursComponent implements OnInit {
