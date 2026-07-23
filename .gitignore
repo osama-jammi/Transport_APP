@@ -3,3 +3,21 @@
 # OS / éditeurs
 .DS_Store
 Thumbs.db
+
+# Fichiers LaTeX et diagrammes générés
+*.tex
+*.mmd
+*.aux
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+raporte.txt
+generate-*.js
+gen-seq*.js
+class_diagram.png
+sequence_gps.png
+sequence_scan_livraison.png
+architecture.mmd
+circuit.mmd
+use_case.mmd
