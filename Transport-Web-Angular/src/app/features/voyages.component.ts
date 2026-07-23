@@ -12,62 +12,79 @@ import {
   GapArticle, GapChauffeur, GapVoyageArticle, TrajetVoyage, MatierePremiere, CommandeMp
 } from '../core/models';
 import { environment } from '../../environments/environment';
+import { SortState } from '../shared/sort.pipe';
+import { matchesSearch, matchesFilters, ColumnFilters } from '../shared/column-filter';
+import { FiltreField } from '../shared/filtre-panel.component';
 import * as L from 'leaflet';
 
 @Component({
   selector: 'app-voyages',
   template: `
-    <div class="toolbar">
-      <div class="search">
-        <i class="fa-solid fa-magnifying-glass"></i>
-        <input [(ngModel)]="q" (ngModelChange)="page=1" placeholder="Rechercher (client, camion, chauffeur, transporteur)…">
+    <div class="premium-voyages">
+      
+    <div class="header">
+        <h1><i class="fa-solid fa-route"></i> Livraisons</h1>
+        <p class="subtitle">Gestion des livraisons et bons de livraison.</p>
       </div>
+      <div class="toolbar glass-panel">
+      <div class="search-box"><i class="fa-solid fa-magnifying-glass"></i>
+        <input [(ngModel)]="q" (ngModelChange)="page=1" placeholder="Rechercher (client, camion, chauffeur, transporteur)…"></div>
+      <button class="p-btn" [ngClass]="filtresUI ? 'p-btn-primary' : 'p-btn-light'" (click)="basculerFiltres()"
+              title="Filtrer par colonne">
+        <i class="fa-solid fa-filter"></i> Filtres</button>
     </div>
 
-    <div class="card"><div class="card-body" style="padding:0">
+    <app-filtre-panel *ngIf="filtresUI" [fields]="filterFields" [filters]="colF" (change)="page=1"></app-filtre-panel>
+
+    <div class="glass-card m-t"><div class="card-body" style="padding:0">
       <div *ngIf="loading" class="spinner"></div>
       <div *ngIf="!loading && filtres().length===0" class="empty">
         <i class="fa-solid fa-route"></i> Aucune livraison
       </div>
-      <div class="table-wrap" *ngIf="!loading && filtres().length">
+      <div class="modern-table" *ngIf="!loading && filtres().length">
         <table>
-          <thead><tr><th>ID</th><th>Client / Chantier</th><th>Chauffeur</th>
-            <th>Chargement</th><th>Déchargement</th><th>Articles</th><th>Statut</th><th></th></tr></thead>
+          <thead>
+            <tr>
+            <th appSortable="id" [(state)]="sortState">ID</th>
+            <th appSortable="client" [(state)]="sortState">Client / Chantier</th>
+            <th appSortable="chauffeur" [(state)]="sortState">Chauffeur</th>
+            <th appSortable="chargementJour" [(state)]="sortState">Chargement</th>
+            <th appSortable="dechargementJour" [(state)]="sortState">Déchargement</th>
+            <th appSortable="nbArticles" [(state)]="sortState">Articles</th>
+            <th appSortable="statut" [(state)]="sortState">Statut</th>
+            <th></th></tr>
+          </thead>
           <tbody>
-            <tr *ngFor="let v of filtres() | paginate:page:pageSize" class="row-link" (click)="voirDetails(v)">
+            <tr *ngFor="let v of filtres() | sortBy:sortState | paginate:page:pageSize" class="row-link" (click)="voirDetails(v)">
               <td><code>#{{ v.id }}</code></td>
               <td><strong>{{ v.client || '—' }}</strong></td>
               <td>{{ v.chauffeur || '—' }}</td>
               <td>{{ v.chargementJour || '—' }} {{ v.chargementHeure || '' }}</td>
               <td>{{ v.dechargementJour || '—' }} {{ v.dechargementHeure || '' }}</td>
-              <td><span class="badge badge-gray">{{ v.nbArticles ?? v.nbColis }}</span></td>
-              <td><span class="badge" [ngClass]="statutVoyage(v).cls">{{ statutVoyage(v).label }}</span></td>
+              <td><span class="p-badge light">{{ v.nbArticles ?? v.nbColis }}</span></td>
+              <td><span class="p-badge" [ngClass]="statutVoyage(v).cls">{{ statutVoyage(v).label }}</span></td>
               <td class="flex" (click)="$event.stopPropagation()">
-                <button class="btn btn-outline btn-sm" (click)="voirDetails(v)" title="Détails">
+                <button class="p-btn p-btn-light p-btn-sm" (click)="voirDetails(v)" title="Détails">
                   <i class="fa-solid fa-eye"></i></button>
-                <button *ngIf="v.statut==='EN_COURS'" class="btn btn-outline btn-sm" (click)="archiver(v)" title="Archiver">
-                  <i class="fa-solid fa-box-archive"></i></button>
+                <button class="p-btn p-btn-light p-btn-sm" (click)="imprimerBL(v)" title="Imprimer le bon de livraison">
+                  <i class="fa-solid fa-print"></i></button>
               </td>
             </tr>
           </tbody>
         </table>
       </div>
       <app-paginator [total]="filtres().length" [page]="page" [pageSize]="pageSize"
-                     (pageChange)="page = $event"></app-paginator>
+                     (pageChange)="page = $event" (pageSizeChange)="pageSize = $event; page = 1"></app-paginator>
     </div></div>
 
     <!-- ════════ Modal NOUVEAU VOYAGE ════════ -->
     <div class="modal-backdrop" *ngIf="modal" (click)="fermer($event)">
-      <div class="modal" style="max-width:1040px" (click)="$event.stopPropagation()">
+      <div class="modal p-modal" style="max-width:1040px" (click)="$event.stopPropagation()">
         <div class="m-head"><h3>{{ editId ? 'Modifier' : 'Nouvelle' }} livraison</h3><button class="x" (click)="modal=false">&times;</button></div>
         <div class="m-body">
-          <p class="muted" style="margin:0 0 12px;font-size:12px">
-            <i class="fa-solid fa-circle-info"></i> Le chauffeur et les heures de chargement/déchargement
-            se définissent au niveau du <strong>Voyage</strong>.
-          </p>
           <div class="form-grid">
             <div class="field combo">
-              <label>Chantier (client) *</label>
+              <label>Chantier *</label>
               <input class="filtre-input" [(ngModel)]="filtreChantier" autocomplete="off"
                      (focus)="comboChantierOpen=true"
                      (input)="comboChantierOpen=true; form.chantierId=undefined"
@@ -85,7 +102,7 @@ import * as L from 'leaflet';
           <div class="art-section">
             <div class="art-head">
               <label>Articles à transporter <span class="muted">({{ selectedCount() }} sélectionné(s))</span></label>
-              <button type="button" class="btn btn-outline btn-sm" (click)="toggleAll()">
+              <button type="button" class="p-btn p-btn-light p-btn-sm" (click)="toggleAll()">
                 {{ allSelected() ? 'Tout désélectionner' : 'Tout sélectionner' }}
               </button>
             </div>
@@ -112,8 +129,8 @@ import * as L from 'leaflet';
 
         </div>
         <div class="m-foot">
-          <button class="btn btn-outline" (click)="modal=false">Annuler</button>
-          <button class="btn btn-primary" (click)="enregistrer()" [disabled]="saving">
+          <button class="p-btn p-btn-light" (click)="modal=false">Annuler</button>
+          <button class="p-btn p-btn-primary" (click)="enregistrer()" [disabled]="saving">
             <i class="fa-solid fa-floppy-disk"></i> Enregistrer</button>
         </div>
       </div>
@@ -121,7 +138,7 @@ import * as L from 'leaflet';
 
     <!-- ════════ Modal DÉTAILS VOYAGE ════════ -->
     <div class="modal-backdrop" *ngIf="detail" (click)="fermerDetail($event)">
-      <div class="modal" style="max-width:720px" (click)="$event.stopPropagation()">
+      <div class="modal p-modal" style="max-width:720px" (click)="$event.stopPropagation()">
         <div class="m-head">
           <h3>Voyage #{{ detail.id }} — {{ detail.client || 'Sans client' }}</h3>
           <button class="x" (click)="fermerDetailModal()">&times;</button>
@@ -131,21 +148,17 @@ import * as L from 'leaflet';
             <div><span class="dk">Transporteur</span><span class="dv">{{ detail.transporteur || '—' }}</span></div>
             <div><span class="dk">Camion</span><span class="dv">{{ detail.camionImmatriculation || '—' }}</span></div>
             <div><span class="dk">Chauffeur</span><span class="dv">{{ detail.chauffeur || '—' }}</span></div>
-            <div><span class="dk">Statut</span><span class="dv"><span class="badge" [ngClass]="statutVoyage(detail).cls">{{ statutVoyage(detail).label }}</span></span></div>
+            <div><span class="dk">Statut</span><span class="dv"><span class="p-badge" [ngClass]="statutVoyage(detail).cls">{{ statutVoyage(detail).label }}</span></span></div>
             <div><span class="dk">Chargement</span><span class="dv">{{ detail.chargementJour || '—' }} {{ detail.chargementHeure || '' }}</span></div>
             <div><span class="dk">Déchargement</span><span class="dv">{{ detail.dechargementJour || '—' }} {{ detail.dechargementHeure || '' }}</span></div>
           </div>
-
-          <p class="muted" style="font-size:12px;margin-top:8px">
-            <i class="fa-solid fa-circle-info"></i> Le code de forçage et le bon de livraison se gèrent désormais au niveau du <strong>Voyage</strong> (par ligne).
-          </p>
 
           <h4 class="art-title">Articles du voyage ({{ detailArticles.length }})</h4>
           <div *ngIf="detailLoading" class="spinner" style="margin:20px auto"></div>
           <div *ngIf="!detailLoading && detailArticles.length===0" class="empty" style="padding:20px">
             <i class="fa-solid fa-boxes-stacked"></i> Aucun article rattaché
           </div>
-          <div class="table-wrap" *ngIf="!detailLoading && detailArticles.length">
+          <div class="modern-table" *ngIf="!detailLoading && detailArticles.length">
             <table>
               <thead><tr><th>Article</th><th>N° prix</th><th>Qté</th><th>Statut réception</th><th>Heure de scan</th><th>QR code</th></tr></thead>
               <tbody>
@@ -153,11 +166,11 @@ import * as L from 'leaflet';
                   <td><strong>{{ a.designation || '—' }}</strong></td>
                   <td><code>{{ a.numPrix || '—' }}</code></td>
                   <td>{{ a.quantite ?? '—' }}</td>
-                  <td><span class="badge badge-gray">{{ a.statutReception || '—' }}</span></td>
+                  <td><span [ngClass]="a.statutReception | statutBadge">{{ a.statutReception || '—' }}</span></td>
                   <td>{{ a.heureScan ? (a.heureScan | date:'dd/MM/yy HH:mm:ss') : '—' }}</td>
                   <td style="white-space:nowrap">
                     <img [src]="qrDetailUrl(a.id)" alt="QR" style="width:56px;height:56px;vertical-align:middle">
-                    <a class="btn btn-outline btn-sm" style="margin-left:6px"
+                    <a class="p-btn p-btn-light p-btn-sm" style="margin-left:6px"
                        [href]="qrDetailUrl(a.id)" [download]="'qr-article-' + a.id + '.png'" target="_blank"
                        title="Télécharger le QR">
                       <i class="fa-solid fa-download"></i></a>
@@ -166,23 +179,152 @@ import * as L from 'leaflet';
               </tbody>
             </table>
           </div>
-
-          <p class="muted" style="font-size:12px;margin-top:14px">
-            <i class="fa-solid fa-circle-info"></i> Le suivi GPS du chauffeur est consultable dans le <strong>Voyage</strong>.
-          </p>
         </div>
         <div class="m-foot">
-          <button class="btn btn-outline" (click)="fermerDetailModal()">Fermer</button>
+          <button class="p-btn p-btn-light" (click)="fermerDetailModal()">Fermer</button>
+          <button class="p-btn p-btn-primary" (click)="detail && imprimerBL(detail)">
+            <i class="fa-solid fa-print"></i> Imprimer BL</button>
         </div>
       </div>
     </div>
-  `
+  `,
+  styles: [`
+    .premium-voyages {
+      font-family: 'Inter', 'Segoe UI', Roboto, sans-serif;
+      color: #334155;
+      padding: 20px;
+      max-width: 1500px;
+      margin: 0 auto;
+    }
+
+    .header { margin-bottom: 25px; }
+    .header h1 {
+      margin: 0; font-size: 2rem; font-weight: 700; color: #0f172a; display: flex; align-items: center; gap: 12px;
+    }
+    .header h1 i { color: #0ea5e9; }
+    .subtitle { color: #64748b; margin-top: 4px; font-size: 1.05rem; }
+
+    /* Glass Panels */
+    .glass-panel, .glass-card {
+      background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+      border: 1px solid #ffffff; border-radius: 12px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+      padding: 20px;
+    }
+
+    /* Toolbar */
+    .toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 15px; margin-bottom: 25px; padding: 15px 20px; }
+    
+    .search-box {
+      display: flex; align-items: center; background: #f1f5f9; border-radius: 8px; padding: 0 15px; width: 320px; border: 1px solid transparent; transition: border 0.3s;
+    }
+    .search-box:focus-within { border-color: #bae6fd; background: #fff; box-shadow: 0 0 0 3px #e0f2fe; }
+    .search-box i { color: #94a3b8; }
+    .search-box input { border: none; background: transparent; padding: 10px; width: 100%; color: #0f172a; font-size: 0.95rem; outline: none; }
+    .actions { display: flex; gap: 10px; }
+
+    /* Buttons */
+    .p-btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 8px 16px; border-radius: 8px; font-weight: 600; font-size: 0.9rem;
+      cursor: pointer; border: none; transition: all 0.2s ease; text-decoration: none;
+    }
+    .p-btn-sm { padding: 5px 10px; font-size: 0.8rem; }
+    .p-btn-primary { background: #0ea5e9; color: #fff; box-shadow: 0 2px 10px rgba(14,165,233,0.3); }
+    .p-btn-primary:hover { background: #0284c7; box-shadow: 0 4px 15px rgba(14,165,233,0.4); }
+    .p-btn-primary[disabled] { opacity: 0.5; pointer-events: none; }
+    .p-btn-light { background: #f1f5f9; color: #475569; }
+    .p-btn-light:hover { background: #e2e8f0; }
+    .p-btn-light.active { background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd; }
+
+    .p-btn-icon { padding: 6px; border-radius: 6px; background: transparent; color: #64748b; font-size: 1rem; }
+    .p-btn-icon:hover { background: #f1f5f9; color: #0f172a; }
+    .p-btn-icon.danger { color: #ef4444; }
+    .p-btn-icon.danger:hover { background: #fee2e2; }
+
+    /* Tables */
+    .m-t { margin-top: 25px; }
+    .modern-table table { width: 100%; border-collapse: separate; border-spacing: 0; }
+    .modern-table th {
+      text-align: left; padding: 12px 15px; color: #64748b; font-weight: 600; font-size: 0.85rem;
+      text-transform: uppercase; border-bottom: 2px solid #f1f5f9;
+    }
+    .modern-table td { padding: 15px; color: #334155; font-weight: 500; font-size: 0.9rem; border-bottom: 1px solid #f1f5f9; }
+    .modern-table tr:hover td { background: #f8fafc; }
+    .modern-table tr.row-link { cursor: pointer; }
+    .modern-table tr.row-active td { background: #f0f9ff; }
+
+    .p-badge {
+      padding: 4px 10px; border-radius: 12px; font-size: 0.8rem; font-weight: 700;
+      background: #f1f5f9; color: #64748b; text-transform: uppercase; display: inline-flex; align-items: center; gap: 6px;
+    }
+    .p-badge.blue { background: #e0f2fe; color: #0284c7; }
+    .p-badge.green { background: #dcfce7; color: #16a34a; }
+    .p-badge.red { background: #fee2e2; color: #ef4444; }
+    .p-badge.orange { background: #ffedd5; color: #ea580c; }
+    .p-badge.light { background: #f8fafc; color: #94a3b8; border: 1px solid #e2e8f0; }
+
+    .empty { padding: 40px; text-align: center; color: #94a3b8; font-size: 1.1rem; display:flex; flex-direction:column; align-items:center; gap: 15px; }
+    .empty i { font-size: 3rem; color: #cbd5e1; }
+    .muted { color: #94a3b8; }
+    .mono { font-family: monospace; }
+    .color-primary { color: #0ea5e9; }
+
+    /* Modals */
+    .p-modal { border: none; border-radius: 16px; box-shadow: 0 20px 40px rgba(0,0,0,0.15); overflow: hidden; background: white; }
+    .p-modal .m-head { background: #f8fafc; border-bottom: 1px solid #e2e8f0; padding: 20px; }
+    .p-modal .m-head h3 { color: #0f172a; font-weight: 700; font-size: 1.2rem; margin:0; }
+    .p-modal .m-body { padding: 25px; max-height: 70vh; overflow-y: auto; }
+    .p-modal .m-foot { background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 20px; display: flex; justify-content: flex-end; gap: 10px; }
+    
+    .p-input, .filtre-input, input[type="date"], input[type="time"] {
+      width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px;
+      font-size: 0.95rem; color: #0f172a; transition: all 0.2s; background: #fff;
+    }
+    .p-input:focus, .filtre-input:focus, input[type="date"]:focus, input[type="time"]:focus { 
+      outline: none; border-color: #0ea5e9; box-shadow: 0 0 0 3px #e0f2fe; 
+    }
+    
+    .spinner-modern {
+      width: 40px; height: 40px; margin: 40px auto; border: 3px solid #e0f2fe; border-radius: 50%;
+      border-top-color: #0ea5e9; animation: spin 1s ease-in-out infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Specific to components */
+    .detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; }
+    .detail-grid .dk { display: block; font-size: 0.85rem; color: #64748b; margin-bottom: 4px; text-transform: uppercase; font-weight: 600; }
+    .detail-grid .dv { display: block; font-size: 1rem; color: #0f172a; font-weight: 500; }
+    
+    .ligne-section { background: #f1f5f9; padding: 12px; border-radius: 8px; margin: 10px 0; }
+    
+    .map-legend { display:flex; gap:18px; flex-wrap:wrap; margin-bottom:12px; font-size:12.5px; color:#64748b; }
+    .map-legend .dot { display:inline-block; width:11px; height:11px; border-radius:50%; margin-right:6px; vertical-align:middle; }
+    .map-legend .leg { cursor:pointer; padding:4px 8px; border-radius:6px; transition: all 0.2s; }
+    .map-legend .leg:hover { background: #f1f5f9; }
+    .map-legend .leg.active { background:#e0f2fe; font-weight:700; color:#0284c7; }
+    
+    .map-holder { position: relative; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0; }
+    #suivi-map { height: calc(100dvh - 430px); min-height: 400px; }
+    .map-fs { position: absolute; top: 12px; right: 12px; z-index: 1000; background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+  `]
 })
 export class VoyagesComponent implements OnInit {
   voyages: Voyage[] = [];
   loading = true; saving = false; modal = false;
   page = 1; pageSize = 10;
   q = ''; vue: 'en-cours' | 'archives' = 'en-cours';
+  filtresUI = false;
+  colF: ColumnFilters = {};
+  filterFields: FiltreField[] = [
+    { key: 'id', label: 'ID', icon: 'fa-hashtag', placeholder: 'ID' },
+    { key: 'client', label: 'Client / Chantier', icon: 'fa-helmet-safety', placeholder: 'Client ou chantier' },
+    { key: 'chauffeur', label: 'Chauffeur', icon: 'fa-id-card', placeholder: 'Chauffeur' },
+    { key: 'chargementJour', label: 'Chargement', icon: 'fa-calendar-day', placeholder: 'Date de chargement' },
+    { key: 'dechargementJour', label: 'Déchargement', icon: 'fa-calendar-check', placeholder: 'Date de déchargement' },
+    { key: 'nbArticles', label: 'Articles', icon: 'fa-boxes-stacked', placeholder: 'Nombre' },
+    { key: 'statut', label: 'Statut', icon: 'fa-flag', placeholder: 'Statut' },
+  ];
+  sortState: SortState = { key: '', dir: 'asc' };
   dateDebut = ''; dateFin = '';
 
   // Référentiels pour le formulaire (tous depuis GAP)
@@ -250,13 +392,13 @@ export class VoyagesComponent implements OnInit {
   }
 
   filtres(): Voyage[] {
-    const t = this.q.toLowerCase().trim();
-    if (!t) return this.voyages;
-    return this.voyages.filter(v =>
-      (v.client || '').toLowerCase().includes(t) ||
-      (v.camionImmatriculation || '').toLowerCase().includes(t) ||
-      (v.chauffeur || '').toLowerCase().includes(t) ||
-      (v.transporteur || '').toLowerCase().includes(t));
+    return this.voyages.filter(v => matchesSearch(v, this.q) && matchesFilters(v, this.colF));
+  }
+
+  /** Affiche/masque la ligne de filtres par colonne (et réinitialise à la fermeture). */
+  basculerFiltres(): void {
+    this.filtresUI = !this.filtresUI;
+    if (!this.filtresUI) { this.colF = {}; this.page = 1; }
   }
 
   /* ─────────── Création / Édition ─────────── */
@@ -551,10 +693,28 @@ export class VoyagesComponent implements OnInit {
 
   /** Statut global affiché : Livré > Chargé > statut brut */
   statutVoyage(v: Voyage): { label: string; cls: string } {
+    if (v.statut === 'ANNULE') return { label: 'Annulé', cls: 'badge-red' };
     if (v.etatDechargement === 'TERMINE') return { label: 'Livré', cls: 'badge-green' };
     if (v.etatChargement === 'TERMINE') return { label: 'Chargé', cls: 'badge-blue' };
     if (v.statut === 'ARCHIVE') return { label: 'Archivé', cls: 'badge-gray' };
     return { label: 'En cours', cls: 'badge-orange' };
+  }
+
+  /** Génère le bon de livraison (Jasper) et l'ouvre dans un nouvel onglet (sinon le télécharge). */
+  imprimerBL(v: Voyage): void {
+    this.svc.imprimerBL(v.id).subscribe({
+      next: blob => {
+        const url = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+        const win = window.open(url, '_blank');
+        if (!win) {
+          const a = document.createElement('a');
+          a.href = url; a.download = `bon-livraison-${v.id}.pdf`;
+          document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        }
+        setTimeout(() => URL.revokeObjectURL(url), 30000);
+      },
+      error: () => this.toastr.error('Bon de livraison indisponible.')
+    });
   }
 
   /** Télécharge / ouvre le bon de livraison du voyage */

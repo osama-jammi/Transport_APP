@@ -7,7 +7,7 @@ import { useRouter } from 'expo-router';
 import { useDispatch } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, LOGO } from '@/constants/theme';
-import { loginAdminPassword } from '@/services/keycloakAuth';
+import { loginSuperviseur } from '@/services/superviseurAuth';
 import { storeChauffeur } from '@/services/authService';
 import { setChauffeur } from '@/store/authSlice';
 
@@ -26,7 +26,7 @@ export default function AdminLoginScreen() {
     }
     setLoading(true);
     try {
-      const profil = await loginAdminPassword(username, password);
+      const profil = await loginSuperviseur(username, password);
       await storeChauffeur(profil);
       dispatch(setChauffeur(profil));
       router.replace('/(admin)' as any);
@@ -53,7 +53,7 @@ export default function AdminLoginScreen() {
             <Image source={LOGO} style={styles.logo} resizeMode="contain" />
           </View>
           <Text style={styles.title}>Connexion administrateur</Text>
-          <Text style={styles.subtitle}>Identifiez-vous avec votre compte Keycloak</Text>
+          <Text style={styles.subtitle}>Identifiez-vous avec votre compte superviseur</Text>
         </View>
 
         <View style={styles.form}>

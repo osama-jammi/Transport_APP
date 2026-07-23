@@ -267,10 +267,9 @@ public class VoyageServiceImpl implements VoyageService {
         return toDTO(voyageRepository.save(voyage));
     }
 
-    /** Génère un code de forçage court (6 caractères) facile à communiquer. */
+    /** Génère un code de forçage numérique à 6 chiffres, facile à communiquer. */
     private String genererForceCode() {
-        return java.util.UUID.randomUUID().toString().replace("-", "")
-                .substring(0, 6).toUpperCase();
+        return String.format("%06d", new java.security.SecureRandom().nextInt(1_000_000));
     }
 
     /** Distance Haversine en mètres entre deux points GPS. */

@@ -1,0 +1,256 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports"
+              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+              xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd"
+              name="bon-livraison" pageWidth="595" pageHeight="842" columnWidth="555"
+              leftMargin="20" rightMargin="20" topMargin="20" bottomMargin="20"
+              whenNoDataType="AllSectionsNoDetail">
+
+    <style name="base" isDefault="true" fontName="DejaVu Sans" fontSize="9"/>
+    <style name="cell" mode="Opaque" backcolor="#FFFFFF">
+        <box><pen lineWidth="0.5" lineColor="#000000"/></box>
+    </style>
+    <style name="head" mode="Opaque" backcolor="#ECECEC" forecolor="#000000">
+        <box><pen lineWidth="0.5" lineColor="#000000"/></box>
+    </style>
+
+    <parameter name="blNumero" class="java.lang.String"/>
+    <parameter name="lieu" class="java.lang.String"/>
+    <parameter name="dateBl" class="java.lang.String"/>
+    <parameter name="projet" class="java.lang.String"/>
+    <parameter name="chauffeur" class="java.lang.String"/>
+    <parameter name="agentLivraison" class="java.lang.String"/>
+    <parameter name="agentControleQualite" class="java.lang.String"/>
+    <parameter name="agentReception" class="java.lang.String"/>
+    <parameter name="logo" class="java.io.InputStream"/>
+
+    <field name="idOf" class="java.lang.String"/>
+    <field name="numPrix" class="java.lang.String"/>
+    <field name="designation" class="java.lang.String"/>
+    <field name="repere" class="java.lang.String"/>
+    <field name="quantite" class="java.lang.String"/>
+    <field name="observation" class="java.lang.String"/>
+
+    <title>
+        <band height="112">
+            <image scaleImage="RetainShape" onErrorType="Blank">
+                <reportElement x="0" y="0" width="170" height="62"/>
+                <imageExpression><![CDATA[$P{logo}]]></imageExpression>
+            </image>
+            <staticText>
+                <reportElement x="185" y="14" width="215" height="26"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle"><font size="16"/></textElement>
+                <text><![CDATA[Bon de livraison]]></text>
+            </staticText>
+            <textField>
+                <reportElement x="400" y="14" width="155" height="26"/>
+                <textElement textAlignment="Left" verticalAlignment="Middle"><font size="14" isBold="true"/></textElement>
+                <textFieldExpression><![CDATA["N° :  " + $P{blNumero}]]></textFieldExpression>
+            </textField>
+            <textField>
+                <reportElement x="185" y="50" width="215" height="18"/>
+                <textElement verticalAlignment="Middle"><font size="10"/></textElement>
+                <textFieldExpression><![CDATA["Lieu :  " + ($P{lieu} == null ? "" : $P{lieu})]]></textFieldExpression>
+            </textField>
+            <textField>
+                <reportElement x="400" y="50" width="155" height="18"/>
+                <textElement verticalAlignment="Middle"><font size="10"/></textElement>
+                <textFieldExpression><![CDATA["Date : " + ($P{dateBl} == null ? "" : $P{dateBl})]]></textFieldExpression>
+            </textField>
+            <textField>
+                <reportElement x="0" y="84" width="555" height="20"/>
+                <textElement verticalAlignment="Middle"><font size="11" isBold="true"/></textElement>
+                <textFieldExpression><![CDATA["Projet :  " + ($P{projet} == null ? "" : $P{projet})]]></textFieldExpression>
+            </textField>
+        </band>
+    </title>
+
+    <columnHeader>
+        <band height="40">
+            <staticText>
+                <reportElement style="head" x="0" y="0" width="60" height="40"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle"><font size="8" isBold="true"/></textElement>
+                <text><![CDATA[ID OF]]></text>
+            </staticText>
+            <staticText>
+                <reportElement style="head" x="60" y="0" width="70" height="40"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle"><font size="8" isBold="true"/></textElement>
+                <text><![CDATA[N° de Prix]]></text>
+            </staticText>
+            <staticText>
+                <reportElement style="head" x="130" y="0" width="150" height="40"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle"><font size="8" isBold="true"/></textElement>
+                <text><![CDATA[Désignation]]></text>
+            </staticText>
+            <staticText>
+                <reportElement style="head" x="280" y="0" width="85" height="40"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle"><font size="8" isBold="true"/></textElement>
+                <text><![CDATA[Repère / Emplacement]]></text>
+            </staticText>
+            <staticText>
+                <reportElement style="head" x="365" y="0" width="55" height="40"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle"><font size="8" isBold="true"/></textElement>
+                <text><![CDATA[Quantité]]></text>
+            </staticText>
+            <staticText>
+                <reportElement style="head" x="420" y="0" width="60" height="20"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle"><font size="8" isBold="true"/></textElement>
+                <text><![CDATA[Contrôlé]]></text>
+            </staticText>
+            <staticText>
+                <reportElement style="head" x="420" y="20" width="30" height="20"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle"><font size="8" isBold="true"/></textElement>
+                <text><![CDATA[Oui]]></text>
+            </staticText>
+            <staticText>
+                <reportElement style="head" x="450" y="20" width="30" height="20"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle"><font size="8" isBold="true"/></textElement>
+                <text><![CDATA[Non]]></text>
+            </staticText>
+            <staticText>
+                <reportElement style="head" x="480" y="0" width="75" height="40"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle"><font size="8" isBold="true"/></textElement>
+                <text><![CDATA[Observation]]></text>
+            </staticText>
+        </band>
+    </columnHeader>
+
+    <detail>
+        <band height="26">
+            <textField>
+                <reportElement style="cell" x="0" y="0" width="60" height="26"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle"><font size="8"/></textElement>
+                <textFieldExpression><![CDATA[$F{idOf}]]></textFieldExpression>
+            </textField>
+            <textField>
+                <reportElement style="cell" x="60" y="0" width="70" height="26"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle"><font size="8"/></textElement>
+                <textFieldExpression><![CDATA[$F{numPrix}]]></textFieldExpression>
+            </textField>
+            <textField textAdjust="StretchHeight">
+                <reportElement style="cell" x="130" y="0" width="150" height="26"/>
+                <box leftPadding="4" rightPadding="4"/>
+                <textElement textAlignment="Left" verticalAlignment="Middle"><font size="8"/></textElement>
+                <textFieldExpression><![CDATA[$F{designation}]]></textFieldExpression>
+            </textField>
+            <textField>
+                <reportElement style="cell" x="280" y="0" width="85" height="26"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle"><font size="8"/></textElement>
+                <textFieldExpression><![CDATA[$F{repere}]]></textFieldExpression>
+            </textField>
+            <textField>
+                <reportElement style="cell" x="365" y="0" width="55" height="26"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle"><font size="8"/></textElement>
+                <textFieldExpression><![CDATA[$F{quantite}]]></textFieldExpression>
+            </textField>
+            <staticText>
+                <reportElement style="cell" x="420" y="0" width="30" height="26"/>
+                <text><![CDATA[]]></text>
+            </staticText>
+            <staticText>
+                <reportElement style="cell" x="450" y="0" width="30" height="26"/>
+                <text><![CDATA[]]></text>
+            </staticText>
+            <textField textAdjust="StretchHeight">
+                <reportElement style="cell" x="480" y="0" width="75" height="26"/>
+                <box leftPadding="4" rightPadding="4"/>
+                <textElement textAlignment="Left" verticalAlignment="Middle"><font size="8"/></textElement>
+                <textFieldExpression><![CDATA[$F{observation}]]></textFieldExpression>
+            </textField>
+        </band>
+    </detail>
+
+    <lastPageFooter>
+        <band height="210">
+            <staticText>
+                <reportElement style="cell" x="0" y="10" width="555" height="22"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle"><font size="10" isBold="true"/></textElement>
+                <text><![CDATA[Check-list de contrôle à la livraison (A cocher) :]]></text>
+            </staticText>
+            <staticText>
+                <reportElement style="cell" x="0" y="32" width="80" height="24"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle"><font size="8"/></textElement>
+                <text><![CDATA[☐ Documents]]></text>
+            </staticText>
+            <staticText>
+                <reportElement style="cell" x="80" y="32" width="70" height="24"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle"><font size="8"/></textElement>
+                <text><![CDATA[☐ Quantité]]></text>
+            </staticText>
+            <staticText>
+                <reportElement style="cell" x="150" y="32" width="150" height="24"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle"><font size="8"/></textElement>
+                <text><![CDATA[☐ Identification et marquage]]></text>
+            </staticText>
+            <staticText>
+                <reportElement style="cell" x="300" y="32" width="80" height="24"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle"><font size="8"/></textElement>
+                <text><![CDATA[☐ Dimensions]]></text>
+            </staticText>
+            <staticText>
+                <reportElement style="cell" x="380" y="32" width="95" height="24"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle"><font size="8"/></textElement>
+                <text><![CDATA[☐ Etat de surface]]></text>
+            </staticText>
+            <staticText>
+                <reportElement style="cell" x="475" y="32" width="80" height="24"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle"><font size="8"/></textElement>
+                <text><![CDATA[☐ Emballage]]></text>
+            </staticText>
+
+            <staticText>
+                <reportElement style="cell" x="0" y="72" width="139" height="28"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle"><font size="8"/></textElement>
+                <text><![CDATA[Agent de livraison (cachet et/ou Visa)]]></text>
+            </staticText>
+            <staticText>
+                <reportElement style="cell" x="139" y="72" width="139" height="28"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle"><font size="8"/></textElement>
+                <text><![CDATA[Agent de contrôle qualité (cachet et/ou Visa)]]></text>
+            </staticText>
+            <staticText>
+                <reportElement style="cell" x="278" y="72" width="139" height="28"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle"><font size="8"/></textElement>
+                <text><![CDATA[Chauffeur (cachet et/ou Visa)]]></text>
+            </staticText>
+            <staticText>
+                <reportElement style="cell" x="417" y="72" width="138" height="28"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle"><font size="8"/></textElement>
+                <text><![CDATA[Agent de réception (cachet et/ou Visa)]]></text>
+            </staticText>
+
+            <textField>
+                <reportElement style="cell" x="0" y="100" width="139" height="58"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle"><font size="9"/></textElement>
+                <textFieldExpression><![CDATA[$P{agentLivraison} == null ? "" : $P{agentLivraison}]]></textFieldExpression>
+            </textField>
+            <textField>
+                <reportElement style="cell" x="139" y="100" width="139" height="58"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle"><font size="9"/></textElement>
+                <textFieldExpression><![CDATA[$P{agentControleQualite} == null ? "" : $P{agentControleQualite}]]></textFieldExpression>
+            </textField>
+            <textField>
+                <reportElement style="cell" x="278" y="100" width="139" height="58"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle"><font size="9"/></textElement>
+                <textFieldExpression><![CDATA[$P{chauffeur} == null ? "" : $P{chauffeur}]]></textFieldExpression>
+            </textField>
+            <textField>
+                <reportElement style="cell" x="417" y="100" width="138" height="58"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle"><font size="9"/></textElement>
+                <textFieldExpression><![CDATA[$P{agentReception} == null ? "" : $P{agentReception}]]></textFieldExpression>
+            </textField>
+            <staticText>
+                <reportElement x="0" y="170" width="555" height="24"/>
+                <textElement textAlignment="Center"><font size="7" isItalic="true"/></textElement>
+                <text><![CDATA[Toute communication de ce document est strictement interdite sans autorisation de la direction RICHE BOIS
+Veiller à la vérification de l'édition de ce document avant son utilisation]]></text>
+            </staticText>
+            <staticText>
+                <reportElement x="380" y="196" width="175" height="12"/>
+                <textElement textAlignment="Right"><font size="8"/></textElement>
+                <text><![CDATA[Code : FL-PRO-07 V02]]></text>
+            </staticText>
+        </band>
+    </lastPageFooter>
+
+</jasperReport>

@@ -31,8 +31,8 @@ function resolveBaseUrl(): string {
   // 2) Auto-detection de l'IP du PC via Metro (cas standard en dev)
   const host = metroHost();
   if (host) return `http://${host}:${BACKEND_PORT}${BACKEND_CONTEXT}`;
-  // 3) Repli
-  return `http://192.168.1.105:${BACKEND_PORT}${BACKEND_CONTEXT}`;
+  // 3) Repli — adresse publique de production
+  return 'http://81.192.31.254:8040/Transport_DEV/api';
 }
 
 export const API_BASE_URL = resolveBaseUrl();
@@ -40,6 +40,8 @@ export const API_BASE_URL = resolveBaseUrl();
 export const ENDPOINTS = {
   // Authentification / appairage
   CONNECT_QR: '/chauffeurs/connect',
+  // Connexion superviseur (backend, hors Keycloak)
+  MOBILE_LOGIN: '/mobile/auth/login',
 
   // Voyages — lus depuis GAP (livraisons), filtrés par chauffeur
   VOYAGES_EN_COURS: '/voyages/gap',
@@ -47,6 +49,8 @@ export const ENDPOINTS = {
 
   // Voyages conteneurs (regroupent plusieurs livraisons), filtrés par chauffeur
   VOYAGES_CONTENEURS: '/voyages-conteneurs',
+  // Arrivée sur un chantier sans OF (matières premières / stock seuls)
+  ARRIVEE_CHANTIER: (vcId: number) => `/voyages-conteneurs/${vcId}/arrivee`,
 
   // Tableau de bord administrateur
   DASHBOARD_STATS: '/voyages/stats',

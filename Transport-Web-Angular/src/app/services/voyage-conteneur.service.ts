@@ -1,8 +1,15 @@
 import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
 import { VoyageConteneur, VoyageConteneurRequest, GapVoyage, TrajetVoyage, MatierePremiere } from '../core/models';
+
+export interface BonLivraisonFile {
+  id: number;
+  reference?: string;
+  fichier?: string;
+  contentType?: string;
+}
 
 @Injectable({ providedIn: 'root' })
 export class VoyageConteneurService {
@@ -16,6 +23,12 @@ export class VoyageConteneurService {
   archiver(id: number): Observable<void> {
     return this.http.patch<void>(`${this.base}/${id}/archiver`, {});
   }
+  /** Export Excel (.xlsx) de la liste des voyages selon la vue affichée. */
+  exportExcel(vue: 'en-cours' | 'archives' | 'historique' = 'en-cours'): Observable<Blob> {
+    const archives = vue === 'archives';
+    const tout = vue === 'historique';
+    return this.http.get(`${this.base}/export?archives=${archives}&tout=${tout}`, { responseType: 'blob' });
+  }
   create(req: VoyageConteneurRequest): Observable<number> {
     return this.http.post<number>(this.base, req);
   }
@@ -28,6 +41,10 @@ export class VoyageConteneurService {
   /** Livraisons libres ou déjà rattachées à ce voyage. */
   livraisonsAssignables(id: number): Observable<GapVoyage[]> {
     return this.http.get<GapVoyage[]>(`${this.base}/${id}/livraisons-assignables`);
+  }
+  /** Livraisons libres (non assignées à aucun voyage) — pour créer un nouveau voyage. */
+  livraisonsLibres(): Observable<GapVoyage[]> {
+    return this.http.get<GapVoyage[]>(`${this.base}/livraisons-libres`);
   }
   /** Livraisons rattachées à ce voyage. */
   livraisons(id: number): Observable<GapVoyage[]> {
@@ -48,5 +65,40 @@ export class VoyageConteneurService {
   /** Clôture / rouvre une ligne de matière première (statut local, sans impact ERP). */
   statutMatiere(mpId: number, statut: string): Observable<void> {
     return this.http.patch<void>(`${this.base}/matieres/${mpId}/statut?statut=${statut}`, {});
+  }
+
+  /** Génère le code de forçage du voyage conteneur (commun à toutes ses lignes, MP incluses). */
+  regenererForceCode(id: number): Observable<{ forceCode: string }> {
+    return this.http.patch<{ forceCode: string }>(`${this.base}/${id}/force-code`, {});
+  }
+
+  /** Met à jour les dates chargement/déchargement prévu + réel du voyage. */
+  mettreAJourDates(id: number, params: {
+    chargementJour?: string; chargementHeure?: string;
+    dechargementJour?: string; dechargementHeure?: string;
+    realChargementJour?: string; realChargementHeure?: string;
+    realDechargementJour?: string; realDechargementHeure?: string;
+  }): Observable<void> {
+    let p = new HttpParams();
+    Object.entries(params).forEach(([k, v]) => { if (v) p = p.set(k, v); });
+    return this.http.patch<void>(`${this.base}/${id}/dates`, {}, { params: p });
+  }
+
+  /** Liste les BL uploadés pour une livraison. */
+  listerBls(livraisonId: number): Observable<BonLivraisonFile[]> {
+    return this.http.get<BonLivraisonFile[]>(`${environment.apiUrl}/voyages/${livraisonId}/bls`);
+  }
+
+  /** Upload un BL pour une livraison. */
+  ajouterBl(livraisonId: number, fichier?: File, reference?: string): Observable<number> {
+    const form = new FormData();
+    if (fichier) form.append('fichier', fichier);
+    if (reference) form.append('reference', reference);
+    return this.http.post<number>(`${environment.apiUrl}/voyages/${livraisonId}/bls`, form);
+  }
+
+  /** URL d'un BL spécifique : affichage inline par défaut, téléchargement si download=true. */
+  blUrl(livraisonId: number, blId: number, download = false): string {
+    return `${environment.apiUrl}/voyages/${livraisonId}/bls/${blId}${download ? '?dl=true' : ''}`;
   }
 }

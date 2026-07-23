@@ -8,7 +8,7 @@ import { useSelector } from 'react-redux';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import type { RootState } from '@/store';
-import { confirmerArrivee } from '@/services/livraisonService';
+import { confirmerArrivee, getLivraisonsDuVoyage, confirmerArriveeChantier, getChantierGeo } from '@/services/livraisonService';
 import { COLORS } from '@/constants/theme';
 
 function distanceMeters(a: { latitude: number; longitude: number }, b: { latitude: number; longitude: number }) {
@@ -22,14 +22,24 @@ function distanceMeters(a: { latitude: number; longitude: number }, b: { latitud
 
 export default function NavigationScreen() {
   const router = useRouter();
-  const { voyageId } = useLocalSearchParams<{ voyageId?: string }>();
+  const { voyageId, vcId, projetCode } = useLocalSearchParams<{ voyageId?: string; vcId?: string; projetCode?: string }>();
   const voyages = useSelector((s: RootState) => s.livraison.voyages);
-  const voyage = voyages.find(v => v.id === Number(voyageId)) ?? voyages[0] ?? null;
+  const voyage = voyages.find(v => v.id === Number(voyageId)) ?? null;
+  // Ligne SANS OF (matières premières / stock seuls) : pas de livraison GAP pour porter
+  // la destination géolocalisée → on la résout via le chantier (projet GAP par code).
+  const chantierOnly = !voyage && !!vcId && !!projetCode;
+
+  const [chantierGeo, setChantierGeo] = useState<{ latitude: number; longitude: number; rayonMetres?: number } | null>(null);
+  useEffect(() => {
+    if (chantierOnly && projetCode) {
+      getChantierGeo(projetCode).then(setChantierGeo).catch(() => setChantierGeo(null));
+    }
+  }, [chantierOnly, projetCode]);
 
   const dest = voyage && voyage.destinationLat != null && voyage.destinationLng != null
     ? { latitude: voyage.destinationLat, longitude: voyage.destinationLng }
-    : null;
-  const rayon = voyage?.destinationRayon ?? 100;
+    : (chantierGeo ? { latitude: chantierGeo.latitude, longitude: chantierGeo.longitude } : null);
+  const rayon = voyage?.destinationRayon ?? chantierGeo?.rayonMetres ?? 100;
 
   const [pos, setPos] = useState<{ latitude: number; longitude: number } | null>(null);
   const [distance, setDistance] = useState<number | null>(null);
@@ -52,7 +62,7 @@ export default function NavigationScreen() {
       );
     })();
     return () => { sub?.remove(); };
-  }, [voyage?.id]);
+  }, [voyage?.id, dest?.latitude, dest?.longitude]);
 
   const dansZone = distance != null && distance <= rayon;
   // Voyage deja livre : on n'autorise plus une nouvelle confirmation / BL.
@@ -69,14 +79,46 @@ export default function NavigationScreen() {
   };
 
   const confirmer = async (force = false, code?: string) => {
-    if (!voyage) return;
     if (dejaLivre) {
       Alert.alert('Voyage deja livre', 'Ce voyage est deja livre : le bon de livraison a deja ete enregistre.');
       return;
     }
+    // Ligne SANS OF (matières premières / stock seuls) : arrivée validée au niveau du
+    // couple (voyage conteneur, chantier), pas d'une livraison GAP.
+    if (chantierOnly) {
+      if (!vcId || !projetCode) return;
+      setBusy(true);
+      try {
+        const res = await confirmerArriveeChantier(Number(vcId), projetCode, {
+          latitude: pos?.latitude, longitude: pos?.longitude, force, forceCode: code,
+        });
+        if (res.confirmed) {
+          setForceOpen(false);
+          const livParams = { id: String(voyageId ?? vcId), vcId: vcId ?? '', projetCode: projetCode ?? '' };
+          Alert.alert('Arrivee confirmee', res.message + '\n\nScannez maintenant les matières / le stock.', [
+            {
+              text: 'Scanner la livraison',
+              onPress: () => router.replace({ pathname: '/(chauffeur)/livraison/[id]', params: livParams }),
+            },
+          ]);
+        } else if (res.forcageRequis) {
+          setForceOpen(true);
+        } else {
+          Alert.alert('Arrivee refusee', res.message);
+        }
+      } catch {
+        Alert.alert('Erreur', 'Impossible de confirmer l arrivee (serveur injoignable ?).');
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+
+    const vid = voyage?.id ?? (voyageId ? Number(voyageId) : null);
+    if (vid == null) return;
     setBusy(true);
     try {
-      const res = await confirmerArrivee(voyage.id, {
+      const res = await confirmerArrivee(vid, {
         latitude: pos?.latitude,
         longitude: pos?.longitude,
         force,
@@ -84,10 +126,22 @@ export default function NavigationScreen() {
       });
       if (res.confirmed) {
         setForceOpen(false);
-        Alert.alert('Arrivee confirmee', res.message + '\n\nScannez maintenant les articles livres.', [
+        // 1 ligne = 1 chantier : confirmer aussi l'arrivée des autres OF du même chantier
+        // (même destination), en best-effort, pour horodater leur arrivée.
+        if (vcId && projetCode) {
+          try {
+            const livs = await getLivraisonsDuVoyage(Number(vcId));
+            const autres = livs.filter(l => (l.projetCode ?? null) === projetCode && l.id !== vid);
+            await Promise.all(autres.map(o =>
+              confirmerArrivee(o.id, { latitude: pos?.latitude, longitude: pos?.longitude, force, forceCode: code })));
+          } catch { /* non bloquant */ }
+        }
+        // Construire les params ici pour éviter la perte dans la closure
+        const livParams = { id: String(vid), vcId: vcId ?? '', projetCode: projetCode ?? '' };
+        Alert.alert('Arrivee confirmee', res.message + '\n\nScannez maintenant les articles et matières premières.', [
           {
             text: 'Scanner la livraison',
-            onPress: () => router.replace({ pathname: '/(chauffeur)/livraison/[id]', params: { id: String(voyage.id) } }),
+            onPress: () => router.replace({ pathname: '/(chauffeur)/livraison/[id]', params: livParams }),
           },
         ]);
       } else if (res.forcageRequis) {
@@ -127,7 +181,7 @@ export default function NavigationScreen() {
             <Ionicons name="location" size={26} color="#ef4444" />
             <View style={{ flex: 1, marginLeft: 12 }}>
               <Text style={styles.label}>Destination</Text>
-              <Text style={styles.destName}>{voyage?.destinationNom || voyage?.client || 'Chantier'}</Text>
+              <Text style={styles.destName}>{voyage?.destinationNom || voyage?.client || projetCode || 'Chantier'}</Text>
               {dest ? (
                 <Text style={styles.coords}>{dest.latitude.toFixed(5)}, {dest.longitude.toFixed(5)} - zone {rayon} m</Text>
               ) : (

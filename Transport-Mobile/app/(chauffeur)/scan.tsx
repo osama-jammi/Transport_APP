@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   View, Text, StyleSheet, Alert, ActivityIndicator,
-  TouchableOpacity, StatusBar, Vibration,
+  TouchableOpacity, StatusBar, Vibration, TextInput, Modal,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -9,7 +9,11 @@ import { useDispatch, useSelector } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
 import * as Notifications from 'expo-notifications';
 import type { RootState } from '@/store';
-import { scanArticle, getArticlesByVoyage } from '@/services/livraisonService';
+import {
+  scanArticle, getArticlesByVoyage, getMatieresDuVoyageConteneur, getLivraisonsDuVoyage,
+  enregistrerBLManuelLivraison, mpEstChargee, mpEstLivree,
+  type ArticleScan, type MatiereMp,
+} from '@/services/livraisonService';
 import { addArticleScanned } from '@/store/livraisonSlice';
 import { sendCurrentPosition } from '@/services/gpsService';
 import { COLORS } from '@/constants/theme';
@@ -58,7 +62,7 @@ function feedbackErreur() {
 export default function ScanArticleScreen() {
   const router   = useRouter();
   const dispatch = useDispatch();
-  const { articleNom, articleQr, destination, voyageId, phase: phaseParam } =
+  const { articleNom, articleQr, destination, voyageId, phase: phaseParam, vcId, projetCode } =
     useLocalSearchParams<{
       articleId?: string;
       articleNom?: string;
@@ -66,6 +70,8 @@ export default function ScanArticleScreen() {
       destination?: string;
       voyageId?: string;
       phase?: string;
+      vcId?: string;
+      projetCode?: string;
     }>();
 
   // Phase de scan : CHARGEMENT (depart) ou LIVRAISON (a destination)
@@ -78,6 +84,14 @@ export default function ScanArticleScreen() {
   const [scanned,  setScanned]  = useState(false);
   const [loading,  setLoading]  = useState(false);
   const [success,  setSuccess]  = useState(false);
+  const [saisieManuelle, setSaisieManuelle] = useState(false);
+  const [blManuel, setBlManuel] = useState('');
+
+  // Article/MP attendu : on part de celui passé en paramètre puis on bascule en mode
+  // libre (undefined) après chaque scan réussi, pour enchaîner les scans suivants
+  // SANS quitter l'écran (le chauffeur reste sur la page de scan).
+  const [expectedQr,  setExpectedQr]  = useState<string | undefined>(articleQr);
+  const [expectedNom, setExpectedNom] = useState<string | undefined>(articleNom);
 
   // Retour sur : evite l'erreur "GO_BACK was not handled" si la pile est vide
   const goBack = () => {
@@ -85,26 +99,90 @@ export default function ScanArticleScreen() {
     else router.replace('/(chauffeur)');
   };
 
-  // Apres un scan reussi : s'il reste des articles a traiter, on revient a la liste
-  // (qui se rafraichit). Si c'etait le dernier :
-  //  - CHARGEMENT : on passe a la navigation (direction le chantier).
-  //  - LIVRAISON  : on passe a la saisie du bon de livraison (terminer).
-  const apresScanReussi = async () => {
-    if (!voyageId) { goBack(); return; }
+  // Rester sur l'écran de scan pour enchaîner l'article / la MP suivant(e) (mode libre).
+  const resterPourScanSuivant = () => {
+    setExpectedQr(undefined);
+    setExpectedNom(undefined);
+    setSuccess(false);
+    setScanned(false);
+  };
+
+  const confirmerBLManuel = async () => {
+    if (!blManuel.trim()) {
+      Alert.alert('Erreur', 'Veuillez saisir une référence BL');
+      return;
+    }
+    setSaisieManuelle(false);
+    setLoading(true);
     try {
-      const arts = await getArticlesByVoyage(Number(voyageId));
-      const reste = livraison
+      if (voyageId) {
+        await enregistrerBLManuelLivraison(Number(voyageId), blManuel);
+        feedbackSucces('BL enregistré manuellement', livraison);
+        setTimeout(() => { apresScanReussi(); }, 1400);
+      }
+    } catch (e: any) {
+      feedbackErreur();
+      Alert.alert('Erreur', 'Impossible d\'enregistrer le BL. Veuillez réessayer.');
+      setLoading(false);
+    }
+  };
+
+  // Apres un scan reussi : on n'enchaîne vers navigation / BL que si TOUT le chantier
+  // (articles ET matières premières) est au bon statut. Sinon retour à l'écran ligne.
+  const apresScanReussi = async () => {
+    if (!voyageId) { resterPourScanSuivant(); return; }
+    try {
+      let arts: ArticleScan[] = [];
+      let mps:  MatiereMp[]   = [];
+      if (vcId) {
+        // Contexte chantier : agréger les articles de tous les OF + les MP du chantier.
+        const livs = await getLivraisonsDuVoyage(Number(vcId));
+        const ofs  = projetCode ? livs.filter(l => (l.projetCode ?? null) === projetCode) : livs;
+        const ofsEff = ofs.length > 0 ? ofs : livs.filter(l => l.id === Number(voyageId));
+        arts = (await Promise.all(ofsEff.map(o => getArticlesByVoyage(o.id)))).flat();
+        // MP du chantier de cette ligne uniquement (comparaison normalisée).
+        const allMp = await getMatieresDuVoyageConteneur(Number(vcId));
+        const norm = (s?: string | null) => (s || '').trim();
+        mps = projetCode ? allMp.filter(m => norm(m.projet) === norm(projetCode)) : allMp;
+      } else {
+        arts = await getArticlesByVoyage(Number(voyageId));
+      }
+
+      const articlesRestants = livraison
         ? arts.filter(a => a.statutScan !== 'SCANNE_LIVRAISON').length
         : arts.filter(a => a.statutScan === 'NON_SCANNE').length;
-      if (reste === 0) {
-        const pathname = livraison ? '/(chauffeur)/bl' : '/(chauffeur)/navigation';
-        router.replace({ pathname, params: { voyageId: String(voyageId) } });
+      const mpRestantes = livraison
+        ? mps.filter(m => !mpEstLivree(m.statut)).length
+        : mps.filter(m => !mpEstChargee(m.statut)).length;
+
+      // Voyage MP seul (aucun article/OF rattaché à cette ligne) : pas de BL.
+      const mpSeul = arts.length === 0 && mps.length > 0;
+
+      // Tout est chargé/livré → étape suivante ; sinon on revient finir les scans.
+      if (articlesRestants === 0 && mpRestantes === 0) {
+        if (livraison) {
+          // Phase LIVRAISON : tout livré.
+          if (mpSeul) {
+            // MP seules → pas de bon de livraison : retour à la ligne (qui passe « terminée »).
+            goBack();
+          } else {
+            router.replace({ pathname: '/(chauffeur)/bl', params: { voyageId: String(voyageId) } });
+          }
+        } else {
+          // Phase CHARGEMENT : tout chargé → confirmer l'arrivée (geofence ou code de forçage).
+          router.replace({
+            pathname: '/(chauffeur)/navigation',
+            params: { voyageId: String(voyageId), vcId: vcId ?? '', projetCode: projetCode ?? '' },
+          });
+        }
         return;
       }
     } catch {
-      // en cas d'echec de verification, on retombe sur le retour liste
+      // Erreur réseau pendant la vérification : on reste sur l'écran pour réessayer.
     }
-    goBack();
+    // Il reste des articles / MP à scanner → on RESTE sur la page pour enchaîner
+    // (au lieu de revenir à la liste des voyages).
+    resterPourScanSuivant();
   };
 
   const handleScan = async ({ data }: { data: string }) => {
@@ -113,11 +191,13 @@ export default function ScanArticleScreen() {
     // QR d'un voyage entier : accepte directement (le backend scanne toutes les lignes)
     const estQrVoyage = typeof data === 'string' && data.startsWith('VOYAGE:');
     // Si on attendait un article precis, verifier la correspondance (sauf QR voyage)
-    if (!estQrVoyage && articleQr && data !== articleQr) {
+    if (!estQrVoyage && expectedQr && data !== expectedQr) {
+      // Gele immediatement la camera pour eviter les scans/alertes en rafale
+      setScanned(true);
       feedbackErreur();
       Alert.alert(
         'Mauvais article',
-        `Le QR scanne ne correspond pas a "${articleNom}".\nVeuillez scanner le bon code.`,
+        `Le QR scanne ne correspond pas a "${expectedNom}".\nVeuillez scanner le bon code.`,
         [{ text: 'OK', onPress: () => setScanned(false) }],
       );
       return;
@@ -132,7 +212,7 @@ export default function ScanArticleScreen() {
       // Enregistre la position du chauffeur au moment du scan, liée au voyage
       sendCurrentPosition(camionId ?? undefined, voyageId ? Number(voyageId) : undefined)
         .catch(() => { /* non bloquant */ });
-      await feedbackSucces(article?.nom ?? articleNom, livraison);
+      await feedbackSucces(article?.nom ?? expectedNom, livraison);
       setTimeout(() => { apresScanReussi(); }, 1400);
     } catch (e: any) {
       feedbackErreur();
@@ -199,11 +279,11 @@ export default function ScanArticleScreen() {
       </View>
 
       {/* Article info chip */}
-      {articleNom ? (
+      {expectedNom ? (
         <View style={styles.articleChip}>
           <Ionicons name="cube-outline" size={16} color={COLORS.gold} />
           <View style={{ flex: 1 }}>
-            <Text style={styles.chipNom} numberOfLines={1}>{articleNom}</Text>
+            <Text style={styles.chipNom} numberOfLines={1}>{expectedNom}</Text>
             {destination ? (
               <Text style={styles.chipDest} numberOfLines={1}>
                 <Ionicons name="location-outline" size={11} color={COLORS.textFaint} /> {destination}
@@ -248,8 +328,8 @@ export default function ScanArticleScreen() {
       {/* Bottom hint */}
       <View style={styles.hint}>
         <Text style={styles.hintTxt}>
-          {articleNom
-            ? `Pointez le QR code de "${articleNom}"`
+          {expectedNom
+            ? `Pointez le QR code de "${expectedNom}"`
             : "Pointez le QR d'un article — ou le QR du voyage pour tout valider"}
         </Text>
         {scanned && !success && !loading && (
@@ -258,7 +338,44 @@ export default function ScanArticleScreen() {
             <Text style={[styles.retryTxt, !livraison && { color: COLORS.brown }]}>Scanner a nouveau</Text>
           </TouchableOpacity>
         )}
+        <TouchableOpacity style={styles.manualBtn} onPress={() => setSaisieManuelle(true)}>
+          <Ionicons name="document-text-outline" size={14} color={COLORS.brown} />
+          <Text style={styles.manualBtnTxt}>QR illisible ? Saisir manuellement</Text>
+        </TouchableOpacity>
       </View>
+
+      {/* Modal saisie manuelle BL */}
+      <Modal visible={saisieManuelle} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Saisir le BL manuellement</Text>
+            <Text style={styles.modalSubtitle}>Référence du bon de livraison</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={blManuel}
+              onChangeText={setBlManuel}
+              placeholder="Ex: BL-2024-001"
+              placeholderTextColor={COLORS.textFaint}
+              autoCapitalize="characters"
+              editable={!loading}
+            />
+            <View style={styles.modalBtnGroup}>
+              <TouchableOpacity
+                style={[styles.modalBtn, styles.modalBtnCancel]}
+                onPress={() => { setSaisieManuelle(false); setBlManuel(''); }}
+                disabled={loading}>
+                <Text style={styles.modalBtnTxtCancel}>Annuler</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalBtn, styles.modalBtnConfirm]}
+                onPress={confirmerBLManuel}
+                disabled={loading}>
+                {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.modalBtnTxtConfirm}>Confirmer</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -329,4 +446,31 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.gold, paddingHorizontal: 28, paddingVertical: 12, borderRadius: 24,
   },
   permBtnTxt:     { color: COLORS.brown, fontWeight: '700', fontSize: 15 },
+
+  manualBtn:      {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 16, paddingVertical: 8, borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,.12)',
+  },
+  manualBtnTxt:   { color: COLORS.gold, fontWeight: '600', fontSize: 12 },
+
+  modalOverlay:   { flex: 1, backgroundColor: 'rgba(0,0,0,.7)', alignItems: 'center', justifyContent: 'center' },
+  modalContent:   {
+    backgroundColor: COLORS.card, borderRadius: 16, padding: 24, width: '85%',
+    shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 8, elevation: 4,
+  },
+  modalTitle:     { fontSize: 16, fontWeight: '700', color: COLORS.text, marginBottom: 4 },
+  modalSubtitle:  { fontSize: 12, color: COLORS.textSub, marginBottom: 16 },
+  modalInput:     {
+    borderWidth: 1, borderColor: COLORS.border, borderRadius: 10,
+    paddingHorizontal: 12, paddingVertical: 10,
+    fontSize: 14, color: COLORS.text,
+    marginBottom: 20, backgroundColor: 'rgba(255,255,255,.05)',
+  },
+  modalBtnGroup:  { flexDirection: 'row', gap: 10 },
+  modalBtn:       { flex: 1, paddingVertical: 11, borderRadius: 8, alignItems: 'center' },
+  modalBtnCancel: { backgroundColor: COLORS.textFaint + '20' },
+  modalBtnConfirm: { backgroundColor: COLORS.gold },
+  modalBtnTxtCancel: { color: COLORS.text, fontWeight: '600', fontSize: 13 },
+  modalBtnTxtConfirm: { color: COLORS.brown, fontWeight: '700', fontSize: 13 },
 });

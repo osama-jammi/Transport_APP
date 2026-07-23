@@ -16,10 +16,14 @@ export interface Voyage {
   statut: 'EN_COURS' | 'ARCHIVE' | 'SUPPRIME';
   // Destination (chantier) pour la navigation / arrivée
   chantierId?: number | null;
+  projetCode?: string | null;
   destinationNom?: string | null;
   destinationLat?: number | null;
   destinationLng?: number | null;
   destinationRayon?: number | null;
+  // Arrivée au chantier confirmée (geofence « Je suis sur place » ou code de forçage).
+  // Conditionne l'autorisation du scan de livraison (2ᵉ scan).
+  arriveeConfirmee?: boolean;
 }
 
 export interface ArriveeResult {
@@ -70,10 +74,12 @@ function mapGapVoyage(g: any): Voyage {
     bl: g.bl ?? null,
     statut: g.statutReception === 'ARCHIVE' ? 'ARCHIVE' : 'EN_COURS',
     chantierId: g.projetId ?? null,
+    projetCode: g.projetCode ?? null,
     destinationNom: g.projetDesignation ?? null,
     destinationLat: g.destinationLat ?? null,
     destinationLng: g.destinationLng ?? null,
     destinationRayon: g.destinationRayon ?? null,
+    arriveeConfirmee: !!g.arriveeDechargement,
   };
 }
 
@@ -128,6 +134,35 @@ export async function confirmerArrivee(
   return data;
 }
 
+/**
+ * Arrivée sur un chantier SANS OF (ligne matières premières / stock seuls).
+ * Rattachée au couple (voyage conteneur, chantier), pas à une livraison GAP.
+ */
+export async function getArriveeChantier(vcId: number, projet: string): Promise<string | null> {
+  const { data } = await api.get<{ arrivee: string | null }>(ENDPOINTS.ARRIVEE_CHANTIER(vcId), { params: { projet } });
+  return data?.arrivee ?? null;
+}
+
+/** Confirmer l'arrivée sur un chantier sans OF (géofence chantier + code de forçage). */
+export async function confirmerArriveeChantier(
+  vcId: number,
+  projet: string,
+  opts: { latitude?: number; longitude?: number; force?: boolean; forceCode?: string } = {},
+): Promise<ArriveeResult> {
+  const { data } = await api.patch<ArriveeResult>(ENDPOINTS.ARRIVEE_CHANTIER(vcId), null, { params: { projet, ...opts } });
+  return data;
+}
+
+/** Géolocalisation d'un chantier (projet GAP) par son code — utile quand aucun OF n'est présent. */
+export async function getChantierGeo(
+  projet: string,
+): Promise<{ latitude: number; longitude: number; rayonMetres?: number } | null> {
+  const { data } = await api.get<any[]>(ENDPOINTS.CHANTIERS_GAP);
+  const ch = (data || []).find((c) => c.code === projet);
+  if (!ch || ch.latitude == null || ch.longitude == null) return null;
+  return { latitude: ch.latitude, longitude: ch.longitude, rayonMetres: ch.rayonMetres ?? undefined };
+}
+
 /** Enregistre le bon de livraison (photo facultative + référence(s)) → voyage livré */
 export async function enregistrerBL(
   voyageId: number,
@@ -145,6 +180,54 @@ export async function enregistrerBL(
   return data;
 }
 
+export interface MatiereMp {
+  id: number;
+  reference?: string;
+  designation?: string;
+  quantite?: number;
+  unite?: string;
+  projet?: string;
+  pieceFournisseur?: string;
+  qteCommande?: number;
+  statut?: string;
+  /** MATIERE (Divalto) ou STOCK (vue Article_en_stock DivNet, lecture seule). */
+  source?: string;
+  /** Dépôt d'origine (code DEPO, ex. RB1) pour les lignes de stock. */
+  depot?: string;
+}
+
+/** Matières premières d'un voyage conteneur, filtrées par chantier de la livraison. */
+export async function getMatieresDuVoyageConteneur(voyageConteneurId: number): Promise<MatiereMp[]> {
+  const { data } = await api.get<any[]>(`/voyages-conteneurs/${voyageConteneurId}/matieres`);
+  return (data || []).map((m) => ({
+    id: m.id,
+    reference: m.reference ?? undefined,
+    designation: m.designation ?? undefined,
+    quantite: m.quantite ?? undefined,
+    unite: m.unite ?? undefined,
+    projet: m.projet ?? undefined,
+    pieceFournisseur: m.pieceFournisseur ?? undefined,
+    qteCommande: m.qteCommande ?? undefined,
+    statut: m.statut ?? undefined,
+    source: m.source ?? undefined,
+    depot: m.depot ?? undefined,
+  } as MatiereMp));
+}
+
+/** MP chargée (1er scan = CHARGE) ou déjà livrée. */
+export const mpEstChargee = (statut?: string | null) => ['CHARGE', 'LIVRE'].includes((statut || '').toUpperCase());
+/** MP livrée (2e scan = LIVRE). */
+export const mpEstLivree = (statut?: string | null) => (statut || '').toUpperCase() === 'LIVRE';
+
+/** Upload un BL (photo ou PDF) pour une livraison — endpoint multi-BL. */
+export async function ajouterBlFile(voyageId: number, photoUri: string, reference?: string): Promise<void> {
+  const ext = photoUri.endsWith('.pdf') ? 'pdf' : 'jpg';
+  const form = new FormData();
+  form.append('fichier', { uri: photoUri, name: `bl-${voyageId}-${Date.now()}.${ext}`, type: ext === 'pdf' ? 'application/pdf' : 'image/jpeg' } as any);
+  if (reference) form.append('reference', reference);
+  await api.post(`/voyages/${voyageId}/bls`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
+}
+
 /** Articles d'un voyage (lus depuis GAP : detail_livraison), mappés au modèle mobile. */
 export async function getArticlesByVoyage(voyageId: number): Promise<ArticleScan[]> {
   const { data } = await api.get<any[]>(`/voyages/${voyageId}/articles`);
@@ -159,4 +242,22 @@ export async function getArticlesByVoyage(voyageId: number): Promise<ArticleScan
       : d.statutReception === 'SCANNE_CHARGEMENT' ? 'SCANNE_CHARGEMENT'
       : 'NON_SCANNE',
   } as ArticleScan));
+}
+
+/** Annule une ligne de livraison individuelle (livraison/OF). */
+export async function annulerLigne(livraisonId: number): Promise<void> {
+  await api.patch(`/voyages-conteneurs/livraisons/${livraisonId}/annuler`, null);
+}
+
+/** Annule le voyage conteneur complet. */
+export async function annulerVoyage(voyageConteneurId: number): Promise<void> {
+  await api.patch(`/voyages-conteneurs/${voyageConteneurId}/annuler`, null);
+}
+
+/** Confirme une livraison en saisissant le BL manuellement (QR illisible). */
+export async function enregistrerBLManuelLivraison(
+  voyageId: number,
+  reference: string,
+): Promise<void> {
+  await api.post(`/voyages/${voyageId}/bl-manuel`, null, { params: { reference } });
 }

@@ -11,10 +11,22 @@
     },
     "preview": {
       "distribution": "internal",
-      "android": { "buildType": "apk" }
+      "android": { "buildType": "apk" },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "http://81.192.31.254:8040/Transport_DEV/api",
+        "EXPO_PUBLIC_KEYCLOAK_URL": "http://192.168.77.21:8081",
+        "EXPO_PUBLIC_KEYCLOAK_REALM": "RB-realm",
+        "EXPO_PUBLIC_KEYCLOAK_CLIENT": "ClientTransport"
+      }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_API_URL": "http://81.192.31.254:8040/Transport_DEV/api",
+        "EXPO_PUBLIC_KEYCLOAK_URL": "http://192.168.77.21:8081",
+        "EXPO_PUBLIC_KEYCLOAK_REALM": "RB-realm",
+        "EXPO_PUBLIC_KEYCLOAK_CLIENT": "ClientTransport"
+      }
     }
   },
   "submit": {

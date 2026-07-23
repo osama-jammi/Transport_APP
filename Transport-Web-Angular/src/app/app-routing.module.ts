@@ -10,6 +10,7 @@ import { ChantiersComponent } from './features/chantiers.component';
 import { ArticlesComponent } from './features/articles.component';
 import { MatieresPremieresComponent } from './features/matieres-premieres.component';
 import { DepotsComponent } from './features/depots.component';
+import { StockComponent } from './features/stock.component';
 import { SuiviTrajetsComponent } from './features/suivi-trajets.component';
 import { AdministrationComponent } from './features/administration.component';
 import { RapportsComponent } from './features/rapports.component';
@@ -27,6 +28,7 @@ const routes: Routes = [
   { path: 'articles',   component: ArticlesComponent,   canActivate: [AuthGuard] },
   { path: 'matieres-premieres', component: MatieresPremieresComponent, canActivate: [AuthGuard] },
   { path: 'depots',     component: DepotsComponent,     canActivate: [AuthGuard] },
+  { path: 'stock',      component: StockComponent,      canActivate: [AuthGuard] },
   { path: 'gps',        redirectTo: 'suivi-trajets' },
   { path: 'suivi-trajets', component: SuiviTrajetsComponent, canActivate: [AuthGuard] },
   { path: 'administration', component: AdministrationComponent, canActivate: [AuthGuard] },

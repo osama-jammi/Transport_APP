@@ -1,0 +1,23 @@
+flowchart TD
+    subgraph Magasin ["Magasin / Production"]
+        A[Préparation Marchandise] --> B[Rédaction BC Papier]
+    end
+
+    subgraph Chauffeur ["Chauffeur Terrain"]
+        B --> C[Départ camion avec BC Papier]
+        C --> D{Suivi par téléphone}
+        D --> E[Livraison sur Chantier]
+        E --> F[Signature BL par Client]
+        F --> G[Retour du BL au Bureau plus tard]
+    end
+
+    subgraph Bureau ["Bureau / Administration"]
+        D -. "Où es-tu ?" .-> BureauAdmin[Responsable]
+        G --> H[Ressaisie dans Excel et dans le ERP]
+        H --> I[Archivage Papier]
+    end
+
+    style B fill:#f9d0c4,stroke:#333,stroke-width:2px
+    style D fill:#f9d0c4,stroke:#333,stroke-width:2px
+    style G fill:#f9d0c4,stroke:#333,stroke-width:2px
+    style H fill:#f9d0c4,stroke:#333,stroke-width:2px

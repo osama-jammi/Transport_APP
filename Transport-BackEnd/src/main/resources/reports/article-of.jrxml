@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Étiquette article / OF (adaptée de ArticleOf GAP pour Transport-BackEnd).
+     - champ ma.gap.entity.OrdreFabrication retiré (classe absente ici, non utilisée au rendu)
+     - logo pointé sur l'asset existant /reports/riche-bois-logo.jpg -->
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd" name="ArticleOf" pageWidth="425" pageHeight="283" orientation="Landscape" columnWidth="417" leftMargin="4" rightMargin="4" topMargin="4" bottomMargin="4" uuid="63602c79-fb14-470f-92b7-2bb371b9f6c1">
+	<property name="com.jaspersoft.studio.data.defaultdataadapter" value="One Empty Record"/>
+	<property name="com.jaspersoft.studio.unit.pageHeight" value="mm"/>
+	<property name="com.jaspersoft.studio.unit.pageWidth" value="mm"/>
+	<property name="com.jaspersoft.studio.unit." value="pixel"/>
+	<property name="com.jaspersoft.studio.unit.topMargin" value="pixel"/>
+	<property name="com.jaspersoft.studio.unit.bottomMargin" value="pixel"/>
+	<property name="com.jaspersoft.studio.unit.leftMargin" value="pixel"/>
+	<property name="com.jaspersoft.studio.unit.rightMargin" value="pixel"/>
+	<property name="com.jaspersoft.studio.unit.columnWidth" value="pixel"/>
+	<property name="com.jaspersoft.studio.unit.columnSpacing" value="pixel"/>
+	<queryString>
+		<![CDATA[]]>
+	</queryString>
+	<field name="emplacement" class="java.lang.String"/>
+	<field name="observation" class="java.lang.String"/>
+	<field name="articleDesignationImpression" class="java.lang.String"/>
+	<field name="affaireCodeImpression" class="java.lang.String"/>
+	<field name="numOFImpression" class="java.lang.String"/>
+	<field name="dateOFImpression" class="java.util.Date"/>
+	<field name="compteurOFImpression" class="java.lang.String"/>
+	<background>
+		<band splitType="Stretch"/>
+	</background>
+	<detail>
+		<band height="221" splitType="Stretch">
+			<staticText>
+				<reportElement x="-3" y="40" width="78" height="40" uuid="a2df19d2-fc49-4321-b90a-448bd9e213f0">
+					<property name="com.jaspersoft.studio.unit.height" value="px"/>
+				</reportElement>
+				<box padding="3"/>
+				<textElement verticalAlignment="Middle">
+					<font size="10" isBold="true"/>
+				</textElement>
+				<text><![CDATA[Article : ]]></text>
+			</staticText>
+			<line>
+				<reportElement x="-3" y="85" width="405" height="1" uuid="fc5324bc-2c70-4870-9e55-d27c5104ebeb">
+					<property name="com.jaspersoft.studio.unit.height" value="px"/>
+					<property name="com.jaspersoft.studio.unit.width" value="px"/>
+				</reportElement>
+			</line>
+			<staticText>
+				<reportElement x="-3" y="99" width="78" height="40" uuid="6b1afd00-b905-4e2f-9e65-893dd49a25ef">
+					<property name="com.jaspersoft.studio.unit.height" value="px"/>
+				</reportElement>
+				<box padding="3"/>
+				<textElement verticalAlignment="Middle">
+					<font size="10" isBold="true"/>
+				</textElement>
+				<text><![CDATA[Emplacement :]]></text>
+			</staticText>
+			<line>
+				<reportElement x="-3" y="144" width="405" height="1" uuid="5abbbbd1-ba8e-4073-8d93-220fdb23ee3f">
+					<property name="com.jaspersoft.studio.unit.height" value="px"/>
+					<property name="com.jaspersoft.studio.unit.width" value="px"/>
+				</reportElement>
+			</line>
+			<staticText>
+				<reportElement x="-3" y="149" width="78" height="40" uuid="4d9d7cbc-6fe0-433a-8948-705950d19e5c">
+					<property name="com.jaspersoft.studio.unit.height" value="px"/>
+				</reportElement>
+				<box padding="3"/>
+				<textElement verticalAlignment="Middle">
+					<font size="10" isBold="true"/>
+				</textElement>
+				<text><![CDATA[Observation :]]></text>
+			</staticText>
+			<line>
+				<reportElement x="-3" y="193" width="405" height="1" uuid="24c41e18-3558-4ea2-a3df-a37161ad5bba">
+					<property name="com.jaspersoft.studio.unit.height" value="px"/>
+					<property name="com.jaspersoft.studio.unit.width" value="px"/>
+				</reportElement>
+			</line>
+			<textField>
+				<reportElement x="76" y="40" width="326" height="40" uuid="ed3d288e-0bf7-4100-b945-68b3a19354f9">
+					<property name="com.jaspersoft.studio.unit.width" value="px"/>
+					<property name="com.jaspersoft.studio.unit.height" value="px"/>
+				</reportElement>
+				<textElement verticalAlignment="Middle">
+					<font size="10"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{articleDesignationImpression}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement x="76" y="100" width="326" height="40" uuid="db0abc20-24fd-4575-be61-6b2c78153e2c">
+					<property name="com.jaspersoft.studio.unit.width" value="px"/>
+					<property name="com.jaspersoft.studio.unit.height" value="px"/>
+				</reportElement>
+				<textElement verticalAlignment="Middle">
+					<font size="10"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{emplacement}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement x="76" y="148" width="326" height="40" uuid="b3bc1c5a-e6e5-48af-9a82-a5357d8cd183">
+					<property name="com.jaspersoft.studio.unit.width" value="px"/>
+					<property name="com.jaspersoft.studio.unit.height" value="px"/>
+				</reportElement>
+				<textElement verticalAlignment="Middle">
+					<font size="10"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{observation}]]></textFieldExpression>
+			</textField>
+			<textField pattern="MMMMM dd, yyyy">
+				<reportElement x="2" y="203" width="158" height="16" uuid="e4e3ba80-a153-4570-8d37-47974a857060"/>
+				<textElement textAlignment="Left" verticalAlignment="Top"/>
+				<textFieldExpression><![CDATA["Le : " + new SimpleDateFormat("dd/MM/yyyy HH:mm").format(new java.util.Date())]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement x="180" y="200" width="100" height="20" uuid="c446cbae-add8-45f5-a937-1957524db2f5"/>
+				<textElement textAlignment="Center" verticalAlignment="Middle">
+					<font isBold="true"/>
+				</textElement>
+				<textFieldExpression><![CDATA["Affaire:"+$F{affaireCodeImpression}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement x="290" y="200" width="108" height="20" uuid="f355d46c-437e-4d15-a824-7446e9bdcdc5"/>
+				<textElement textAlignment="Right" verticalAlignment="Middle">
+					<font isBold="true"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{numOFImpression}]]></textFieldExpression>
+			</textField>
+			<componentElement>
+				<reportElement x="302" y="0" width="100" height="30" uuid="0d1156b6-201a-4545-afb3-f079daecc68b"/>
+				<jr:Codabar xmlns:jr="http://jasperreports.sourceforge.net/jasperreports/components" xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports/components http://jasperreports.sourceforge.net/xsd/components.xsd">
+					<jr:codeExpression><![CDATA[new SimpleDateFormat("ddMMyyyy").format($F{dateOFImpression})+$F{compteurOFImpression}]]></jr:codeExpression>
+				</jr:Codabar>
+			</componentElement>
+			<image>
+				<reportElement x="1" y="0" width="89" height="30" uuid="4eadd035-86da-482b-bc43-c6e8389f405b"/>
+				<imageExpression><![CDATA[this.getClass().getResourceAsStream("/reports/riche-bois-logo.jpg")]]></imageExpression>
+			</image>
+		</band>
+	</detail>
+</jasperReport>

@@ -1,6 +1,7 @@
 import * as SecureStore from 'expo-secure-store';
 import api from './api';
 import { ENDPOINTS } from '@/constants/api';
+import { setMobileToken, clearMobileToken } from './mobileToken';
 
 export interface ChauffeurInfo {
   id: number;
@@ -14,15 +15,19 @@ export interface ChauffeurInfo {
   camionImmatriculation?: string | null;
   /** Compte administrateur/superviseur → tableau de bord mobile. */
   admin?: boolean;
+  /** Jeton backend renvoyé par /connect (chauffeur). */
+  token?: string;
 }
 
 const CHAUFFEUR_KEY = 'chauffeur_info';
 
-/** Appairage : scan du QR code chauffeur → connexion persistante */
+/** Appairage : scan du QR code chauffeur → connexion persistante (+ jeton backend) */
 export async function connectByQrCode(qrCode: string): Promise<ChauffeurInfo> {
   const { data } = await api.post<ChauffeurInfo>(ENDPOINTS.CONNECT_QR, null, {
     params: { qrCode },
   });
+  // Le backend renvoie un jeton chauffeur : on le stocke pour sécuriser les appels suivants.
+  if (data.token) await setMobileToken(data.token);
   await SecureStore.setItemAsync(CHAUFFEUR_KEY, JSON.stringify(data));
   return data;
 }
@@ -43,7 +48,8 @@ export async function registerPushToken(chauffeurId: number, token: string): Pro
   await api.patch(`/chauffeurs/${chauffeurId}/push-token`, null, { params: { token } });
 }
 
-/** Déconnexion locale (supprime la session) */
+/** Déconnexion locale (supprime la session + le jeton backend) */
 export async function logout(): Promise<void> {
   await SecureStore.deleteItemAsync(CHAUFFEUR_KEY);
+  await clearMobileToken();
 }

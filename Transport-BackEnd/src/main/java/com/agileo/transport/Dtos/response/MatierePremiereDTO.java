@@ -22,6 +22,8 @@ public class MatierePremiereDTO {
     private String pieceFournisseur; // n° pièce fournisseur (entête commande Divalto)
     private Double qteCommande;      // quantité commandée (ligne Divalto d'origine)
     private String statut;           // statut local de clôture : EN_ATTENTE / LIVRE (sans impact ERP)
+    private String source;           // MATIERE (Divalto) ou STOCK (vue Article_en_stock DivNet, lecture seule)
+    private String depot;            // dépôt d'origine (code DEPO, ex. RB1) pour les lignes de stock
     private java.time.LocalDateTime dateChargement;
     private java.time.LocalDateTime dateDechargement;
 }
