@@ -16,14 +16,20 @@ L'application **Transport APP** est une plateforme complète (Backend, Front Web
 
 ---
 
-## 🏗️ Architecture et Conception Technique
+## 🏗️ Architecture et Modélisation
 
 Le projet repose sur une architecture répartie :
 - **Transport-BackEnd** : API robuste gérant la logique métier et la connexion ERP.
 - **Transport-Web-Angular** : Interface d'administration.
 - **Transport-Mobile** : Application chauffeur.
 
-### Diagrammes et Flux
+### 1. Architecture Globale
+<img src="https://raw.githubusercontent.com/osama-jammi/Transport_APP/main/architecture.png" alt="Architecture" width="100%" />
+
+### 2. Cas d'Utilisation
+<img src="https://raw.githubusercontent.com/osama-jammi/Transport_APP/main/use_case.png" alt="Use Case" width="100%" />
+
+### 3. Modèle et Flux Techniques
 **Diagramme de Classes :**
 <img src="https://raw.githubusercontent.com/osama-jammi/Transport_APP/main/class_diagram.png" alt="Diagramme de Classes" width="100%" />
 
@@ -39,20 +45,29 @@ Le projet repose sur une architecture répartie :
 
 *L'interface Web permet aux gestionnaires de suivre l'ensemble de la flotte et des expéditions.*
 
-### 1. Tableau de bord / Liste des Voyages
-<img src="https://raw.githubusercontent.com/osama-jammi/Transport_APP/main/web_1.png" alt="Tableau de Bord Voyages" width="100%" />
+### 1. Page de Connexion
+<img src="https://raw.githubusercontent.com/osama-jammi/Transport_APP/main/web_login.png" alt="Login" width="100%" />
 
-### 2. Détail d'une Livraison
-<img src="https://raw.githubusercontent.com/osama-jammi/Transport_APP/main/web_2.png" alt="Détail Livraison" width="100%" />
+### 2. Tableau de Bord (Dashboard)
+<img src="https://raw.githubusercontent.com/osama-jammi/Transport_APP/main/web_dashboard.png" alt="Dashboard" width="100%" />
 
-### 3. Gestion des Articles et Matières Premières
-<img src="https://raw.githubusercontent.com/osama-jammi/Transport_APP/main/web_3.png" alt="Articles et Matières Premières" width="100%" />
+### 3. Liste des Voyages
+<img src="https://raw.githubusercontent.com/osama-jammi/Transport_APP/main/web_voyages_liste.png" alt="Liste Voyages" width="100%" />
 
-### 4. Suivi des Chauffeurs
-<img src="https://raw.githubusercontent.com/osama-jammi/Transport_APP/main/web_4.png" alt="Suivi des Chauffeurs" width="100%" />
+### 4. Saisie d'un Voyage
+<img src="https://raw.githubusercontent.com/osama-jammi/Transport_APP/main/web_voyage_saisie.png" alt="Saisie Voyage" width="100%" />
 
-### 5. Options Avancées
-<img src="https://raw.githubusercontent.com/osama-jammi/Transport_APP/main/web_5.png" alt="Options Avancées" width="100%" />
+### 5. Détails d'une Livraison
+<img src="https://raw.githubusercontent.com/osama-jammi/Transport_APP/main/web_livraison_detail.png" alt="Détail Livraison" width="100%" />
+
+### 6. Suivi des Trajets (GPS)
+<img src="https://raw.githubusercontent.com/osama-jammi/Transport_APP/main/web_suivi_trajets.png" alt="Suivi Trajets" width="100%" />
+
+### 7. Gestion de la Flotte
+<img src="https://raw.githubusercontent.com/osama-jammi/Transport_APP/main/web_flotte.png" alt="Flotte" width="100%" />
+
+### 8. Administration
+<img src="https://raw.githubusercontent.com/osama-jammi/Transport_APP/main/web_administration.png" alt="Administration" width="100%" />
 
 *(Note : L'application mobile est en cours de développement, les captures d'écran mobiles seront ajoutées prochainement).*
 
@@ -60,9 +75,9 @@ Le projet repose sur une architecture répartie :
 
 ## 🛠️ Technologies & Outils
 
-- **Backend** : Java / Spring Boot *(à confirmer)*
+- **Backend** : Java / Spring Boot
 - **Frontend Web** : Angular
-- **Application Mobile** : React Native / Expo *(à confirmer)*
+- **Application Mobile** : React Native / Expo
 - **Intégration** : Divalto / Base GAP
 
 ## 🚀 Installation & Déploiement
